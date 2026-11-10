@@ -47,6 +47,141 @@ private Q_SLOTS:
         document.undo();
         QCOMPARE(document.renderToImage(), edited);
     }
+    void mouseGestureAtScale_data()
+    {
+        QTest::addColumn<qreal>("zoom");
+        QTest::addColumn<qreal>("imageDpr");
+        for (qreal zoom : {0.5, 1.0, 2.0}) {
+            for (qreal dpr : {1.0, 1.25, 1.5, 2.0}) {
+                const auto name = QStringLiteral("zoom-%1-imageDpr-%2").arg(zoom).arg(dpr).toLatin1();
+                QTest::newRow(name.constData()) << zoom << dpr;
+            }
+        }
+    }
+    void mouseGestureAtScale()
+    {
+        QFETCH(qreal, zoom);
+        QFETCH(qreal, imageDpr);
+        AnnotationDocument document;
+        QImage source(QSize(100 * imageDpr, 80 * imageDpr), QImage::Format_ARGB32_Premultiplied);
+        source.setDevicePixelRatio(imageDpr);
+        source.fill(Qt::white);
+        document.setBaseImage(source);
+        const auto before = document.renderToImage();
+        QQuickWindow window;
+        window.resize(260, 220);
+        PortableAnnotationViewport viewport(window.contentItem());
+        viewport.setTransformOrigin(QQuickItem::TopLeft);
+        viewport.setPosition({20, 20});
+        viewport.setSize({100, 80});
+        viewport.setScale(zoom);
+        viewport.setViewportRect({0, 0, 100, 80});
+        viewport.setDocument(&document);
+        document.tool()->setType(AnnotationTool::RectangleTool);
+        document.tool()->setStrokeColor(Qt::blue);
+        document.tool()->setStrokeWidth(4);
+        document.tool()->setShadow(false); // Isolate geometry from shadow rasterization.
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const auto start = viewport.mapToScene({20, 20}).toPoint();
+        const auto end = viewport.mapToScene({70, 60}).toPoint();
+        QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(&window, end);
+        QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, end);
+        QTRY_COMPARE(document.undoStackDepth(), 1);
+        const auto edited = document.renderToImage();
+        QVERIFY(edited != before);
+        // Independent document-level gesture checks scene-to-image coordinates,
+        // not merely that some pixels changed after a mouse event.
+        AnnotationDocument expected;
+        expected.setBaseImage(source);
+        expected.tool()->setType(AnnotationTool::RectangleTool);
+        expected.tool()->setStrokeColor(Qt::blue);
+        expected.tool()->setStrokeWidth(4);
+        expected.tool()->setShadow(false);
+        // AnnotationViewport rounds local input to the window's device pixels.
+        const auto snapped = [&window](QPointF point) {
+            const auto dpr = window.devicePixelRatio();
+            return QPointF(qRound(point.x() * dpr) / dpr, qRound(point.y() * dpr) / dpr);
+        };
+        expected.beginItem(snapped({20, 20}));
+        expected.continueItem(snapped({70, 60}));
+        expected.finishItem();
+        expected.deselectItem(); // Mouse release deselects creation tools too.
+        QCOMPARE(edited, expected.renderToImage());
+        document.undo();
+        QCOMPARE(document.renderToImage(), before);
+        document.redo();
+        QCOMPARE(document.renderToImage(), edited);
+    }
+    void basicToolsUndoRedo_data()
+    {
+        QTest::addColumn<int>("tool");
+        QTest::newRow("freehand") << int(AnnotationTool::FreehandTool);
+        QTest::newRow("highlighter") << int(AnnotationTool::HighlighterTool);
+        QTest::newRow("line") << int(AnnotationTool::LineTool);
+        QTest::newRow("arrow") << int(AnnotationTool::ArrowTool);
+        QTest::newRow("ellipse") << int(AnnotationTool::EllipseTool);
+    }
+    void basicToolsUndoRedo()
+    {
+        QFETCH(int, tool);
+        AnnotationDocument document;
+        QImage source(100, 80, QImage::Format_ARGB32_Premultiplied);
+        source.fill(Qt::white);
+        document.setBaseImage(source);
+        const auto before = document.renderToImage();
+        document.tool()->setType(static_cast<AnnotationTool::Tool>(tool));
+        document.tool()->setStrokeColor(Qt::blue);
+        document.tool()->setStrokeWidth(6);
+        document.beginItem({20, 20});
+        document.continueItem({40, 30});
+        document.continueItem({70, 60});
+        document.finishItem();
+        const auto edited = document.renderToImage();
+        QVERIFY(edited != before);
+        QCOMPARE(document.undoStackDepth(), 1);
+        document.undo();
+        QCOMPARE(document.renderToImage(), before);
+        document.redo();
+        QCOMPARE(document.renderToImage(), edited);
+    }
+    void viewportDocumentReplacement()
+    {
+        // Documents outlive the viewport; upstream setDocument(nullptr) is not supported.
+        AnnotationDocument first;
+        AnnotationDocument second;
+        QImage white(100, 80, QImage::Format_ARGB32_Premultiplied);
+        white.fill(Qt::white);
+        QImage red = white;
+        red.fill(Qt::red);
+        first.setBaseImage(white);
+        second.setBaseImage(red);
+        QQuickWindow window;
+        window.resize(100, 80);
+        PortableAnnotationViewport viewport(window.contentItem());
+        viewport.setSize({100, 80});
+        viewport.setViewportRect({0, 0, 100, 80});
+        viewport.setDocument(&first);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_VERIFY(!window.grabWindow().isNull());
+        QTRY_COMPARE(window.grabWindow().pixelColor(10, 10), QColor(Qt::white));
+        viewport.setDocument(&second);
+        QTRY_COMPARE(window.grabWindow().pixelColor(10, 10), QColor(Qt::red));
+        const auto secondFrame = window.grabWindow();
+        drawRectangle(first);
+        QCoreApplication::processEvents();
+        QCOMPARE(window.grabWindow(), secondFrame);
+        drawRectangle(second);
+        QTRY_VERIFY(window.grabWindow() != secondFrame);
+        second.undo();
+        QTRY_COMPARE(window.grabWindow(), secondFrame);
+        viewport.setDocument(&first);
+        QTRY_VERIFY(window.grabWindow() != secondFrame);
+        first.undo();
+        QTRY_COMPARE(window.grabWindow().pixelColor(10, 10), QColor(Qt::white));
+    }
     void softwareViewportRepaints()
     {
         QQuickWindow window;
@@ -61,19 +196,18 @@ private Q_SLOTS:
         viewport.setDocument(&document);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QTest::qWait(50);
+        QTRY_VERIFY(!window.grabWindow().isNull());
+        QTRY_COMPARE(window.grabWindow().pixelColor(10, 10), QColor(Qt::white));
         const auto before = window.grabWindow();
         QVERIFY(!before.isNull());
         drawRectangle(document);
-        QTest::qWait(50);
+        QTRY_VERIFY(window.grabWindow() != before);
         const auto edited = window.grabWindow();
         QVERIFY(edited != before);
         document.undo();
-        QTest::qWait(50);
-        QCOMPARE(window.grabWindow(), before);
+        QTRY_COMPARE(window.grabWindow(), before);
         document.redo();
-        QTest::qWait(50);
-        QCOMPARE(window.grabWindow(), edited);
+        QTRY_COMPARE(window.grabWindow(), edited);
     }
 };
 QTEST_MAIN(EditorDocumentTest)

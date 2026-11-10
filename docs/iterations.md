@@ -166,3 +166,23 @@ interactions, clipboard, Wayland capture or GPU material acceptance.
 
 Next: move property groups into a persistent, non-clipping panel and review dark
 appearance. Preserve the existing 250ms property-transaction commit semantics.
+
+## 009 — Actual input, zoom/DPR and document switching matrix
+
+Extend EditorDocumentTest only. Add real QTest mouse rectangle gestures at zoom
+0.5/1/2 and image DPR 1/1.25/1.5/2; compare against document-coordinate rendering.
+Add freehand/highlighter/line/arrow/ellipse undo/redo, document replacement and
+old-document isolation. Use QTRY assertions rather than fixed sleeps.
+
+Verified: incremental editor_document_test compilation passed. Eight separate
+processes (QT_SCALE_FACTOR 1/1.25/1.5/2 × QSG_RENDER_LOOP basic/threaded) each
+reported 22 passed, 0 failed, 0 skipped, with a 25-second timeout. Software/offscreen
+only. No UI source changed in this iteration; the 008 runtime screenshot remains
+the current visual baseline.
+
+Known discrepancy: geometry tests disable shadows to isolate coordinates. With
+shadows enabled and image DPR > 1, earlier mouse-path versus direct-document
+comparison showed an approximately one-pixel right-edge difference. It may be an
+upstream incremental shadow repaint boundary; not diagnosed or fixed yet. Original
+tests retain their default shadow setting. Do not interpret this matrix as all
+annotation tools, text/IME, full QML interaction or GPU/desktop acceptance.
