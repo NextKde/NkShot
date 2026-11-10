@@ -796,3 +796,21 @@ local documents, not captures of another application. Native desktop picker,
 large real-world images, mixed color profiles and automatic scrolling are not
 validated by these UI tests; conservative core rejection cases remain covered.
 This feature is manual local composition, NOT automatic scrolling capture.
+
+## 042 — Actionable composition errors
+
+Replace the generic combination failure with specific guidance for unreadable/
+short images, mismatched width/scale/profile, missing overlap, ambiguous repeated
+content, duplicate frames and size limits. Validate width/height/input pixel limits
+before decoding and distinguish invalid image headers from oversized inputs.
+If the preview cannot initialize, report the failure rather than silently doing
+nothing. Each failure confirms that source files and current edits are unchanged.
+
+Build, CTest 5/5 and static checks 16/16 pass. The actual picker/UI test now checks
+specific duplicate, wrong-width, damaged PNG, too-few-input and missing-overlap
+messages; each rejects without a preview or document mutation. Existing successful
+composition and cancellation tests rerun in both themes. Reviewed
+[light](screenshots/042-combine-errors-light.png) and
+[dark](screenshots/042-combine-errors-dark.png) real software-rendered notifications.
+The core's ambiguity/size cases are covered by its unit tests; this does not claim
+large real-file or native desktop portal testing.

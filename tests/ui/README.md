@@ -127,3 +127,9 @@ picker. It tests reuse, cancel/reopen, reverse-selected natural filename order,
 exact output pixels and unchanged editor content, then rejects duplicate frames.
 The capture is the actual resulting pin containing a synthetic document fixture.
 Native file portals and automatic scrolling are not covered.
+
+Add `NKSHOT_TEST_COMBINE_ERRORS=1` to the combine scenario to exercise wrong width,
+a damaged PNG file, one-image selection and absent overlap through the actual
+picker. It requires the corresponding specific warning and no preview/editor
+mutation. The final capture shows the missing-overlap guidance. Duplicate error
+text is also checked in the ordinary combine scenario.

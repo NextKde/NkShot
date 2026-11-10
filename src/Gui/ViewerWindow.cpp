@@ -126,12 +126,34 @@ void ViewerWindow::combineImages()
             m_combiningImages = false;
             Q_EMIT combiningImagesChanged();
             if (result.error != NkShot::Imaging::StitchError::None) {
+                using Error = NkShot::Imaging::StitchError;
+                QString reason;
+                switch (result.error) {
+                case Error::InvalidInput:
+                    reason = i18nc("@info", "An image could not be read or is too short. Choose intact images taller than 24 pixels."); break;
+                case Error::IncompatibleFrames:
+                    reason = i18nc("@info", "Images must have the same width, scale and color profile. Use screenshots from the same capture session."); break;
+                case Error::NoOverlap:
+                    reason = i18nc("@info", "No unchanged overlap was found. Number images top to bottom and retain at least 24 overlapping pixels. Prefer original PNG screenshots."); break;
+                case Error::AmbiguousOverlap:
+                    reason = i18nc("@info", "Repeated content makes the overlap ambiguous. Choose screenshots with more distinctive overlapping content."); break;
+                case Error::NoProgress:
+                    reason = i18nc("@info", "A repeated image adds no new content. Remove duplicate or fully overlapping screenshots."); break;
+                case Error::TooLarge:
+                    reason = i18nc("@info", "These images exceed the safe size limit. Use fewer or smaller images: 40 megapixels total, at most 8192 pixels wide and 32000 pixels tall."); break;
+                case Error::None: break;
+                }
                 InlineMessageModel::instance()->push(InlineMessageModel::Warning,
-                    i18nc("@info", "Could not combine these images. Use equal-width, numbered screenshots with a unique unchanged overlap of at least 24 pixels. Total input is limited to 40 megapixels. No files were changed."));
+                    reason + QLatin1Char(' ') + i18nc("@info", "No source files or edits were changed."));
                 return;
             }
             auto preview = new PinnedImageWindow(result.image, engine());
-            if (preview->status() != QQuickView::Ready) { delete preview; return; }
+            if (preview->status() != QQuickView::Ready) {
+                delete preview;
+                InlineMessageModel::instance()->push(InlineMessageModel::Error,
+                    i18nc("@info", "The combined preview could not be opened. No source files or edits were changed."));
+                return;
+            }
             preview->setTitle(i18nc("@title:window", "Combined Image — NkShot"));
             preview->setScreen(screen());
             preview->show();
@@ -145,7 +167,9 @@ void ViewerWindow::combineImages()
                 QImageReader reader(path);
                 const auto size = reader.size();
                 const qint64 count = qint64(size.width()) * size.height();
-                if (!size.isValid() || count < 1 || count > 40000000 - pixels)
+                if (!size.isValid() || count < 1)
+                    return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::InvalidInput};
+                if (count > 40000000 - pixels || size.width() > 8192 || size.height() > 32000)
                     return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::TooLarge};
                 pixels += count;
                 auto image = reader.read();

@@ -21,6 +21,7 @@
 #include <QClipboard>
 #include <QMimeData>
 #include <QFileInfo>
+#include <QFile>
 #include <QFileDialog>
 #include <QTemporaryDir>
 #include <QLineEdit>
@@ -304,6 +305,43 @@ void installUiCaptureHook(QApplication &application)
                     || !samePixels(document->renderToImage(), original)) { application.exit(84); return; }
                 for (auto window : QGuiApplication::allWindows())
                     if (qobject_cast<PinnedImageWindow *>(window)) { application.exit(85); return; }
+                const auto warningText = InlineMessageModel::instance()->data(
+                    InlineMessageModel::instance()->index(beforeWarning, 0), Qt::DisplayRole).toString();
+                if (!warningText.contains(QStringLiteral("repeated image"))) { application.exit(86); return; }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE_ERRORS")) {
+                    const auto wrongWidth = files.filePath(QStringLiteral("frame20-width.png"));
+                    const auto missingOverlap = files.filePath(QStringLiteral("frame20-gap.png"));
+                    const auto broken = files.filePath(QStringLiteral("frame20-broken.png"));
+                    QImage gap(320, 360, QImage::Format_RGBA8888); gap.fill(QColor(222, 222, 222));
+                    QFile damaged(broken);
+                    if (!expected.copy(0, 240, 319, 360).save(wrongWidth) || !gap.save(missingOverlap)
+                        || !damaged.open(QIODevice::WriteOnly)) { application.exit(87); return; }
+                    damaged.write("not an image"); damaged.close();
+                    const QList<QPair<QStringList, QString>> errors = {
+                        {{top, wrongWidth}, QStringLiteral("same width")},
+                        {{top, broken}, QStringLiteral("could not be read")},
+                        {{top}, QStringLiteral("Choose 2")},
+                        {{top, missingOverlap}, QStringLiteral("No unchanged overlap")},
+                    };
+                    for (const auto &test : errors) {
+                        auto messages = InlineMessageModel::instance(); messages->clear();
+                        viewer->combineImages(); QTest::qWait(200); dialog = currentDialog();
+                        filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+                        if (!filename) { application.exit(88); return; }
+                        QStringList quoted;
+                        for (const auto &path : test.first) quoted.append(QStringLiteral("\"%1\"").arg(path));
+                        filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, quoted.join(QLatin1Char(' ')));
+                        QMetaObject::invokeMethod(dialog, "accept");
+                        if (!QTest::qWaitFor([&] { return !viewer->combiningImages() && dialog.isNull(); }, 5000)
+                            || messages->rowCount() != 1 || !messages->data(messages->index(0, 0), Qt::DisplayRole).toString().contains(test.second)
+                            || !samePixels(document->renderToImage(), original)) { application.exit(89); return; }
+                        for (auto window : QGuiApplication::allWindows())
+                            if (qobject_cast<PinnedImageWindow *>(window)) { application.exit(90); return; }
+                    }
+                    QTest::qWait(400);
+                    if (!viewer->grabWindow().save(destination)) { application.exit(91); return; }
+                    qInfo() << "NkShot specific mismatch, damaged-image, count and missing-overlap errors passed";
+                }
                 qInfo() << "NkShot combine actual menu, cancel/reopen, numeric filename order, exact pixels and source isolation and duplicate rejection passed";
                 application.exit(0); return;
             }
