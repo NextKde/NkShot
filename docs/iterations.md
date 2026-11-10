@@ -86,3 +86,28 @@ observed. No full native-menu invocation/save/clipboard interaction test yet.
 The image is intentionally a synthetic fixture. These are software-rendered
 window captures, not glass-effect or complete Apple-style acceptance. The
 annotation sidebar and native menu styling still need a coordinated review.
+
+## 005 — Editor regression tests and render-thread safety
+
+Review found a potential lock inversion: calling the upstream document renderer
+inside a scene-graph paint callback can wait for the GUI thread's pending timer.
+No hang was reproduced, but the implementation now pre-composes an immutable
+image in GUI-thread updatePolish; the render callback only consumes that snapshot.
+Document repaints invalidate the snapshot, reducing repeated full-image work
+during scrolling. Match upstream fractional-DPR crop rounding.
+
+New QtTest verifies rectangle creation, pixel changes, undo, redo, nonzero-origin
+crop, PNG save/read pixel equivalence, and actual software viewport repaint after
+undo/redo. The initial PNG comparison exposed premultiplied/nonpremultiplied
+QImage format differences; comparison now normalizes storage format, not pixels.
+
+Verified: incremental build passed; CTest 2/2 passed. The editor test also passed
+with QSG_RENDER_LOOP=threaded and a 20-second timeout. This exercises the requested
+software loop configuration, not a real Wayland desktop. Static checks 14/14 pass.
+[Actual editor screenshot](screenshots/005-editor-snapshot.png) was reviewed after
+the threading change: image and controls remain visible.
+
+Still not covered: physical mouse gestures, large-image performance, all annotation
+tools, fractional-DPR matrix, GPU visuals, desktop screenshot/recording. User
+rejected the original editor appearance; the next visual iteration must redesign
+the workspace, not merely recolor toolbar buttons.

@@ -9,7 +9,11 @@ class PortableAnnotationViewport : public AnnotationViewport
     Q_OBJECT
     QML_ELEMENT
 public:
-    using AnnotationViewport::AnnotationViewport;
+    explicit PortableAnnotationViewport(QQuickItem *parent = nullptr);
 protected:
+    void updatePolish() override;
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data) override;
+private:
+    QImage m_softwareImage;
+    QMetaObject::Connection m_repaintConnection;
 };

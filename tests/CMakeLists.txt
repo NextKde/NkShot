@@ -24,3 +24,16 @@ ecm_add_test(
     LINK_LIBRARIES  Qt::Test
         Qt::PrintSupport Qt::Qml KF6::I18n KF6::ConfigCore KF6::GlobalAccel KF6::KIOCore KF6::WindowSystem KF6::XmlGui KF6::GuiAddons KF6::PrisonScanner
 )
+
+# Reusable editor model and actual software viewport regression tests.
+ecm_add_test(
+    EditorDocumentTest.cpp
+    ../src/Gui/PortableAnnotationViewport.cpp
+    ../src/Gui/PortableAnnotationViewport.h
+    TEST_NAME "editor_document_test"
+    LINK_LIBRARIES Qt::Test Qt::Quick KQuickImageEditor
+)
+set_tests_properties(editor_document_test PROPERTIES
+    TIMEOUT 20
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
+)
