@@ -12,7 +12,9 @@ import org.kde.spectacle.private
 PortableAnnotationViewport {
     id: root
 
-    document: SpectacleCore.annotationDocument
+    // Inject the image model so a future photo editor can reuse this canvas.
+    required property AnnotationDocument editorDocument
+    document: editorDocument
     viewportRect: Qt.rect(0, 0, width, height)
 
     onPressedChanged: if (pressed) {

@@ -21,6 +21,14 @@ import org.kde.kquickimageeditor
 EmptyPage {
     id: root
     focus: true
+    palette.windowText: Kos.AppTheme.paletteText
+    palette.text: Kos.AppTheme.paletteText
+    palette.buttonText: Kos.AppTheme.paletteText
+    palette.window: Kos.AppTheme.contentSecondaryBackground
+    palette.base: Kos.AppTheme.contentBackground
+    palette.button: Kos.AppTheme.controlBackground
+    palette.light: Kos.AppTheme.border
+    palette.mid: Kos.AppTheme.border
     background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
 
     // Used in ViewerWindow::setMode()

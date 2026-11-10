@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QStandardPaths>
 #include <QPointer>
+#include <QPalette>
 #include <QQuickItem>
 #include <QTimer>
 
@@ -20,6 +21,23 @@ void installUiCaptureHook(QApplication &application)
     const QString destination = qEnvironmentVariable("NKSHOT_TEST_UI_CAPTURE");
     if (destination.isEmpty()) {
         return;
+    }
+
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_DARK")) {
+        // Supply a dark desktop palette to the real controls in offscreen tests.
+        // This tests palette adaptation without requiring a running desktop.
+        QPalette palette = application.palette();
+        palette.setColor(QPalette::Window, QColor(QStringLiteral("#1c1c1e")));
+        palette.setColor(QPalette::Base, QColor(QStringLiteral("#242426")));
+        palette.setColor(QPalette::Button, QColor(QStringLiteral("#2c2c2e")));
+        for (const auto role : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText}) {
+            palette.setColor(role, QColor(QStringLiteral("#f5f5f7")));
+        }
+        palette.setColor(QPalette::Highlight, QColor(QStringLiteral("#70a7ff")));
+        palette.setColor(QPalette::HighlightedText, Qt::black);
+        palette.setColor(QPalette::Mid, QColor(QStringLiteral("#454548")));
+        palette.setColor(QPalette::Light, QColor(QStringLiteral("#3a3a3c")));
+        application.setPalette(palette);
     }
 
     // Offscreen platforms do not supply desktop icon search paths. Restore the

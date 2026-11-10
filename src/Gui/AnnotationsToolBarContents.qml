@@ -78,6 +78,7 @@ ButtonGrid {
 
     component ToolButton: QQC.ToolButton {
         id: button
+        icon.color: palette.buttonText
         property string extraHelp: ""
         property bool secondary: false
         visible: !root.essentialsOnly || !secondary

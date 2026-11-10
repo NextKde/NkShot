@@ -67,7 +67,7 @@ MouseArea {
         animationDuration: Settings.reduceUiMotion ? 0 : Kirigami.Units.veryLongDuration
         sourceComponent: AnnotationEditor {
             enabled: contextWindow.annotating
-            document: SpectacleCore.annotationDocument
+            editorDocument: SpectacleCore.annotationDocument
             viewportRect: root.viewportRect
         }
     }

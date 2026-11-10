@@ -9,6 +9,7 @@ import org.kde.spectacle.private
 
 QQC.ToolButton {
     id: root
+    icon.color: palette.buttonText
     implicitHeight: QmlUtils.iconTextButtonHeight
     width: display === QQC.ToolButton.IconOnly ? height : implicitWidth
     // Keep the native content item, actions, accessibility and keyboard focus.

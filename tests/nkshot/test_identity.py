@@ -90,7 +90,10 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('action: EditAction {}', viewer)
         self.assertIn('contextWindow.annotating', viewer)
         self.assertIn('onToggled: contextWindow.annotating = checked', read('src/Gui/EditAction.qml'))
-        self.assertIn('document: SpectacleCore.annotationDocument', read('src/Gui/AnnotationEditor.qml'))
+        self.assertIn('required property AnnotationDocument editorDocument', read('src/Gui/AnnotationEditor.qml'))
+        self.assertIn('document: editorDocument', read('src/Gui/AnnotationEditor.qml'))
+        for path in ['ScreenshotView.qml', 'CaptureOverlay.qml']:
+            self.assertIn('editorDocument: SpectacleCore.annotationDocument', read('src/Gui/' + path))
 
     def test_annotation_tools_and_undo_redo_retained(self):
         toolbar = read('src/Gui/AnnotationsToolBarContents.qml')

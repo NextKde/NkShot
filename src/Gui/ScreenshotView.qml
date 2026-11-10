@@ -170,7 +170,7 @@ EmptyPage {
             scale: root.fitZoom
             visible: true
             enabled: contextWindow.annotating
-            document: SpectacleCore.annotationDocument
+            editorDocument: SpectacleCore.annotationDocument
             Keys.forwardTo: cropTool
             Keys.priority: Keys.AfterItem
         }

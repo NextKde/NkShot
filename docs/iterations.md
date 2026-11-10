@@ -186,3 +186,25 @@ comparison showed an approximately one-pixel right-edge difference. It may be an
 upstream incremental shadow repaint boundary; not diagnosed or fixed yet. Original
 tests retain their default shadow setting. Do not interpret this matrix as all
 annotation tools, text/IME, full QML interaction or GPU/desktop acceptance.
+
+## 010 — Injected editor model and dark palette review
+
+AnnotationEditor now requires an explicitly supplied editorDocument. Screenshot
+and capture-overlay callers provide their document; the reusable canvas no longer
+fetches the screenshot singleton. This is one boundary improvement, not a claim
+that the complete UI has become an independent photo-editor library.
+
+The first actual dark-palette run exposed black labels/icons on dark surfaces.
+Bind viewer palette roles to Kos.AppTheme semantic colors and explicitly tint
+monochrome action icons with buttonText. After each correction, rebuild and render.
+The final actual [light](screenshots/010-editor-light-final.png) and
+[dark](screenshots/010-editor-dark-final.png) windows were visually reviewed: labels
+and tools are legible and the layout is unchanged. The test-only hook supplies a
+dark desktop palette because the offscreen platform has no theme service; these
+are real controls, not recolored screenshots.
+
+Verified: incremental builds 021–024 passed; CTest 2/2 and updated static identity/
+injection checks 14/14 passed. Required-property injection was exercised by the
+actual viewer; capture overlay compiles but awaits a live compositor test.
+Remaining: full high-contrast/disabled-state audit, tool properties panel, live
+system theme changes, text/IME and native screenshot/recording workflows.

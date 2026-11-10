@@ -26,3 +26,7 @@ adjustments are not implemented in this fallback; committed document adjustments
 are rendered normally. NkShot currently does not set those preview properties.
 
 Set `NKSHOT_TEST_MORE=1` to open the actual More menu before capture.
+
+Additional capture states: `NKSHOT_TEST_MORE_TOOLS=1`, `NKSHOT_TEST_ZOOM=1`,
+`NKSHOT_TEST_TOOL=blur` or `text`, and `NKSHOT_TEST_DARK=1`. Dark mode supplies a
+dark QPalette to the actual offscreen application; it does not post-process pixels.
