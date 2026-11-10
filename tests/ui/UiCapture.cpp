@@ -208,7 +208,10 @@ void installUiCaptureHook(QApplication &application)
                 QPointer<PinnedImageWindow> second = qobject_cast<PinnedImageWindow *>(viewer->pinImage());
                 if (!second || !samePixels(first->snapshot(), original) || !samePixels(second->snapshot(), edited)
                     || samePixels(first->snapshot(), second->snapshot())) { application.exit(42); return; }
-                first->resize(480, 360);
+                const auto pinSize = qEnvironmentVariable("NKSHOT_TEST_PIN_SIZE", QStringLiteral("480x360")).split(u'x');
+                if (pinSize.size() == 2 && pinSize[0].toInt() >= 260 && pinSize[1].toInt() >= 180)
+                    first->resize(pinSize[0].toInt(), pinSize[1].toInt());
+                else first->resize(480, 360);
                 first->requestActivate();
                 QTest::qWait(400);
                 auto click = [](QQuickWindow *window, const QString &name) {
@@ -220,6 +223,11 @@ void installUiCaptureHook(QApplication &application)
                 };
                 if (!click(first, QStringLiteral("nkshotPinCopy")) || !samePixels(QApplication::clipboard()->image(), original)) {
                     application.exit(43); return;
+                }
+                auto copyButton = visualItem(first->contentItem(), QStringLiteral("nkshotPinCopy"));
+                if (!copyButton || !copyButton->property("copied").toBool()) { application.exit(51); return; }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_FEEDBACK")) {
+                    if (!QTest::qWaitFor([copyButton] { return !copyButton->property("copied").toBool(); }, 2500)) { application.exit(52); return; }
                 }
                 if (!first->stayOnTop() || !click(first, QStringLiteral("nkshotPinTop")) || first->stayOnTop()) {
                     application.exit(44); return;

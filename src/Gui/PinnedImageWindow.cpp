@@ -29,7 +29,7 @@ PinnedImageWindow::PinnedImageWindow(const QImage &image, QQmlEngine *engine)
       m_providerId(QStringLiteral("nkshotpin%1").arg(++nextPin)), m_sharedEngine(engine)
 {
     setObjectName(QStringLiteral("nkshotPinnedImage"));
-    setTitle(i18nc("@title:window", "Pinned Image — NkShot"));
+    setTitle(i18nc("@title:window", "Pinned Image - NkShot"));
     setFlags(Qt::Window | Qt::WindowStaysOnTopHint);
     setMinimumSize({260, 180});
     setResizeMode(SizeRootObjectToView);
@@ -54,7 +54,7 @@ PinnedImageWindow::~PinnedImageWindow()
     if (m_sharedEngine) m_sharedEngine->removeImageProvider(m_providerId);
 }
 QUrl PinnedImageWindow::imageSource() const { return QUrl(QStringLiteral("image://%1/snapshot").arg(m_providerId)); }
-void PinnedImageWindow::copyImage() { QApplication::clipboard()->setImage(m_image); }
+void PinnedImageWindow::copyImage() { QApplication::clipboard()->setImage(m_image); Q_EMIT imageCopied(); }
 void PinnedImageWindow::setStayOnTop(bool value)
 {
     if (value == stayOnTop()) return;

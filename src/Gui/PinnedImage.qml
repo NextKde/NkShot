@@ -47,9 +47,21 @@ QQC.Pane {
             }
             Item { Layout.fillWidth: true }
             PinButton {
+                id: copyButton
                 objectName: "nkshotPinCopy"
-                text: i18nc("@action", "Copy")
-                icon.name: "edit-copy"
+                property bool copied: false
+                text: copied ? i18nc("@info", "Copied") : i18nc("@action", "Copy")
+                icon.name: copied ? "dialog-ok" : "edit-copy"
+                display: root.width < 340 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
+                Connections {
+                    target: pinnedWindow
+                    function onImageCopied() { copyButton.copied = true; copyFeedback.restart() }
+                }
+                Timer {
+                    id: copyFeedback
+                    interval: 1800
+                    onTriggered: copyButton.copied = false
+                }
                 onClicked: pinnedWindow.copyImage()
             }
             PinButton {

@@ -22,6 +22,7 @@ public:
     Q_INVOKABLE void copyImage();
 Q_SIGNALS:
     void stayOnTopChanged();
+    void imageCopied();
 protected:
     bool event(QEvent *event) override;
 private:

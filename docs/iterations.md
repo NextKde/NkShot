@@ -625,3 +625,16 @@ Wayland/compositor policy can affect topmost behavior; KWin desktop validation
 is still unavailable. These are actual software-rendered application windows
 with synthetic image input, not a fake desktop demonstration. The opt-in dev
 harness can report pending QML incubations at forced shutdown.
+
+## 032 — Compact pins and copy feedback
+
+The pin's Copy action now shows a checkmark/Copied confirmation for 1.8 seconds,
+then returns to Copy. At widths below 340 pixels it uses an accessible icon-only
+control with a tooltip, preserving all controls at the 260×180 minimum.
+
+Incremental build passed. Extend actual pin tests to assert immediate feedback
+and timer reset; rerun full snapshot/copy/topmost-flag/close/editor-close checks
+in minimum size, normal dark and timeout scenarios. All exit0, CTest 4/4 and
+static checks 16/16 pass. Reviewed [minimum size](screenshots/032-pin-compact.png)
+and [dark feedback](screenshots/032-pin-dark.png). Real pin windows, synthetic
+image input/software rendering only; compositor stacking remains unverified.

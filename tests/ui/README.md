@@ -101,3 +101,7 @@ cancel, timed double-click acceptance, crop pixels and keyboard undo/redo.
 independent immutable snapshots, actual copy/topmost-toggle/close controls and
 editor-close survival, then captures the real pin window. Topmost flag checks
 do not establish compositor stacking behavior.
+
+The pin test accepts `NKSHOT_TEST_PIN_SIZE=260x180` for minimum-size review and
+`NKSHOT_TEST_PIN_FEEDBACK=1` to verify Copied feedback returns to Copy after its
+actual timer. Clipboard pixels are checked independently of the feedback label.
