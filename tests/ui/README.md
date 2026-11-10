@@ -75,3 +75,7 @@ The region drag probe still uses synthetic pixels, not a desktop capture backend
 `NKSHOT_TEST_NOTIFICATIONS=1` exercises a bounded twelve-warning stack, scrolls
 the actual list, clicks a real dismissal button, checks copied-message replacement
 and verifies stable workbench geometry. It does not invoke external file handlers.
+
+Add `NKSHOT_TEST_NOTIFICATION_TIMEOUT=1` to the notification test to wait for the
+real ten-second transient-message expiry while its row is scrolled out of view.
+Allow at least 30 seconds for the complete process. Persistent warnings must remain.

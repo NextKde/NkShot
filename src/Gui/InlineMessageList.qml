@@ -126,17 +126,7 @@ ListView {
             return actions
         }
         onLinkActivated: (link) => Qt.openUrlExternally(link)
-        Timer {
-            running: switch (delegate.model.type) {
-            case InlineMessageModel.Copied:
-            case InlineMessageModel.Shared:
-                return true
-            default:
-                return false
-            }
-            interval: 10000
-            onTriggered: InlineMessageModel.pop(delegate.index)
-        }
+
     }
 
     Component {

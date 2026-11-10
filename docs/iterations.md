@@ -453,3 +453,18 @@ severity icons and remain available in a bounded stack rather than displacing
 the image. Synthetic input/software rendering only. Scrolling here is driven by
 the list's content position; physical wheel/touch gestures and timeout behavior
 for virtualized messages are not yet covered.
+
+## 022 — Notification expiry independent of virtualized delegates
+
+Move the existing ten-second Copied/Shared lifetime from QML ListView delegates
+into InlineMessageModel. A scrolled-out delegate must not suspend or reset the
+message lifetime. Assign each inserted item a monotonic identity so a pending
+old timer cannot delete a newer replacement or another row after removal.
+Persistent saved/error/warning messages remain persistent.
+
+Incremental compilation passed. Extend the actual-window overflow scenario to
+scroll the transient row out of view and wait for expiry: Copied disappears while
+all eleven remaining warnings persist, and the workbench stays unchanged. Actual
+close click and duplicate replacement checks still pass. CTest 4/4 and static
+checks 15/15 pass. Reviewed the [post-expiry window](screenshots/022-notification-timeout.png).
+Synthetic input/software rendering only; no real desktop or recording claim.

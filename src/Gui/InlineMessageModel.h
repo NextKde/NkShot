@@ -71,8 +71,10 @@ private:
         InlineMessageType type;
         QString text;
         QVariant data;
+        quint64 serial;
     };
 
     QList<Item> m_data;
+    quint64 m_nextSerial = 0;
     QHash<int, QByteArray> m_roleNames;
 };

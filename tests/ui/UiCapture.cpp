@@ -296,6 +296,17 @@ void installUiCaptureHook(QApplication &application)
                     application.exit(23); return;
                 }
                 qInfo() << "NkShot notification overflow, actual dismiss, deduplication and stable geometry passed";
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_NOTIFICATION_TIMEOUT")) {
+                    list->setProperty("contentY", 0);
+                    // The transient last row is outside the visible list area.
+                    if (!QTest::qWaitFor([model] { return model->rowCount() == 11; }, 11000)) {
+                        qCritical() << "NkShot offscreen transient notification failed to expire";
+                        application.exit(24); return;
+                    }
+                    if (QRectF(workbench->position(), workbench->size()) != before) { application.exit(25); return; }
+                    qInfo() << "NkShot offscreen transient timeout preserved all eleven persistent warnings";
+                }
+
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_CONTEXT_MENU")) {
                 auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));

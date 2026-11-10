@@ -8,6 +8,7 @@
 #include <KIO/OpenFileManagerWindowJob>
 #include <KSystemClipboard>
 #include <QMimeData>
+#include <QTimer>
 
 using namespace Qt::StringLiterals;
 
@@ -88,8 +89,21 @@ void InlineMessageModel::push(InlineMessageType type, const QString &text, const
     }
     const int i = m_data.size();
     beginInsertRows({}, i, i);
-    m_data.push_back({type, text, data});
+    const auto serial = ++m_nextSerial;
+    m_data.push_back({type, text, data, serial});
     endInsertRows();
+    // Lifetime belongs to the model, not a virtualized ListView delegate.
+    // Identity prevents an older timer from removing a replacement message.
+    if (type == Copied || type == Shared) {
+        QTimer::singleShot(10000, this, [this, serial] {
+            for (int row = 0; row < m_data.size(); ++row) {
+                if (m_data[row].serial == serial) {
+                    pop(row);
+                    return;
+                }
+            }
+        });
+    }
     auto last = index(i);
     if (removed.isValid()) {
         Q_EMIT dataChanged(removed, last, {TypeRole, Qt::DisplayRole, DataRole});
