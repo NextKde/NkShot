@@ -194,10 +194,13 @@ EmptyPage {
 
     InlineMessageList {
         id: inlineMessageList
-        // parent is contentItem
-        anchors.left: parent.left
+        // Notifications overlay the workbench without changing image zoom/geometry.
         anchors.right: parent.right
         anchors.top: parent.top
+        anchors.margins: 16
+        width: Math.min(520, parent.width - 32)
+        maximumHeight: Math.max(80, parent.height * 0.4)
+        z: 3
     }
 
     QQC.Pane { // parent is contentItem
@@ -288,10 +291,11 @@ EmptyPage {
 
     Loader { // parent is contentItem
         id: contentLoader
+        objectName: "nkshotWorkbench"
         anchors {
             left: parent.left
             right: parent.right
-            top: inlineMessageList.bottom
+            top: parent.top
             bottom: annotationsToolBar.visible ? annotationsToolBar.top : parent.bottom
             topMargin: 24
             leftMargin: 24

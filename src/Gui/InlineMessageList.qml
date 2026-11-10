@@ -9,10 +9,14 @@ import org.kde.spectacle.private
 
 ListView {
     id: root
+    property real maximumHeight: Number.POSITIVE_INFINITY
     model: InlineMessageModel
-    interactive: false
+    interactive: contentHeight > height
+    clip: true
+    spacing: 8
+    QQC.ScrollBar.vertical: QQC.ScrollBar {}
     visible: height > 0
-    height: implicitHeight
+    height: Math.min(implicitHeight, maximumHeight)
     implicitHeight: contentHeight
     contentWidth: width
     Behavior on height {
@@ -87,7 +91,7 @@ ListView {
         }
         text: model.text
         visible: true
-        position: Kirigami.InlineMessage.Position.Header
+        position: Kirigami.InlineMessage.Position.Inline
         width: root.width
         actions: {
             const data = model.data

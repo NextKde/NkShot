@@ -207,6 +207,8 @@ void installUiCaptureHook(QApplication &application)
                     return;
                 }
                 const auto expected = SpectacleCore::instance()->annotationDocument()->renderToImage();
+                auto workbench = viewer->rootObject()->findChild<QQuickItem *>(QStringLiteral("nkshotWorkbench"));
+                const QRectF before = workbench ? QRectF(workbench->position(), workbench->size()) : QRectF();
                 viewer->copyImage();
                 if (!QTest::qWaitFor([expected] {
                     return QApplication::clipboard()->image().convertToFormat(expected.format()) == expected;
@@ -225,6 +227,12 @@ void installUiCaptureHook(QApplication &application)
                 }
                 qInfo() << "NkShot actual Copy and Save action pixel regressions passed";
                 QTest::qWait(800);
+                if (!workbench || QRectF(workbench->position(), workbench->size()) != before) {
+                    qCritical() << "NkShot notifications changed workbench geometry";
+                    application.exit(19);
+                    return;
+                }
+                qInfo() << "NkShot notification workbench geometry remained stable" << before;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_CONTEXT_MENU")) {
                 auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));

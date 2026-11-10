@@ -378,3 +378,26 @@ These are real application-window grabs with synthetic input and software
 rendering, not real desktop captures or production GPU-material acceptance.
 Backend-gated recording is unavailable here; menu action routes are retained but
 not all native dialogs or video actions have been interactively exercised.
+
+## 018 — Stable workbench during export notifications
+
+Move notifications into a right-aligned, bounded, scrollable overlay instead of
+reflowing the image viewport. Keep existing messages, error/warning states, file
+links, open-folder/copy/dismiss actions and copied/shared timeout behavior.
+Add a real-window assertion that Copy/Save notifications leave the workbench
+position and size unchanged.
+
+The isolated build environment was lost and reconstructed from approved official
+packages and pinned source dependencies. KQuickImageEditor (91 steps), KPipeWire
+(177 steps), and NkShot (361 steps) rebuilt successfully; dependency tests 3/3,
+NkShot CTest 4/4 and static tests 15/15 passed. Actual annotated-image Copy/Save
+pixel equality, properties close/undo/redo and stable geometry passed in light
+and dark software-rendered application windows. Reviewed
+[light](screenshots/018-notification-overlay.png) and
+[dark](screenshots/018-notification-dark.png), using synthetic pixels.
+
+Open findings, not acceptance: an extra unannotated-image Copy pixel comparison
+failed and needs diagnosis; the annotated route passes. Dark notification icon
+and link contrast needs refinement. Repeated-message overflow/dismiss semantics
+need interaction coverage. Forced test exit can warn about two pending QML
+incubations. No DBus/KWin, real capture/recording or GPU-window acceptance is claimed.
