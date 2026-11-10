@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
+#include "Gui/InlineMessageModel.h"
 #include "Gui/CaptureWindow.h"
 #include "Gui/SelectionEditor.h"
 #include "Gui/Selection.h"
@@ -25,6 +26,15 @@
 #include <QQuickItem>
 #include <QTimer>
 #include <cstring>
+
+static QQuickItem *visualItem(QQuickItem *root, const QString &name)
+{
+    if (root->objectName() == name) return root;
+    for (auto child : root->childItems()) {
+        if (auto found = visualItem(child, name)) return found;
+    }
+    return nullptr;
+}
 
 static bool samePixels(const QImage &a, const QImage &b)
 {
@@ -246,6 +256,46 @@ void installUiCaptureHook(QApplication &application)
                     return;
                 }
                 qInfo() << "NkShot notification workbench geometry remained stable" << before;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_NOTIFICATIONS")) {
+                auto model = InlineMessageModel::instance();
+                model->clear();
+                auto list = viewer->rootObject()->findChild<QQuickItem *>(QStringLiteral("nkshotNotifications"));
+                auto workbench = viewer->rootObject()->findChild<QQuickItem *>(QStringLiteral("nkshotWorkbench"));
+                const QRectF before(workbench->position(), workbench->size());
+                for (int i = 0; i < 12; ++i) {
+                    model->push(InlineMessageModel::Warning, QStringLiteral("Test warning %1: this message must remain available until dismissed.").arg(i));
+                }
+                QTest::qWait(700);
+                if (!list || model->rowCount() != 12 || list->height() > list->property("maximumHeight").toReal() + 1
+                    || list->property("contentHeight").toReal() <= list->height()) {
+                    qCritical() << "NkShot notification overflow bounds failed";
+                    application.exit(20);
+                    return;
+                }
+                list->setProperty("contentY", list->property("contentHeight").toReal() - list->height());
+                QTest::qWait(400);
+                auto close = visualItem(viewer->contentItem(), QStringLiteral("nkshotCloseNotification11"));
+                if (!close) {
+                    qCritical() << "NkShot notification close target missing" << list->property("contentY") << list->property("contentHeight") << list->height();
+                    for (auto item : viewer->rootObject()->findChildren<QQuickItem *>()) {
+                        if (item->objectName().startsWith(QStringLiteral("nkshotCloseNotification"))) qInfo() << item->objectName() << item->mapToScene(QPointF());
+                    }
+                    application.exit(21); return;
+                }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, close->mapToScene(QPointF(close->width()/2, close->height()/2)).toPoint());
+                if (!QTest::qWaitFor([model] { return model->rowCount() == 11; }, 1000)) {
+                    qCritical() << "NkShot notification actual close click failed";
+                    application.exit(22);
+                    return;
+                }
+                model->push(InlineMessageModel::Copied, QStringLiteral("Copied once"));
+                model->push(InlineMessageModel::Copied, QStringLiteral("Copied again"));
+                QTest::qWait(500);
+                if (model->rowCount() != 12 || QRectF(workbench->position(), workbench->size()) != before) {
+                    application.exit(23); return;
+                }
+                qInfo() << "NkShot notification overflow, actual dismiss, deduplication and stable geometry passed";
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_CONTEXT_MENU")) {
                 auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));

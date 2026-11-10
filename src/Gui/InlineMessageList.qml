@@ -10,6 +10,7 @@ import org.kde.spectacle.private
 
 ListView {
     id: root
+    objectName: "nkshotNotifications"
     property real maximumHeight: Number.POSITIVE_INFINITY
     model: InlineMessageModel
     interactive: contentHeight > height
@@ -179,6 +180,7 @@ ListView {
             displayComponent: QQC.ToolButton {
                 display: QQC.AbstractButton.IconOnly
                 action: kirigamiAction
+                objectName: "nkshotCloseNotification" + kirigamiAction.index
                 icon.color: Kos.AppTheme.paletteText
             }
         }

@@ -435,3 +435,21 @@ Copy/Save pixel equality and unchanged workbench geometry pass in both states;
 CTest 4/4 and static tests 15/15 pass. These remain actual development-window grabs
 with synthetic pixels/software rendering, not GPU/KWin acceptance. Repeated
 notification overflow and dismissal need additional interaction coverage.
+
+## 021 — Notification overflow and real dismissal regression
+
+Add a dev-only actual-window scenario with twelve distinct warnings. Verify the
+list is height-bounded and scrollable, scroll to its end, click the last warning's
+real close button with QTest, then insert repeated Copied messages and check
+replacement instead of accumulation. Assert image workbench geometry never
+changes. Name actual notification controls for reliable testing. The harness
+traverses the visual item tree because ListView-created controls are not all
+QObject descendants of the window's root object.
+
+Incremental build passed. All overflow/bounds, actual close click, deduplication
+and geometry assertions passed; CTest 4/4 and static tests 15/15 passed. Reviewed
+[actual window](screenshots/021-notification-overflow.png): warnings retain their
+severity icons and remain available in a bounded stack rather than displacing
+the image. Synthetic input/software rendering only. Scrolling here is driven by
+the list's content position; physical wheel/touch gestures and timeout behavior
+for virtualized messages are not yet covered.

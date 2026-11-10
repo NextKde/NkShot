@@ -71,3 +71,7 @@ This does not invoke a desktop capture backend or establish Wayland permissions.
 For the capture overlay probe, set `NKSHOT_TEST_CAPTURE_MORE=1` together with
 `NKSHOT_TEST_CAPTURE_OVERLAY=1` to open the selected-region secondary actions menu.
 The region drag probe still uses synthetic pixels, not a desktop capture backend.
+
+`NKSHOT_TEST_NOTIFICATIONS=1` exercises a bounded twelve-warning stack, scrolls
+the actual list, clicks a real dismissal button, checks copied-message replacement
+and verifies stable workbench geometry. It does not invoke external file handlers.
