@@ -604,3 +604,24 @@ pixels. CTest 4/4 and static tests 16/16 pass. Reviewed
 [cropped window](screenshots/030-crop-gesture.png), with synthetic input/software
 rendering. Update the preservation map to distinguish now-tested editing, OCR
 and dependency paths from remaining real desktop/recording gaps.
+
+## 031 — Offline pinned-image MVP
+
+Add More → Pin Image for still images. Freeze the current annotated pixels into
+a separate resizable, aspect-preserving window with shared Kos.Ui surfaces,
+Copy, Close and a Stay on Top toggle. Each pin has an independent image provider
+and immutable snapshot; no document mutation, disk write or network transfer is
+needed. Multiple pins are allowed. Native editor-window closure leaves pins
+alive; quitting the application closes them. Pins are not persistent saved files.
+
+Application build passed. Actual menu click, two different pin snapshots,
+original-document edit/undo isolation, real Copy/Stay on Top/Close clicks,
+resizing and survival after editor close all pass in light and dark. CTest 4/4
+and static checks 16/16 pass. Reviewed actual pin windows:
+[light](screenshots/031-pin-light.png), [dark](screenshots/031-pin-dark.png).
+
+The toggle's Qt window flag is tested, not real cross-application stacking.
+Wayland/compositor policy can affect topmost behavior; KWin desktop validation
+is still unavailable. These are actual software-rendered application windows
+with synthetic image input, not a fake desktop demonstration. The opt-in dev
+harness can report pending QML incubations at forced shutdown.

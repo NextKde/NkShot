@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
+#include "Gui/PinnedImageWindow.h"
 #include "Gui/InlineMessageModel.h"
 #include "Gui/CaptureWindow.h"
 #include "Gui/SelectionEditor.h"
@@ -184,6 +185,63 @@ void installUiCaptureHook(QApplication &application)
         QTimer::singleShot(500, &application, [&application, viewer, destination]() {
             if (!viewer) {
                 application.exit(3);
+                return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                const auto original = document->renderToImage();
+                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(41); return; }
+                QTest::qWait(200);
+                auto pinAction = visualItem(viewer->contentItem(), QStringLiteral("nkshotPinImageAction"));
+                if (!pinAction) { application.exit(41); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                    pinAction->mapToScene(QPointF(pinAction->width()/2, pinAction->height()/2)).toPoint());
+                QPointer<PinnedImageWindow> first;
+                for (auto window : QGuiApplication::allWindows()) {
+                    if (auto pin = qobject_cast<PinnedImageWindow *>(window)) first = pin;
+                }
+                if (!first) { application.exit(41); return; }
+                document->tool()->setType(AnnotationTool::RectangleTool);
+                document->beginItem({100,100}); document->continueItem({350,250}); document->finishItem();
+                const auto edited = document->renderToImage();
+                QPointer<PinnedImageWindow> second = qobject_cast<PinnedImageWindow *>(viewer->pinImage());
+                if (!second || !samePixels(first->snapshot(), original) || !samePixels(second->snapshot(), edited)
+                    || samePixels(first->snapshot(), second->snapshot())) { application.exit(42); return; }
+                first->resize(480, 360);
+                first->requestActivate();
+                QTest::qWait(400);
+                auto click = [](QQuickWindow *window, const QString &name) {
+                    auto button = visualItem(window->contentItem(), name);
+                    if (!button) return false;
+                    QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                        button->mapToScene(QPointF(button->width()/2, button->height()/2)).toPoint());
+                    return true;
+                };
+                if (!click(first, QStringLiteral("nkshotPinCopy")) || !samePixels(QApplication::clipboard()->image(), original)) {
+                    application.exit(43); return;
+                }
+                if (!first->stayOnTop() || !click(first, QStringLiteral("nkshotPinTop")) || first->stayOnTop()) {
+                    application.exit(44); return;
+                }
+                click(first, QStringLiteral("nkshotPinTop"));
+                if (!first->stayOnTop()) { application.exit(45); return; }
+                if (!click(second, QStringLiteral("nkshotPinClose")) || !QTest::qWaitFor([&second] { return second.isNull(); }, 1000)) {
+                    application.exit(46); return;
+                }
+                document->undo();
+                if (!samePixels(document->renderToImage(), original) || !samePixels(first->snapshot(), original)) { application.exit(47); return; }
+                viewer->close();
+                QTest::qWait(200);
+                if (!first || !first->isVisible() || !samePixels(first->snapshot(), original)) { application.exit(50); return; }
+                viewer->show();
+                if (!first->grabWindow().save(destination)) { application.exit(48); return; }
+                if (!click(first, QStringLiteral("nkshotPinClose")) || !QTest::qWaitFor([&first] { return first.isNull(); }, 1000)) {
+                    application.exit(49); return;
+                }
+                qInfo() << "NkShot actual menu entry, two pin snapshots, copy/top-toggle/close, source isolation and editor-close survival passed";
+                qInfo() << "NkShot actual pinned window capture" << destination;
+                application.exit(0);
                 return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_GESTURE")) {

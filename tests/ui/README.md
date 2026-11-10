@@ -96,3 +96,8 @@ test a real Fcitx/IBus candidate-selection session.
 
 `NKSHOT_TEST_CROP_GESTURE=1` with editing enabled tests actual drag/right-click
 cancel, timed double-click acceptance, crop pixels and keyboard undo/redo.
+
+`NKSHOT_TEST_PIN=1` with editing enabled clicks More → Pin Image, verifies two
+independent immutable snapshots, actual copy/topmost-toggle/close controls and
+editor-close survival, then captures the real pin window. Topmost flag checks
+do not establish compositor stacking behavior.

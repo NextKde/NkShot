@@ -33,6 +33,7 @@ public:
     static ViewerWindow *instance();
 
     Q_INVOKABLE void startDrag();
+    Q_INVOKABLE QQuickWindow *pinImage();
 
 protected:
     bool event(QEvent *event) override;

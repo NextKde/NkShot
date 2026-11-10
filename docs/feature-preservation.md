@@ -14,7 +14,8 @@ A retained route is not an end-to-end feature acceptance.
 | Undo/redo/crop | Main bar, shortcuts and original document model | Actual crop drag/cancel/accept and keyboard undo/redo pass; pixel/model tests pass for documented cases |
 | Zoom/pan | Minus/plus, popup Fit/Actual/custom value, wheel/pinch/shortcuts | Controls render; original coordinate model retained; rectangle/blur/pixelate checked at 3 zooms × 4 image DPRs across 8 process configurations; pan/pinch gestures pending |
 | OCR | More, only when original OCR capability is available | Initialization notification and synthetic English and one Chinese phrase recognized asynchronously; clipboard and temporary-language restoration tested, not general accuracy |
-| Translation, pinned images, scrolling capture | Future staged features | Not implemented; no fake completion claim |
+| Pinned images | More → Pin Image | Offline immutable snapshots; two windows, copy, topmost flag toggle, close, resize and editor-close survival tested; real KWin stacking pending |
+| Translation, scrolling capture | Future staged features | Not implemented; no fake completion claim |
 
 ## Reuse boundary
 

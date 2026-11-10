@@ -6,6 +6,8 @@
  */
 
 #include "ViewerWindow.h"
+#include "PinnedImageWindow.h"
+#include <KQuickImageEditor/AnnotationDocument>
 
 #include "Config.h"
 #include "Gui/ExportMenu.h"
@@ -65,6 +67,19 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
         KConfigGroup configGroup(KSharedConfig::openConfig(), u"ViewerWindow"_s);
         KWindowConfig::restoreWindowSize(this, configGroup);
     }
+}
+
+QQuickWindow *ViewerWindow::pinImage()
+{
+    if (SpectacleCore::instance()->videoMode()) return nullptr;
+    const auto image = SpectacleCore::instance()->annotationDocument()->renderToImage();
+    if (image.isNull()) return nullptr;
+    auto window = new PinnedImageWindow(image, engine());
+    if (window->status() != QQuickView::Ready) { delete window; return nullptr; }
+    window->setScreen(screen());
+    window->setPosition(position() + QPoint(40, 40));
+    window->show();
+    return window;
 }
 
 ViewerWindow::~ViewerWindow()

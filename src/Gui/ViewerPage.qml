@@ -165,6 +165,15 @@ EmptyPage {
                         icon.name: "document-share"
                         onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
                     }
+                    QQC.MenuItem {
+                        objectName: "nkshotPinImageAction"
+                        visible: !SpectacleCore.videoMode
+                        height: visible ? implicitHeight : 0
+                        text: i18nc("@action", "Pin Image")
+                        icon.name: "window-pin"
+                        icon.color: palette.buttonText
+                        onTriggered: contextWindow.pinImage()
+                    }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
                         opacity: enabled ? 1 : 0.38
