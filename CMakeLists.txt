@@ -53,7 +53,6 @@ find_package(
         Widgets
         DBus
         PrintSupport
-        Test
         WaylandClient
         Multimedia
 )
@@ -133,7 +132,10 @@ add_subdirectory(dbus)
 add_subdirectory(desktop)
 add_subdirectory(icons)
 # Upstream Spectacle migrations are deliberately not installed by NkShot.
-add_subdirectory(tests)
+if(BUILD_TESTING)
+    find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Test)
+    add_subdirectory(tests)
+endif()
 
 # Keep upstream manuals in source only: their install names belong to Spectacle.
 # Compile existing translations under our own domain without modifying originals.

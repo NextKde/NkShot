@@ -68,3 +68,11 @@ isolated from the host; local display sockets are currently unavailable there.
 OCR regression testing requires Tesseract English data (`tesseract-ocr-eng`) and
 DejaVu Sans fonts. The test creates a synthetic English image and uses a temporary
 configuration directory; it does not submit images to a network service.
+
+## Production configuration
+
+Use `-DBUILD_TESTING=OFF -DNKSHOT_ENABLE_UI_CAPTURE=OFF` for a production build.
+Qt Test is needed only for tests or the explicit developer capture hook. A fresh
+production build has also been verified with
+`-DCMAKE_DISABLE_FIND_PACKAGE_Qt6Test=TRUE`; do not enable the capture hook in
+distributed builds.

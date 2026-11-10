@@ -468,3 +468,24 @@ all eleven remaining warnings persist, and the workbench stays unchanged. Actual
 close click and duplicate replacement checks still pass. CTest 4/4 and static
 checks 15/15 pass. Reviewed the [post-expiry window](screenshots/022-notification-timeout.png).
 Synthetic input/software rendering only; no real desktop or recording claim.
+
+## 023 — Production build without Qt Test or developer capture
+
+Honor BUILD_TESTING when adding test targets and finding Qt Test. The opt-in
+developer capture hook still requests Qt Test explicitly when enabled; ordinary
+production builds no longer require it solely because test sources exist.
+
+Development reconfiguration/build and CTest 4/4 passed; static tests 15/15 passed.
+A fresh production tree configured with BUILD_TESTING=OFF,
+NKSHOT_ENABLE_UI_CAPTURE=OFF and CMAKE_DISABLE_FIND_PACKAGE_Qt6Test=TRUE, then
+completed all 333 build steps. CTest reports zero production tests; the final
+executable links neither Qt6Test nor missing libraries and contains no
+NKSHOT_TEST_UI_CAPTURE string. Its version command reports nkshot 6.8.3.
+
+Production --new-instance --edit-existing stayed alive for the full eight-second
+smoke interval (timeout exit124), emitted only the expected unavailable DBus
+warning, and ignored test capture environment variables without creating an
+image. Binary SHA256: 43388374a0ee84d54be855cab223197d63937e938802e3ce553ffcdccb18516b.
+No UI was changed in this build-only iteration; no new visual screenshot is
+claimed. This remains a cloud startup smoke check, not real KWin/recording or
+production GPU visual acceptance.
