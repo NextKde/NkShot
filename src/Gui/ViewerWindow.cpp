@@ -7,6 +7,8 @@
 
 #include "ViewerWindow.h"
 #include "PinnedImageWindow.h"
+#include "OcrTextWindow.h"
+#include "OcrManager.h"
 #include "Imaging/VerticalStitcher.h"
 #include <QFileDialog>
 #include <QImageReader>
@@ -63,6 +65,17 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
             InlineMessageModel::instance()->push(InlineMessageModel::Error, text);
         }
     });
+
+    if (mode == Viewer) {
+        connect(OcrManager::instance(), &OcrManager::textRecognized, this,
+            [this](const QString &text, const QStringList &, bool success) {
+                if (!success || text.trimmed().isEmpty()) return;
+                auto result = new OcrTextWindow(text, this->engine());
+                if (result->status() != QQuickView::Ready) { delete result; return; }
+                result->setScreen(screen());
+                result->show();
+            });
+    }
 
     // set up QML
     setResizeMode(QQuickView::SizeRootObjectToView);

@@ -2,6 +2,7 @@
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
 #include "Gui/PinnedImageWindow.h"
+#include "Gui/OcrTextWindow.h"
 #include "Gui/InlineMessageModel.h"
 #include "Gui/CaptureWindow.h"
 #include "Gui/SelectionEditor.h"
@@ -220,6 +221,58 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_RESULT")) {
+                const bool chinese = qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_CHINESE");
+                const QString expected = chinese ? QStringLiteral("中文截图编辑12345") : QStringLiteral("HELLO NKSHOT 12345");
+                QImage source(1000, 220, QImage::Format_RGB32); source.fill(Qt::white);
+                {
+                    QPainter painter(&source);
+                    QFont font(chinese ? QStringLiteral("Noto Sans CJK SC") : QStringLiteral("DejaVu Sans"));
+                    font.setPixelSize(chinese ? 72 : 64); painter.setFont(font); painter.setPen(Qt::black);
+                    painter.drawText(source.rect(), Qt::AlignCenter,
+                        chinese ? QStringLiteral("中文截图编辑 12345") : expected);
+                }
+                auto document = SpectacleCore::instance()->annotationDocument();
+                document->setBaseImage(source);
+                const auto original = document->renderToImage();
+                if (!QTest::qWaitFor([] { return SpectacleCore::instance()->ocrAvailable(); }, 10000)
+                    || !SpectacleCore::instance()->startOcrExtraction(chinese ? QStringLiteral("chi_sim") : QStringLiteral("eng"))) {
+                    application.exit(92); return;
+                }
+                QPointer<OcrTextWindow> result;
+                if (!QTest::qWaitFor([&] {
+                    for (auto window : QGuiApplication::allWindows())
+                        if (auto text = qobject_cast<OcrTextWindow *>(window)) result = text;
+                    return !result.isNull();
+                }, 15000)) { application.exit(93); return; }
+                auto normalized = result->recognizedText().simplified();
+                if (chinese) normalized.remove(QLatin1Char(' '));
+                auto textArea = visualItem(result->contentItem(), QStringLiteral("nkshotOcrText"));
+                auto copy = visualItem(result->contentItem(), QStringLiteral("nkshotOcrCopy"));
+                auto close = visualItem(result->contentItem(), QStringLiteral("nkshotOcrClose"));
+                if (normalized != expected || !textArea || !copy || !close || !textArea->property("readOnly").toBool()
+                    || !samePixels(document->renderToImage(), original)) { application.exit(94); return; }
+                const bool compact = qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_COMPACT");
+                result->resize(compact ? QSize(360, 260) : QSize(520, 360));
+                result->requestActivate(); QTest::qWait(300);
+                QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier, textArea->mapToScene(QPointF(20, 20)).toPoint());
+                QTest::keyClick(result, Qt::Key_A, Qt::ControlModifier);
+                QTest::keyClick(result, Qt::Key_C, Qt::ControlModifier);
+                if (textArea->property("selectedText").toString() != result->recognizedText()
+                    || QApplication::clipboard()->text() != result->recognizedText()) { application.exit(98); return; }
+                QMetaObject::invokeMethod(textArea, "deselect");
+                QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier,
+                    copy->mapToScene(QPointF(copy->width()/2, copy->height()/2)).toPoint());
+                if (QApplication::clipboard()->text() != result->recognizedText() || !copy->property("copied").toBool()) {
+                    application.exit(95); return;
+                }
+                if (!result->grabWindow().save(destination)) { application.exit(96); return; }
+                QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier,
+                    close->mapToScene(QPointF(close->width()/2, close->height()/2)).toPoint());
+                if (!QTest::qWaitFor([&] { return result.isNull(); }, 1000)) { application.exit(97); return; }
+                qInfo() << "NkShot real OCR result, copy feedback, source isolation and close passed" << expected;
+                application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
                 auto document = SpectacleCore::instance()->annotationDocument();

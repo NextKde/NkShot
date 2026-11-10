@@ -814,3 +814,22 @@ composition and cancellation tests rerun in both themes. Reviewed
 [dark](screenshots/042-combine-errors-dark.png) real software-rendered notifications.
 The core's ambiguity/size cases are covered by its unit tests; this does not claim
 large real-file or native desktop portal testing.
+
+## 043 — Review local OCR results in the application
+
+Successful OCR now opens a separate selectable plain-text result window with
+Copy all feedback and Close. The shared Kos palette and surfaces support light,
+dark and the minimum 360×260 size. The text is read-only and treated as plain
+text, not rich text or links. Existing automatic clipboard and notification
+behavior remains intact. Recognition stays on the device; no translation service
+or image upload is introduced. Failed/empty recognition does not open a result.
+
+Build, CTest 5/5 and static checks 16/16 pass. Actual Tesseract English and chi_sim
+recognition of synthetic image fixtures reaches the new window. Tests verify
+recognized text, unchanged source pixels, mouse focus plus Ctrl+A/C selection,
+Copy all clipboard/feedback and actual Close destruction. Light, dark, compact
+and Chinese cases pass. Reviewed [light](screenshots/043-ocr-light.png),
+[dark](screenshots/043-ocr-dark.png), [compact](screenshots/043-ocr-compact.png)
+and [Chinese](screenshots/043-ocr-chinese.png) software-rendered windows.
+The harness invokes the real core OCR entry point, not the menu action; this is
+not a general OCR-accuracy benchmark, desktop-notification test or GPU test.

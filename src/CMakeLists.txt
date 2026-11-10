@@ -36,6 +36,8 @@ target_sources(spectacle PRIVATE
     Geometry.cpp
     OcrManager.cpp
     Imaging/VerticalStitcher.cpp
+    Gui/OcrTextWindow.cpp
+    Gui/OcrTextWindow.h
     Gui/PinnedImageWindow.cpp
     Gui/PinnedImageWindow.h
     Gui/PortableAnnotationViewport.cpp
@@ -204,6 +206,7 @@ qt_target_qml_sources(spectacle
     Gui/TextContextMenuConnection.qml
     Gui/TtToolButton.qml
     Gui/UndoRedoGroup.qml
+    Gui/OcrText.qml
     Gui/PinnedImage.qml
     Gui/ViewerPage.qml
 )

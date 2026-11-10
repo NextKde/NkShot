@@ -133,3 +133,11 @@ a damaged PNG file, one-image selection and absent overlap through the actual
 picker. It requires the corresponding specific warning and no preview/editor
 mutation. The final capture shows the missing-overlap guidance. Duplicate error
 text is also checked in the ordinary combine scenario.
+
+`NKSHOT_TEST_OCR_RESULT=1` supplies a synthetic text image to the real core OCR
+entry point and waits for actual Tesseract output. It checks the result window,
+plain read-only text, unchanged source pixels, Ctrl+A/C selection, Copy all and
+Close destruction. Add `NKSHOT_TEST_OCR_CHINESE=1` for the installed chi_sim model,
+`NKSHOT_TEST_OCR_COMPACT=1` for 360×260, or `NKSHOT_TEST_DARK=1`. This invokes the
+core action, not a menu click, and does not establish real-world OCR accuracy or
+native desktop notification delivery.
