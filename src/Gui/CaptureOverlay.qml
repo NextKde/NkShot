@@ -85,10 +85,22 @@ MouseArea {
     }
 
     component ToolButton : TtToolButton {
+        property bool primaryAction: false
         focusPolicy: Qt.NoFocus
         implicitHeight: 36
+        icon.width: 18
+        icon.height: 18
         leftPadding: 10
         rightPadding: 10
+        palette.buttonText: primaryAction ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
+        background: Kos.KosSurface {
+            fillColor: parent.primaryAction ? Kos.AppTheme.accent
+                : parent.hovered || parent.down ? Kos.AppTheme.controlBackground : "transparent"
+            radius: 10
+            elevation: 0
+            strokeWidth: 0
+            showInnerHighlight: false
+        }
     }
     component CaptureMenuItem: QQC.MenuItem {
         icon.color: palette.buttonText
@@ -548,7 +560,7 @@ MouseArea {
                     easing.type: Easing.OutCubic
                 }
             }
-            layer.enabled: true // improves the visuals of the opacity animation
+            layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software // Software layers can lose rounded alpha.
             focusPolicy: Qt.NoFocus
             contentItem: ButtonGrid {
                 spacing: parent.spacing
@@ -646,9 +658,14 @@ MouseArea {
             id: imageFinalizerToolBarComponent
             ButtonGrid {
                 spacing: parent.parent.spacing
-                ToolBarSizeLabel {}
-                ToolButton { visible: action.enabled; action: AcceptAction {} }
-                ToolButton { visible: action.enabled; action: CancelAction {} }
+                ToolBarSizeLabel { color: Kos.AppTheme.mutedText }
+                ToolButton {
+                    objectName: "nkshotCaptureCancel"
+                    visible: action.enabled
+                    display: QQC.AbstractButton.IconOnly
+                    action: CancelAction {}
+                }
+                QQC.ToolSeparator { height: 24 }
                 ToolButton { visible: action.enabled; action: CopyImageAction {} }
                 ToolButton { visible: action.enabled; action: SaveAction {} }
                 ToolButton {
@@ -689,6 +706,13 @@ MouseArea {
                             onTriggered: Qt.callLater(function() { OptionsMenu.popup(captureMoreButton) })
                         }
                     }
+                }
+                ToolButton {
+                    objectName: "nkshotCaptureDone"
+                    visible: action.enabled
+                    primaryAction: true
+                    action: AcceptAction {}
+                    text: i18nc("@action finish screenshot selection", "Done")
                 }
             }
         }
@@ -999,7 +1023,7 @@ MouseArea {
                         easing.type: Easing.OutCubic
                     }
                 }
-                layer.enabled: true // improves the visuals of the opacity animation
+                layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software // Software layers can lose rounded alpha.
                 focusPolicy: Qt.NoFocus
                 contentItem: Loader {
                     sourceComponent: SpectacleCore.videoMode ? videoToolBarComponent : imageFinalizerToolBarComponent

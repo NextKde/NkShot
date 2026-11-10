@@ -752,3 +752,25 @@ secondary modes without changing document pixels or undo history, in light/dark/
 [dark](screenshots/039-tools-dark.png), [narrow](screenshots/039-tools-narrow.png)
 and the [capture overlay](screenshots/039-capture-overlay.png). These use synthetic
 input/software rendering; real desktop capture and GPU optics remain unverified.
+
+## 040 — Capture completion hierarchy and reliable fallback corners
+
+Place the primary Done action at the end of the capture completion bar, retain
+Copy/Save and More, and present cancellation as a labeled/tooltip icon. Dim the
+secondary size readout. Actions retain their original implementation, including
+AcceptAction behind Done. Use the same small icons and primary accent treatment
+as the standalone editor.
+
+Actual screenshots caught a Grid-anchor layout regression during implementation;
+remove that invalid anchor and add assertions that Done/Cancel and their toolbar
+have usable geometry inside the window. Software-rendered layers also exposed
+black rectangular corners: use the explicit solid FloatingBackground fallback
+and disable the software-only opacity layer while retaining the GPU material
+route. Rebuilt and reran all affected scenes after both corrections.
+
+Final build, CTest 5/5 and static checks 16/16 pass. Real selection mouse drags,
+finalizer geometry and More popup render pass in light/dark/menu states. Reviewed
+[light](screenshots/040-capture-light.png), [dark](screenshots/040-capture-dark.png)
+and [More](screenshots/040-capture-more.png). These are real selection windows
+fed synthetic input, not desktop-capture or recording validation. Actual accept/
+cancel capture lifecycle and full-window GPU effects remain unverified.

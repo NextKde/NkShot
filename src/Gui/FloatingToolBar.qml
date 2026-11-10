@@ -44,7 +44,7 @@ T.Pane {
     background: Item {
         Kos.LiquidPanelSurface {
             anchors.fill: parent
-            visible: root.uniformCorners
+            visible: root.uniformCorners && GraphicsInfo.api !== GraphicsInfo.Software && Settings.useLiquidMaterial
             backdrop: root.backdrop
             cornerRadius: root.radius
             materialOpacity: root.backgroundColorOpacity
@@ -56,7 +56,7 @@ T.Pane {
         // the shared material does not expose. Keep a truthful opaque fallback.
         FloatingBackground {
             anchors.fill: parent
-            visible: !root.uniformCorners
+            visible: !root.uniformCorners || GraphicsInfo.api === GraphicsInfo.Software || !Settings.useLiquidMaterial
             color: root.palette.window
             border.color: Qt.alpha(root.palette.windowText, 0.16)
             radius: root.radius

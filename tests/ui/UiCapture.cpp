@@ -156,6 +156,16 @@ void installUiCaptureHook(QApplication &application)
                     }
                     QTest::qWait(300);
                 }
+                for (const auto &name : {QStringLiteral("nkshotCaptureDone"), QStringLiteral("nkshotCaptureCancel")}) {
+                    auto action = visualItem(capture->contentItem(), name);
+                    if (!action || !action->isVisible() || action->width() < 20 || action->height() < 20
+                        || !action->parentItem() || action->parentItem()->width() < 200 || action->parentItem()->height() < 30) {
+                        qCritical() << "NkShot capture finalizer missing or clipped" << name;
+                        application.exit(70); return;
+                    }
+                    const auto bounds = action->mapRectToScene(QRectF(0, 0, action->width(), action->height()));
+                    if (!QRectF(0, 0, capture->width(), capture->height()).contains(bounds)) { application.exit(71); return; }
+                }
                 const auto pixels = capture->grabWindow();
                 const bool saved = !pixels.isNull() && pixels.save(destination);
                 qInfo() << "NkShot actual CaptureOverlay with synthetic input:" << destination << pixels.size();
