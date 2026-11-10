@@ -21,6 +21,7 @@ import org.kde.kquickimageeditor
 EmptyPage {
     id: root
     focus: true
+    background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
 
     // Used in ViewerWindow::setMode()
     readonly property real minimumWidth: Math.max(
@@ -161,23 +162,31 @@ EmptyPage {
 
     QQC.Pane { // parent is contentItem
         id: annotationsToolBar
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
+        anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.left
+        anchors.leftMargin: 16
         visible: false
-        leftPadding: header.leftPadding
-        rightPadding: header.rightPadding
-        topPadding: header.topPadding
-        bottomPadding: header.bottomPadding
+        leftPadding: 10
+        rightPadding: 10
+        topPadding: 12
+        bottomPadding: 12
         contentItem: AnnotationsToolBarContents {
             id: annotationsToolBarContents
             displayMode: QQC.AbstractButton.IconOnly
-            flow: Grid.TopToBottom
+            flow: Grid.LeftToRight
+            columns: 2
+            rows: -1
+            spacing: 6
+            paletteMode: true
             showUndoRedo: false
             showNoneButton: true
         }
-        background: Rectangle {
-            color: parent.palette.window
+        background: Kos.KosSurface {
+            fillColor: Kos.AppTheme.contentBackground
+            radius: 20
+            elevation: 0.5
+            strokeColor: Kos.AppTheme.border
+            showInnerHighlight: false
         }
     }
 
@@ -185,6 +194,8 @@ EmptyPage {
         id: separator
         visible: false
         anchors.left: annotationsToolBar.right
+        anchors.leftMargin: 16
+        opacity: 0
         anchors.top: parent.top
         anchors.bottom: parent.bottom
     }
@@ -196,6 +207,9 @@ EmptyPage {
             right: parent.right
             top: inlineMessageList.bottom
             bottom: footerLoader.top
+            topMargin: 24
+            rightMargin: 24
+            bottomMargin: 24
         }
         sourceComponent: SpectacleCore.videoMode ? recordingViewComponent : screenshotViewComponent
         Component {
@@ -217,6 +231,11 @@ EmptyPage {
         active: visible
         sourceComponent: QQC.ToolBar { // parent is contentItem
             position: QQC.ToolBar.Footer
+            leftPadding: 12
+            rightPadding: 16
+            topPadding: 10
+            bottomPadding: 10
+            background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
             contentHeight: QmlUtils.iconTextButtonHeight
             contentItem: RowLayout {
                 spacing: Kirigami.Units.mediumSpacing
@@ -339,7 +358,7 @@ EmptyPage {
                     value: true
                 }
                 AnchorAnimation {
-                    duration: Kirigami.Units.longDuration
+                    duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
                     easing.type: Easing.OutCubic
                 }
             }
@@ -348,7 +367,7 @@ EmptyPage {
             to: "normal"
             SequentialAnimation {
                 AnchorAnimation {
-                    duration: Kirigami.Units.longDuration
+                    duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
                     easing.type: Easing.OutCubic
                 }
                 PropertyAction {

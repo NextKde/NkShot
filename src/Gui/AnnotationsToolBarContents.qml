@@ -5,11 +5,13 @@
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Controls as QQC
+import Kos.Ui as Kos
 import org.kde.spectacle.private
 import org.kde.kquickimageeditor
 
 ButtonGrid {
     id: root
+    property bool paletteMode: false
     property bool showUndoRedo: true
     property bool showNoneButton: false
     property alias checkedButton: toolGroup.checkedButton
@@ -76,7 +78,19 @@ ButtonGrid {
     component ToolButton: QQC.ToolButton {
         id: button
         property string extraHelp: ""
-        implicitHeight: QmlUtils.iconTextButtonHeight
+        implicitHeight: root.paletteMode ? 36 : QmlUtils.iconTextButtonHeight
+        implicitWidth: root.paletteMode ? 36 : implicitContentWidth + leftPadding + rightPadding
+        background: Kos.KosSurface {
+            fillColor: button.checked ? Kos.AppTheme.controlBackground
+                : button.hovered ? Kos.AppTheme.contentSecondaryBackground : "transparent"
+            radius: 10
+            elevation: 0
+            strokeWidth: 0
+            hovered: button.hovered
+            pressed: button.down
+            focused: button.visualFocus
+            showInnerHighlight: false
+        }
         focusPolicy: root.buttonFocusPolicy
         display: root.displayMode
         checkable: true

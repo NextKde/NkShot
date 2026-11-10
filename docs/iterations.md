@@ -111,3 +111,22 @@ Still not covered: physical mouse gestures, large-image performance, all annotat
 tools, fractional-DPR matrix, GPU visuals, desktop screenshot/recording. User
 rejected the original editor appearance; the next visual iteration must redesign
 the workspace, not merely recolor toolbar buttons.
+
+## 006 — Workspace composition, not just buttons
+
+Replace the full-height tool rail with a rounded two-column floating tool palette,
+add canvas breathing room, and use the same KosSurface vocabulary as NextKdeAppDemo.
+Entering edit mode now fits large images instead of cropping their view at 100%;
+small images are not enlarged. All original annotation tools remain present.
+Reduced-motion preference now also covers workspace and zoom transitions.
+
+Verified: both incremental builds passed; CTest 2/2, static checks 14/14 passed.
+Actual [960px](screenshots/006-editor-workspace.png) and
+[640px](screenshots/006-editor-workspace-narrow.png) captures were reviewed. The
+image is fully visible and controls are not clipped. This is an intermediate
+workspace redesign, not user acceptance: the palette still needs clear grouping,
+and the bottom properties/zoom area needs a coordinated compact treatment.
+
+Reference: NextKde NkNotes 014 light/013 dark layouts favor calm content planes,
+wide margins and a few capsules rather than glass on every control. GPU liquid
+materials remain unverified in this software-only runtime.

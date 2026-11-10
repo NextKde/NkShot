@@ -216,7 +216,7 @@ EmptyPage {
             when: contextWindow.annotating
             PropertyChanges {
                 target: annotationEditor
-                scale: 1
+                scale: Math.min(1, root.fitZoom)
             }
         },
         State {
@@ -232,7 +232,7 @@ EmptyPage {
         Transition {
             NumberAnimation {
                 property: "scale"
-                duration: Kirigami.Units.longDuration
+                duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
                 easing.type: Easing.InOutSine
             }
         }
