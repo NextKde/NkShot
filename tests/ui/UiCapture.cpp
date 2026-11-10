@@ -24,6 +24,19 @@
 #include <QPalette>
 #include <QQuickItem>
 #include <QTimer>
+#include <cstring>
+
+static bool samePixels(const QImage &a, const QImage &b)
+{
+    if (a.isNull() || a.size() != b.size()) return false;
+    const auto left = a.convertToFormat(QImage::Format_RGBA8888);
+    const auto right = b.convertToFormat(QImage::Format_RGBA8888);
+    for (int y = 0; y < left.height(); ++y) {
+        if (std::memcmp(left.constScanLine(y), right.constScanLine(y), left.width() * 4) != 0) return false;
+    }
+    return true;
+}
+
 
 void installUiCaptureHook(QApplication &application)
 {
@@ -211,7 +224,7 @@ void installUiCaptureHook(QApplication &application)
                 const QRectF before = workbench ? QRectF(workbench->position(), workbench->size()) : QRectF();
                 viewer->copyImage();
                 if (!QTest::qWaitFor([expected] {
-                    return QApplication::clipboard()->image().convertToFormat(expected.format()) == expected;
+                    return samePixels(QApplication::clipboard()->image(), expected);
                 }, 1000)) {
                     qCritical() << "NkShot Copy action pixels differ";
                     application.exit(13);
@@ -219,7 +232,7 @@ void installUiCaptureHook(QApplication &application)
                 }
                 viewer->save();
                 if (!QTest::qWaitFor([expected, output] {
-                    return QImage(output.toLocalFile()).convertToFormat(expected.format()) == expected;
+                    return samePixels(QImage(output.toLocalFile()), expected);
                 }, 1000)) {
                     qCritical() << "NkShot Save action pixels differ";
                     application.exit(14);

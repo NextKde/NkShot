@@ -401,3 +401,19 @@ failed and needs diagnosis; the annotated route passes. Dark notification icon
 and link contrast needs refinement. Repeated-message overflow/dismiss semantics
 need interaction coverage. Forced test exit can warn about two pending QML
 incubations. No DBus/KWin, real capture/recording or GPU-window acceptance is claimed.
+
+## 019 — Diagnose unannotated export comparison
+
+The extra Copy test failure in 018 was a test-comparison issue: diagnostic PNGs
+of clipboard and document output had identical RGBA pixels (zero difference in
+every channel). QImage object equality was stricter than the intended pixel
+contract. Compare normalized RGBA scanlines explicitly instead; do not change
+the working export backend to accommodate a faulty test.
+
+Incremental compilation passed, followed by unannotated Copy and Save pixel
+checks plus stable notification/workbench geometry in light and dark actual
+development windows. CTest 4/4 and static checks 15/15 passed. Reviewed
+[light](screenshots/019-unannotated-export.png) and
+[dark](screenshots/019-unannotated-dark.png). The known dark notification contrast
+issue remains for the next UI iteration. All screenshots use synthetic input
+and software rendering, not a KWin desktop capture.
