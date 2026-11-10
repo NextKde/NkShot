@@ -227,3 +227,23 @@ Not yet accepted: rapid property-change/close undo transactions, all font-dialog
 flows and keyboard/IME. A pre-existing context-menu signal warning remains in
 the property spinbox and needs a separate Qt 6.11 compatibility fix. The model
 flush path is implemented but not claimed as a full QML interaction regression.
+
+## 012 — Fix reproduced upstream shadow repaint clipping
+
+Isolated reproduction confirmed the prior edge discrepancy exists in upstream
+AnnotationDocument without any NkShot viewport or mouse input. Incremental repaint
+expanded only left/top bounds, clipping faint right/bottom shadow pixels. Apply
+a one-line symmetric repaint expansion to pinned KQuickImageEditor and keep the
+patch in third_party/patches with reproducible build instructions.
+
+Verified: 48 DPR/origin/size cases changed from 13 mismatches to 0; all full-render
+SHA256 values remained unchanged. The linked library was rebuilt/installed in the
+isolated prefix. New shadow_repaint_test checks the same 48 cases. NkShot CTest
+3/3, official KQuickImageEditor CTest 3/3 and static checks 14/14 pass. Actual
+[editor after dependency replacement](screenshots/012-editor-shadow-regression.png)
+was rendered and reviewed.
+
+Scope: this fixes reproduced rectangle shadow incremental-vs-full rendering,
+including a fractional-origin DPR1 case. It does not prove every transform,
+object-deletion or multi-tool shadow scenario. It is a local patch, not claimed
+to be accepted upstream.

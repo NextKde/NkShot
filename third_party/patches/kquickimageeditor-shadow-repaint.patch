@@ -1,0 +1,11 @@
+--- a/src/annotations/annotationdocument.cpp
++++ b/src/annotations/annotationdocument.cpp
+@@ -1065,7 +1065,7 @@
+         return;
+     }
+     // HACK: workaround not always repainting everywhere it should with fractional scaling.
+-    auto biggerRect = rect.normalized().adjusted(-1, -1, 0, 0).toAlignedRect();
++    auto biggerRect = rect.normalized().adjusted(-1, -1, 1, 1).toAlignedRect();
+     /* QRegion has a QRect overload for operator+=, but not for operator|=.
+      *
+      * `region += rect` is not the same as `region = region.united(rect)`. It will try to add the

@@ -29,7 +29,17 @@ to work around this requirement.
 ## Build sequence
 
 In an environment with the matching development packages installed, first build
-KQuickImageEditor and KPipeWire into your chosen `PREFIX`, then:
+KQuickImageEditor and KPipeWire into your chosen `PREFIX`. Before building the
+pinned KQuickImageEditor v0.7.0.1, apply the reviewed one-line repaint fix:
+
+```sh
+git -C "$KQUICKIMAGEEDITOR_SOURCE" apply "$NKSHOT_SOURCE/third_party/patches/kquickimageeditor-shadow-repaint.patch"
+```
+
+This fixes a reproduced incremental-shadow boundary difference. The patch targets
+commit `ac7568044defc89c494b0d6edb60073cb0ad8b25`; do not blindly reapply it to a
+newer upstream version. `shadow_repaint_test` detects whether the linked library
+still exhibits the issue. Then build NkShot:
 
 ```sh
 cmake -S . -B build -G Ninja \

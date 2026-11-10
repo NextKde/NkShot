@@ -37,3 +37,9 @@ set_tests_properties(editor_document_test PROPERTIES
     TIMEOUT 20
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
 )
+
+# Detect upstream fractional-DPR shadow repaint clipping; see third_party/patches.
+ecm_add_test(ShadowRepaintTest.cpp TEST_NAME "shadow_repaint_test"
+    LINK_LIBRARIES Qt::Test Qt::Gui KQuickImageEditor)
+set_tests_properties(shadow_repaint_test PROPERTIES TIMEOUT 20
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
