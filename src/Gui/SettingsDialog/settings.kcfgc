@@ -1,0 +1,8 @@
+File=nkshot.kcfg
+ClassName=Settings
+GlobalEnums=true
+Mutators=true
+GenerateProperties=true
+Singleton=true
+DefaultValueGetters=true
+QmlRegistration=true

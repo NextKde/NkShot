@@ -1,0 +1,157 @@
+set_source_files_properties(
+    foundation/AppTheme.qml
+    i18n/I18n.qml
+    controls/ControlForm.qml
+    controls/LiquidStyle.qml
+    PROPERTIES QT_QML_SINGLETON_TYPE TRUE
+)
+
+qt_add_qml_module(kos_ui
+    URI Kos.Ui
+    VERSION 1.0
+    STATIC
+    PLUGIN_TARGET kos_ui_plugin
+    RESOURCE_PREFIX /qt/qml
+    QML_FILES
+        i18n/I18n.qml
+        foundation/AppTheme.qml
+        foundation/KosSidebar.qml
+        foundation/KosSidebarToggle.qml
+        foundation/KosCheckBox.qml
+        foundation/KosComboBox.qml
+        foundation/KosTextArea.qml
+        foundation/KosApplicationWindow.qml
+        foundation/KosWindowControls.qml
+        foundation/KosWindowResizeHandles.qml
+        foundation/KosButton.qml
+        foundation/KosCard.qml
+        foundation/SettingsGroup.qml
+        foundation/SettingsItem.qml
+        foundation/SettingsTextField.qml
+        foundation/SettingsTextArea.qml
+        foundation/SettingsSwitch.qml
+        foundation/SettingsDateField.qml
+        foundation/SettingsTimeField.qml
+        foundation/SettingsAppearancePreview.qml
+        foundation/KosWorkspaceDialog.qml
+        foundation/KosItemDelegate.qml
+        foundation/KosDialog.qml
+        foundation/KosEmptyState.qml
+        foundation/KosNavigationButton.qml
+        foundation/KosPageCache.qml
+        foundation/KosPageMotion.qml
+        foundation/KosRoundButton.qml
+        foundation/KosSettingsDialog.qml
+        foundation/KosSlider.qml
+        foundation/KosSurface.qml
+        foundation/KosSwitch.qml
+        foundation/KosTextField.qml
+        foundation/KosToolButton.qml
+        foundation/KosToolTip.qml
+        foundation/KosLyricLine.qml
+        foundation/KosKineticScroll.qml
+        foundation/KosKineticScrollPhysics.mjs
+        foundation/PageCachePolicy.js
+        controls/ControlForm.qml
+        controls/ColorRampSlider.qml
+        controls/VectorIcon.qml
+        controls/LiquidGlassButton.qml
+        controls/LiquidStyle.qml
+        controls/LiquidBackdrop.qml
+        controls/LiquidSurface.qml
+        controls/LiquidGlassNumber.qml
+        controls/LiquidOuterShadow.qml
+        controls/LiquidCard.qml
+        controls/LiquidActionButton.qml
+        controls/LiquidActionButtonGroup.qml
+        controls/LiquidNavigationButton.qml
+        controls/LiquidCheckBox.qml
+        controls/LiquidContentPopover.qml
+        controls/LiquidPopover.qml
+        controls/LiquidPopoverItem.qml
+        controls/LiquidPopoverSurface.qml
+        controls/LiquidDialog.qml
+        controls/LiquidDialogButton.qml
+        controls/LiquidDialogSurface.qml
+        controls/LiquidPanelSurface.qml
+        controls/LiquidGlassSwitch.qml
+        controls/LiquidSlider.qml
+        controls/LiquidSelect.qml
+        controls/LiquidNavBar.qml
+        controls/LiquidTextField.qml
+        controls/LiquidSegmentedControl.qml
+        controls/SelectionHighlight.qml
+    RESOURCES
+        controls/shaders/liquid_popover.vert
+        controls/shaders/liquid_popover.frag
+        controls/shaders/liquid_popover.vert.qsb
+        controls/shaders/liquid_popover.frag.qsb
+        controls/shaders/liquid_dialog.vert
+        controls/shaders/liquid_dialog.frag
+        controls/shaders/liquid_dialog.vert.qsb
+        controls/shaders/liquid_dialog.frag.qsb
+        controls/shaders/liquid_number.vert
+        controls/shaders/liquid_number.vert.qsb
+        controls/shaders/liquid_number.frag
+        controls/shaders/liquid_number.frag.qsb
+        controls/shaders/liquid_highlight_full_extended.frag
+        controls/shaders/liquid_highlight_full_extended.frag.qsb
+        controls/shaders/liquid_highlight_full_extended_fallback.frag
+        controls/shaders/liquid_highlight_full_extended_fallback.frag.qsb
+        controls/shaders/liquid_convex.vert
+        controls/shaders/liquid_highlight_tint.vert
+        controls/shaders/liquid_highlight_tint.vert.qsb
+        controls/shaders/liquid_highlight_topbottom_wider.frag
+        controls/shaders/liquid_highlight_topbottom_wider.frag.qsb
+        controls/shaders/liquid_highlight_topbottom_wider_fallback.frag
+        controls/shaders/liquid_highlight_topbottom_wider_fallback.frag.qsb
+        controls/shaders/liquid_edgetint_glint.vert
+        controls/shaders/liquid_edgetint_glint.vert.qsb
+        controls/shaders/liquid_edgetint_rollback_before_shade_removal.frag
+        controls/shaders/liquid_edgetint_rollback_before_shade_removal.frag.qsb
+        controls/shaders/liquid_edgetint_rollback_before_shade_removal_fallback.frag
+        controls/shaders/liquid_edgetint_rollback_before_shade_removal_fallback.frag.qsb
+        controls/shaders/liquid_adaptive_glint.vert
+        controls/shaders/liquid_adaptive_glint.vert.qsb
+        controls/shaders/liquid_adaptive_diagonal_light.frag
+        controls/shaders/liquid_adaptive_diagonal_light.frag.qsb
+        controls/shaders/liquid_adaptive_diagonal_light_fallback.frag
+        controls/shaders/liquid_adaptive_diagonal_light_fallback.frag.qsb
+        controls/shaders/liquid_convex.vert.qsb
+        controls/shaders/liquid_convex.frag
+        controls/shaders/liquid_convex.frag.qsb
+        controls/shaders/liquid_convex_reflection.vert
+        controls/shaders/liquid_convex_reflection.vert.qsb
+        controls/shaders/liquid_convex_diagonal_thin.frag
+        controls/shaders/liquid_convex_diagonal_thin.frag.qsb
+        controls/shaders/liquid_diffuse.vert
+        controls/shaders/liquid_diffuse.vert.qsb
+        controls/shaders/liquid_diffuse.frag
+        controls/shaders/liquid_diffuse.frag.qsb
+        controls/shaders/liquid_reflection.vert
+        controls/shaders/liquid_reflection.vert.qsb
+        controls/shaders/liquid_diagonal_thin.frag
+        controls/shaders/liquid_diagonal_thin.frag.qsb
+        controls/shaders/liquid_shadow.vert
+        controls/shaders/liquid_shadow.vert.qsb
+        controls/shaders/liquid_shadow.frag
+        controls/shaders/liquid_shadow.frag.qsb
+        controls/shaders/liquid_surface.vert
+        controls/shaders/liquid_surface.vert.qsb
+        controls/shaders/liquid_surface.frag
+        controls/shaders/liquid_surface.frag.qsb
+        i18n/qmldir
+        i18n/ZhCatalog.mjs
+        i18n/SystemLanguage.mjs
+)
+
+add_library(Kos::Ui ALIAS kos_ui)
+add_library(Kos::UiPlugin ALIAS kos_ui_plugin)
+
+target_link_libraries(kos_ui PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::QuickControls2
+)

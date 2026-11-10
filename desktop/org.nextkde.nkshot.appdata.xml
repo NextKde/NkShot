@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component type="desktop-application">
+  <id>org.nextkde.nkshot</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="org.nextkde"><name translate="no">NextKde</name></developer>
+  <name>NkShot</name>
+  <summary>A screenshot utility with a custom QML interface for KDE Plasma</summary>
+  <description><p>NkShot is a fork of KDE Spectacle with rounded floating controls and a neutral selection overlay. It retains Spectacle's screenshot, annotation and recording functionality.</p></description>
+  <launchable type="desktop-id">org.nextkde.nkshot.desktop</launchable>
+  <url type="homepage">https://github.com/NextKde/NkShot</url>
+  <url type="bugtracker">https://github.com/NextKde/NkShot/issues</url>
+  <url type="vcs-browser">https://github.com/NextKde/NkShot</url>
+  <content_rating type="oars-1.1"/>
+</component>

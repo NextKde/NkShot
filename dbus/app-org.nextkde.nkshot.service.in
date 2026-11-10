@@ -1,0 +1,7 @@
+[Unit]
+Description=NkShot screenshot capture utility
+
+[Service]
+ExecStart=@KDE_INSTALL_FULL_BINDIR@/nkshot --dbus
+BusName=org.nextkde.nkshot
+KillMode=process
