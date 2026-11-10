@@ -9,10 +9,22 @@
 - Preserved each modified source file's copyright/SPDX header.
 - Reviewed source diff for whitespace errors and action/shortcut preservation.
 
+## Actual build checks
+
+- Complete NkShot C++/QML build and staged install pass using Qt 6.11.2 / KF 6.30.
+- Official filename CTest: 1/1 pass.
+- Official KQuickImageEditor image-processing CTests: 3/3 pass.
+- The compiled application responds with `nkshot 6.8.3`.
+- Install manifest uses independent NkShot names, with no Spectacle-named artifacts.
+- Five changed QML files also pass the Qt 6.11.3 parser.
+- Standalone Kos.Ui software fallback renders; that is not the application UI.
+
 ## Not run yet
 
-The preparation environment has no CMake, Qt 6, KDE Frameworks or Plasma session.
-No compile, QML runtime, screenshot or capture-success claim has been made.
+Actual KWin capture, recording, editing interactions, GPU liquid optics and
+side-by-side application coexistence have not passed runtime acceptance.
+The cloud environment currently rejects the local display sockets required by
+Xvfb/KWin. See the iteration log; no screenshot-success claim is made.
 
 ## Required before release
 

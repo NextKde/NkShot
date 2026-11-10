@@ -33,8 +33,9 @@ native settings window are retained, not falsely described as a complete macOS
 27 reproduction. Apple assets are not copied. The design direction is the user's
 macOS-inspired NextKde family, not a claim of pixel-identical Apple behavior.
 
-No build or GPU visual acceptance has happened. A matching development environment
-must verify QML module/plugin imports, shader loading, backdrop mapping while
+The complete C++/QML build now passes. A standalone software-backend panel test
+rendered its opaque fallback; this does not validate the app UI or GPU optics.
+Runtime verification must still cover module/plugin imports, shader loading, backdrop mapping while
 moving toolbars, 100–200%/mixed DPI, light/dark themes, reduced transparency,
 reduced motion, joined panels and software fallback. Verify saved/copied image
 pixels exclude all overlay controls and glass effects, and compare the rendered

@@ -20,8 +20,8 @@ The visual changes are presentation, not a rewrite of image processing.
 6. Cancel capture/edit, repeat capture, then test dark/light themes, keyboard-only
    navigation, mixed-DPI multi-screen selection and narrow viewport layout.
 
-Static checks are useful but **do not satisfy these runtime gates**. No release
-binary has been built or tested in the current preparation environment.
+Static checks are useful but **do not satisfy these runtime gates**. A development binary has now compiled and passed the filename test. Capture,
+editing interaction and visual gates remain pending; this is not a release build.
 
 ## 2. Recording
 

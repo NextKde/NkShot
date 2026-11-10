@@ -1,7 +1,7 @@
 # NkShot
 
 A macOS-inspired QML interface fork of KDE Spectacle for the KDE Plasma desktop.
-This is an early source prototype, not a tested release or an Apple product.
+This is an early compiled prototype, not a release-tested product or an Apple product.
 
 ## Current scope
 
@@ -28,15 +28,15 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-Use a matching Plasma development environment. Build and runtime checks are still
-pending. Do not install this prototype over your working Spectacle package.
+Use a matching Plasma development environment. The first complete build, staged install, filename test and image-library tests
+passed. Full capture/runtime and visual acceptance are still pending. Do not install this prototype over your working Spectacle package.
 The executable is `nkshot`, the desktop/D-Bus ID is `org.nextkde.nkshot`, and
 settings are stored in `nkshotrc`. Notification, icon, translations and metadata
 install names are separate from Spectacle. Upstream migration scripts and manuals
 are not installed. Default global shortcuts are deliberately unassigned so the
 fork does not steal Spectacle's Print key; assign them in KDE System Settings.
-These source-level isolation changes still need an actual staged-install and
-side-by-side launch test before declaring coexistence verified.
+The staged install produced only NkShot-named application artifacts. A real
+side-by-side launch test is still needed before declaring coexistence verified.
 
 Source-level checks (no Qt dependencies):
 
@@ -65,3 +65,6 @@ translation is not implemented. See [delivery plan](docs/roadmap.md).
 
 See [liquid-material integration](docs/liquid-ui.md) for provenance, limits and
 required visual checks.
+
+Build requirements and the first verified results: [building](docs/building.md),
+[iteration log](docs/iterations.md).
