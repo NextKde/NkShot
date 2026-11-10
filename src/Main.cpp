@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
 
     KLocalizedString::setApplicationDomain(QByteArrayLiteral("nkshot"));
-    QCoreApplication::setOrganizationDomain(u"org.nextkde"_s);
+    QCoreApplication::setOrganizationDomain(u"nextkde.org"_s);
 
     KAboutData aboutData(u"nkshot"_s,
                          i18n("NkShot"),
@@ -50,6 +50,8 @@ int main(int argc, char **argv)
     aboutData.addAuthor(u"David Redondo"_s, {}, u"kde@david-redondo.de"_s);
     aboutData.addAuthor(u"Noah Davis"_s, {}, u"noahadvs@gmail.com"_s);
     aboutData.setTranslator(i18nc("NAME OF TRANSLATORS", "Your names"), i18nc("EMAIL OF TRANSLATORS", "Your emails"));
+    aboutData.setOrganizationDomain(QByteArrayLiteral("nextkde.org"));
+    aboutData.setDesktopFileName(u"org.nextkde.nkshot"_s);
     aboutData.setHomepage(u"https://github.com/NextKde/NkShot"_s);
     aboutData.setBugAddress(QByteArrayLiteral("https://github.com/NextKde/NkShot/issues"));
     KAboutData::setApplicationData(aboutData);

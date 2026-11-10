@@ -29,3 +29,20 @@ image is not presented as a screenshot of the application.
 
 Next: render the actual editor with a deterministic test image in a test-only
 configuration, inspect its pixels, then make small UI/action-hierarchy changes.
+
+## 002 — Correct runtime application identity
+
+The first real offscreen editor launch revealed a warning that KAboutData still
+advertised `org.kde.nkshot` even though the QGuiApplication ID was
+`org.nextkde.nkshot`. The early QCoreApplication setting alone was overwritten by
+KAboutData's defaults. Set both the organization domain (`nextkde.org`) and desktop
+ID on KAboutData explicitly, and strengthen the source regression test.
+
+Verified: incremental compile/link passed; filename CTest passed (1/1), source
+checks passed (14/14), and the actual editor process stayed running in an offscreen
+smoke launch without the identity-mismatch warning. The separate test-root MIME
+cache was generated, removing the missing PNG MIME warning.
+
+Not accepted yet: a live D-Bus service/coexistence test and screenshot backend.
+The smoke launch was stopped by its test timeout, not by a full interactive test.
+A pre-existing zoom-field context-menu signal warning remains to investigate.

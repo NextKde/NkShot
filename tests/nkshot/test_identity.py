@@ -70,8 +70,9 @@ class IdentityTests(unittest.TestCase):
     def test_runtime_identity(self):
         main = read('src/Main.cpp')
         self.assertIn('KAboutData aboutData(u"nkshot"_s', main)
-        self.assertIn('setOrganizationDomain(u"org.nextkde"_s)', main)
-        self.assertIn(f'setDesktopFileName(u"{APP_ID}"_s)', main)
+        self.assertIn('setOrganizationDomain(u"nextkde.org"_s)', main)
+        self.assertIn(f'aboutData.setDesktopFileName(u"{APP_ID}"_s)', main)
+        self.assertIn('aboutData.setOrganizationDomain(QByteArrayLiteral("nextkde.org"))', main)
         self.assertIn('setApplicationDomain(QByteArrayLiteral("nkshot"))', main)
         self.assertIn(f'registerService(u"{APP_ID}"_s)', main)
 
