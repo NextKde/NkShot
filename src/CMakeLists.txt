@@ -35,6 +35,7 @@ target_sources(spectacle PRIVATE
     ExportManager.cpp
     Geometry.cpp
     OcrManager.cpp
+    Imaging/VerticalStitcher.cpp
     Gui/PinnedImageWindow.cpp
     Gui/PinnedImageWindow.h
     Gui/PortableAnnotationViewport.cpp

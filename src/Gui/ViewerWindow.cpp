@@ -7,6 +7,13 @@
 
 #include "ViewerWindow.h"
 #include "PinnedImageWindow.h"
+#include "Imaging/VerticalStitcher.h"
+#include <QFileDialog>
+#include <QImageReader>
+#include <QFutureWatcher>
+#include <QtConcurrentRun>
+#include <QCollator>
+#include <algorithm>
 #include <KQuickImageEditor/AnnotationDocument>
 
 #include "Config.h"
@@ -82,8 +89,78 @@ QQuickWindow *ViewerWindow::pinImage()
     return window;
 }
 
+void ViewerWindow::combineImages()
+{
+    if (m_combiningImages) return;
+    if (auto existing = qobject_cast<QFileDialog *>(m_combineDialog.data())) {
+        existing->raise(); existing->activateWindow(); return;
+    }
+    auto dialog = new QFileDialog;
+    m_combineDialog = dialog;
+    dialog->setObjectName(QStringLiteral("nkshotCombineDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(i18nc("@title:window", "Combine overlapping screenshots — top to bottom by filename"));
+    dialog->setFileMode(QFileDialog::ExistingFiles);
+    dialog->setNameFilter(i18nc("@item:inlistbox", "Images (*.png *.jpg *.jpeg *.webp *.bmp)"));
+    dialog->winId();
+    dialog->windowHandle()->setTransientParent(this);
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog] {
+        auto paths = dialog->selectedFiles();
+        if (paths.size() < 2 || paths.size() > 16) {
+            InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+                i18nc("@info", "Choose 2–16 overlapping images. Number their filenames from top to bottom."));
+            return;
+        }
+        QCollator order(QLocale(QLocale::English, QLocale::UnitedStates));
+        order.setNumericMode(true);
+        std::sort(paths.begin(), paths.end(), [&order](const QString &a, const QString &b) {
+            const auto compared = order.compare(QFileInfo(a).fileName(), QFileInfo(b).fileName());
+            return compared == 0 ? a < b : compared < 0;
+        });
+        m_combiningImages = true;
+        Q_EMIT combiningImagesChanged();
+        auto watcher = new QFutureWatcher<NkShot::Imaging::StitchResult>(this);
+        connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
+            const auto result = watcher->result();
+            watcher->deleteLater();
+            m_combiningImages = false;
+            Q_EMIT combiningImagesChanged();
+            if (result.error != NkShot::Imaging::StitchError::None) {
+                InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+                    i18nc("@info", "Could not combine these images. Use equal-width, numbered screenshots with a unique unchanged overlap of at least 24 pixels. Total input is limited to 40 megapixels. No files were changed."));
+                return;
+            }
+            auto preview = new PinnedImageWindow(result.image, engine());
+            if (preview->status() != QQuickView::Ready) { delete preview; return; }
+            preview->setTitle(i18nc("@title:window", "Combined Image — NkShot"));
+            preview->setScreen(screen());
+            preview->show();
+            InlineMessageModel::instance()->push(InlineMessageModel::Saved,
+                i18nc("@info", "Combined image opened in a separate window. Copy or Save As there; the source images and current edit are unchanged."));
+        });
+        watcher->setFuture(QtConcurrent::run([paths] {
+            QList<QImage> frames;
+            qint64 pixels = 0;
+            for (const auto &path : paths) {
+                QImageReader reader(path);
+                const auto size = reader.size();
+                const qint64 count = qint64(size.width()) * size.height();
+                if (!size.isValid() || count < 1 || count > 40000000 - pixels)
+                    return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::TooLarge};
+                pixels += count;
+                auto image = reader.read();
+                if (image.isNull()) return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::InvalidInput};
+                frames.append(image);
+            }
+            return NkShot::Imaging::stitchVertical(frames);
+        }));
+    });
+    dialog->open();
+}
+
 ViewerWindow::~ViewerWindow()
 {
+    delete m_combineDialog;
     InlineMessageModel::instance()->clear();
     if (s_viewerWindowInstance == this) {
         s_viewerWindowInstance = nullptr;

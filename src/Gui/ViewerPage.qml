@@ -198,6 +198,14 @@ EmptyPage {
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.pinImage()
                     }
+                    QQC.MenuItem {
+                        objectName: "nkshotCombineImagesAction"
+                        text: contextWindow.combiningImages ? i18nc("@action", "Combining images…") : i18nc("@action", "Combine screenshots…")
+                        icon.name: "view-preview"
+                        icon.color: palette.buttonText
+                        enabled: !contextWindow.combiningImages
+                        onTriggered: contextWindow.combineImages()
+                    }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
                         opacity: enabled ? 1 : 0.38

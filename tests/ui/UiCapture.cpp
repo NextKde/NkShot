@@ -29,6 +29,7 @@
 #include <QStandardPaths>
 #include <QPointer>
 #include <QPalette>
+#include <QPainter>
 #include <QQuickItem>
 #include <QTimer>
 #include <cstring>
@@ -61,7 +62,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -218,6 +219,93 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                const auto original = document->renderToImage();
+                QTemporaryDir files;
+                QImage expected(320, 600, QImage::Format_RGBA8888);
+                expected.fill(QColor(QStringLiteral("#f5f5f7")));
+                {
+                    QPainter painter(&expected);
+                    painter.fillRect(QRect(12, 12, 296, 576), Qt::white);
+                    QFont heading(QStringLiteral("DejaVu Sans"), 15, QFont::Bold);
+                    painter.setFont(heading); painter.setPen(QColor(QStringLiteral("#202126")));
+                    painter.drawText(QRect(28, 28, 264, 58), Qt::TextWordWrap, QStringLiteral("Design notes"));
+                    painter.setFont(QFont(QStringLiteral("DejaVu Sans"), 9));
+                    painter.setPen(QColor(QStringLiteral("#747680")));
+                    painter.drawText(28, 77, QStringLiteral("Synthetic local stitching fixture"));
+                    for (int section = 0; section < 5; ++section) {
+                        const int y = 110 + section * 90;
+                        painter.setPen(QColor(QStringLiteral("#202126")));
+                        painter.setFont(QFont(QStringLiteral("DejaVu Sans"), 11, QFont::DemiBold));
+                        painter.drawText(28, y, QStringLiteral("%1. Keep the essentials").arg(section + 1));
+                        for (int line = 0; line < 3; ++line)
+                            painter.fillRect(QRect(28, y + 12 + line * 13, 238 - line * 26, 4), QColor(QStringLiteral("#dfe1e7")));
+                    }
+                }
+                // A one-pixel row marker makes exact overlap unambiguous without
+                // replacing the document-like visual fixture with random noise.
+                for (int y = 0; y < expected.height(); ++y)
+                    expected.setPixelColor(0, y, QColor(y % 256, y / 256, 240));
+                const auto top = files.filePath(QStringLiteral("frame2.png"));
+                const auto bottom = files.filePath(QStringLiteral("frame10.png"));
+                if (!files.isValid() || !expected.copy(0, 0, 320, 360).save(top)
+                    || !expected.copy(0, 240, 320, 360).save(bottom)) { application.exit(72); return; }
+                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                QMetaObject::invokeMethod(menu, "open"); QTest::qWait(200);
+                auto entry = visualItem(viewer->contentItem(), QStringLiteral("nkshotCombineImagesAction"));
+                if (!entry) { application.exit(73); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
+                QTest::qWait(200);
+                auto currentDialog = []() -> QFileDialog * {
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotCombineDialog")) return qobject_cast<QFileDialog *>(widget);
+                    return nullptr;
+                };
+                QPointer<QFileDialog> dialog = currentDialog();
+                if (!dialog) { application.exit(74); return; }
+                viewer->combineImages();
+                if (currentDialog() != dialog) { application.exit(75); return; }
+                dialog->reject();
+                if (!QTest::qWaitFor([&] { return dialog.isNull(); }, 1000) || viewer->combiningImages()) { application.exit(76); return; }
+                viewer->combineImages(); QTest::qWait(200);
+                dialog = currentDialog();
+                auto filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+                if (!filename) { application.exit(77); return; }
+                filename->setFocus(); filename->selectAll();
+                QTest::keyClicks(filename, QStringLiteral("\"%1\" \"%2\"").arg(bottom, top));
+                QMetaObject::invokeMethod(dialog, "accept");
+                if (!QTest::qWaitFor([&] { return !viewer->combiningImages() && dialog.isNull(); }, 5000)) { application.exit(78); return; }
+                QPointer<PinnedImageWindow> combined;
+                for (auto window : QGuiApplication::allWindows())
+                    if (auto pin = qobject_cast<PinnedImageWindow *>(window)) combined = pin;
+                if (!combined || !samePixels(combined->snapshot(), expected) || !samePixels(document->renderToImage(), original)) {
+                    qCritical() << "Combined image mismatch" << bool(combined);
+                    application.exit(79); return;
+                }
+                combined->resize(380, 520); QTest::qWait(250);
+                if (!combined->grabWindow().save(destination)) { application.exit(80); return; }
+                combined->close();
+                if (!QTest::qWaitFor([&] { return combined.isNull(); }, 1000)) { application.exit(81); return; }
+                // Duplicate frames must reject rather than fabricate a long image.
+                const auto duplicate = files.filePath(QStringLiteral("frame3.png"));
+                if (!expected.copy(0, 0, 320, 360).save(duplicate)) { application.exit(82); return; }
+                const auto beforeWarning = InlineMessageModel::instance()->rowCount();
+                viewer->combineImages(); QTest::qWait(200);
+                dialog = currentDialog();
+                filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+                if (!filename) { application.exit(83); return; }
+                filename->setFocus(); filename->selectAll();
+                QTest::keyClicks(filename, QStringLiteral("\"%1\" \"%2\"").arg(top, duplicate));
+                QMetaObject::invokeMethod(dialog, "accept");
+                if (!QTest::qWaitFor([&] { return !viewer->combiningImages() && dialog.isNull(); }, 5000)
+                    || InlineMessageModel::instance()->rowCount() != beforeWarning + 1
+                    || !samePixels(document->renderToImage(), original)) { application.exit(84); return; }
+                for (auto window : QGuiApplication::allWindows())
+                    if (qobject_cast<PinnedImageWindow *>(window)) { application.exit(85); return; }
+                qInfo() << "NkShot combine actual menu, cancel/reopen, numeric filename order, exact pixels and source isolation and duplicate rejection passed";
+                application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_SECONDARY_TOOLS")) {
                 auto document = SpectacleCore::instance()->annotationDocument();

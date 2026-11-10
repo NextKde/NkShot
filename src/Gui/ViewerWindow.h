@@ -8,6 +8,7 @@
 
 #include "Gui/SpectacleWindow.h"
 #include <QPalette>
+#include <QPointer>
 
 class ViewerWindowPrivate;
 
@@ -20,6 +21,7 @@ class ViewerWindowPrivate;
 class ViewerWindow : public SpectacleWindow
 {
     Q_OBJECT
+    Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
 public:
     enum Mode {
         Dialog,
@@ -34,6 +36,10 @@ public:
 
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
+    Q_INVOKABLE void combineImages();
+    bool combiningImages() const { return m_combiningImages; }
+Q_SIGNALS:
+    void combiningImagesChanged();
 
 protected:
     bool event(QEvent *event) override;
@@ -49,6 +55,8 @@ private:
 
     void setBackgroundColorRole(QPalette::ColorRole role);
 
+    QPointer<QObject> m_combineDialog;
+    bool m_combiningImages = false;
     bool m_pixmapExists = false;
     QPalette::ColorRole m_backgroundColorRole;
     Qt::WindowStates m_oldWindowStates;

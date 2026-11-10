@@ -29,3 +29,13 @@ overlap pixels, incompatible color spaces, alpha and fractional DPR.
 Future UI/capture integration must still establish frame order, explain rejected
 sequences and obtain real compositor frames through permitted mechanisms. A
 passed composition test is not a passed automatic scrolling screenshot.
+
+## Application entry (041)
+
+More → Combine screenshots loads 2–16 local images, ordered naturally by filename
+(e.g. frame2 precedes frame10). Number frames top-to-bottom. Total input is capped
+at 40 megapixels before decode. Work runs through QtConcurrent and the original
+editor stays unchanged. A successful image opens in a separate pinned preview
+with Copy/Save As; no input file is modified and no image is uploaded. Ambiguous,
+duplicate, incompatible or insufficiently overlapping inputs are rejected.
+This is not automated scrolling or fuzzy/perspective photo stitching.

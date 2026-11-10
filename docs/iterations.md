@@ -774,3 +774,25 @@ finalizer geometry and More popup render pass in light/dark/menu states. Reviewe
 and [More](screenshots/040-capture-more.png). These are real selection windows
 fed synthetic input, not desktop-capture or recording validation. Actual accept/
 cancel capture lifecycle and full-window GPU effects remain unverified.
+
+## 041 — User-facing offline screenshot composition
+
+More → Combine screenshots opens a multi-file picker. Choose 2–16 equal-width
+images with a unique unchanged vertical overlap (at least 24 pixels), numbered
+from top to bottom. Natural numeric filename order is deterministic, independent
+of click order. Decode and stitch off the GUI thread; reject over 40 megapixels
+of total input before decoding. The result opens as a separate immutable pin for
+Copy/Save As. Source files, the current annotation document and its history are
+not replaced. One picker at a time; busy state prevents concurrent combinations.
+
+A missing executable source entry was caught at link time and corrected. Final
+build, CTest 5/5 and static checks 16/16 pass. Actual menu/picker tests cover
+repeated open, cancellation/reopen, reverse-selected frame10/frame2 numeric sort,
+exact reconstructed pixels, unchanged editor pixels and duplicate-frame rejection
+without producing a preview. Both light and dark pass. Reviewed the
+[entry](screenshots/041-combine-entry.png), [light result](screenshots/041-combined-light.png)
+and [dark result](screenshots/041-combined-dark.png). Fixtures are clearly synthetic
+local documents, not captures of another application. Native desktop picker,
+large real-world images, mixed color profiles and automatic scrolling are not
+validated by these UI tests; conservative core rejection cases remain covered.
+This feature is manual local composition, NOT automatic scrolling capture.

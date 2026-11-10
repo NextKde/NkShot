@@ -121,3 +121,9 @@ consumers and reports active/sampling state. With QT_QUICK_BACKEND=software both
 must be false. Merely setting QSG_RHI_BACKEND=vulkan is not evidence that the
 application used Vulkan; the offscreen platform can choose software. Explicit
 QT_QUICK_BACKEND=rhi currently fails to create a Vulkan instance in the cloud.
+
+`NKSHOT_TEST_COMBINE=1` drives More → Combine screenshots and the widget file
+picker. It tests reuse, cancel/reopen, reverse-selected natural filename order,
+exact output pixels and unchanged editor content, then rejects duplicate frames.
+The capture is the actual resulting pin containing a synthetic document fixture.
+Native file portals and automatic scrolling are not covered.
