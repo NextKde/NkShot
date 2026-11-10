@@ -11,6 +11,17 @@ import org.kde.spectacle.private
 
 T.Pane {
     id: root
+    // Stable semantic API for joined toolbars, independent of background type.
+    readonly property real backgroundBorderWidth: contextWindow.dprRound(1)
+    readonly property color solidBackgroundColor: Kos.AppTheme.contentSecondaryBackground
+    palette.window: Kos.AppTheme.contentSecondaryBackground
+    palette.windowText: Kos.AppTheme.paletteText
+    palette.text: Kos.AppTheme.paletteText
+    palette.buttonText: Kos.AppTheme.paletteText
+    palette.button: Kos.AppTheme.controlBackground
+    palette.base: Kos.AppTheme.contentBackground
+    palette.light: Kos.AppTheme.border
+    palette.mid: Kos.AppTheme.border
     // Same canonical material used by NextKde apps, with no compositor blur request.
     property real radius: Kirigami.Units.largeSpacing * 2
     property real topLeftRadius: radius

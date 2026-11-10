@@ -60,3 +60,10 @@ render target. Outputs are **component harness images**, not screenshots of the
 application window or desktop. It uses existing CPU Mesa Vulkan support; no
 system security settings, compositor permissions or input-device access change.
 The baseline/liquid/reduced-transparency sampling states must be false/true/false.
+
+## Actual selection window with synthetic input
+
+Set `NKSHOT_TEST_CAPTURE_OVERLAY=1` to construct CaptureWindow using the fixture
+fitted to the synthetic primary screen. Add `NKSHOT_TEST_REGION_DRAG=1` to send
+actual mouse press/move/release events and assert the inclusive selection bounds.
+This does not invoke a desktop capture backend or establish Wayland permissions.

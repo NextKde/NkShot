@@ -784,13 +784,13 @@ MouseArea {
                     visible: otbLoader.visible
                     opacity: otbLoader.opacity
                     parent: annotationsToolBar
-                    x: otbLoader.x + annotationsToolBar.background.border.width
+                    x: otbLoader.x + annotationsToolBar.backgroundBorderWidth
                     y: (otbLoader.valignment & Qt.AlignTop)
                         && !SelectionEditor.selection.empty
                         ? otbLoader.y + otbLoader.height : otbLoader.y
-                    width: otbLoader.width - annotationsToolBar.background.border.width * 2
+                    width: otbLoader.width - annotationsToolBar.backgroundBorderWidth * 2
                     height: dprRound(1)
-                    color: annotationsToolBar.background.color
+                    color: annotationsToolBar.solidBackgroundColor
                 }
 
                 HoverHandler {

@@ -326,3 +326,32 @@ Sampling states were false/true/false; shader execution and visible refraction/
 softening were verified, with no QML/shader errors. The expected missing display
 extension notice does not prevent offscreen texture rendering. This is a CPU
 Vulkan driver, not hardware GPU, a ViewerWindow, or a Wayland capture acceptance.
+
+## 016 — Production build and actual selection-window test
+
+A separate production configuration (BUILD_TESTING=OFF, UI capture hook OFF)
+completed all 331 compilation/link steps. ldd showed no Qt6Test or missing library,
+the binary contained no test-capture environment hook, and --version exited 0.
+Default startup exited 1 because this cloud environment has no DBus session.
+Using the existing --new-instance --edit-existing path stayed alive for 8 seconds
+until timeout124, with a kglobalaccel/DBus warning but no QML errors. Setting test
+capture variables on that production executable did not create a screenshot.
+This is a startup smoke test, not desktop functionality or visual acceptance.
+
+The opt-in development hook now constructs the **actual CaptureWindow** with a
+synthetic document fitted to the synthetic screen, never reads the real desktop,
+and sends actual QTest selection mouse events. This exposed stale assumptions
+that FloatingToolBar.background was a Rectangle with border/color properties.
+Add stable semantic toolbar properties and use them for joined option borders;
+also align the floating control palette with Kos colors. The warnings were fixed
+and both development and production configurations incrementally rebuilt.
+
+Verified: actual drag from (80,100) to (480,400) produced the inclusive
+401×301 selection. Reviewed real [light](screenshots/016-capture-overlay-final.png)
+and [dark](screenshots/016-capture-overlay-dark-final.png) CaptureWindow grabs.
+No QML errors remained; CTest 4/4 and static checks 15/15 pass. The platform still
+has no window-system plugin or real screenshot/recording session. These are
+software-rendered selection UI tests using synthetic pixels, not desktop captures.
+
+Product follow-up: the selection controls are still too dense and retain three
+separate tool strips. Consolidate secondary actions without removing functionality.

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
+#include "Gui/CaptureWindow.h"
+#include "Gui/SelectionEditor.h"
+#include "Gui/Selection.h"
+#include <QScreen>
+#include <memory>
 #include "Gui/TextContextMenu.h"
 #include <QtTest/QTest>
 #include "SpectacleCore.h"
@@ -65,6 +70,42 @@ void installUiCaptureHook(QApplication &application)
         if (!viewer || viewer->status() != QQuickView::Ready) {
             qCritical() << "NkShot UI capture: no ready viewer";
             application.exit(2);
+            return;
+        }
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_CAPTURE_OVERLAY")) {
+            // Construct the real selection window with the already loaded,
+            // synthetic document. This does not read/capture the desktop.
+            auto document = SpectacleCore::instance()->annotationDocument();
+            const auto screenSize = application.primaryScreen()->geometry().size();
+            document->setBaseImage(document->renderToImage().scaled(screenSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+            document->tool()->setType(AnnotationTool::NoTool);
+            auto capture = std::shared_ptr<CaptureWindow>(CaptureWindow::makeUnique(
+                CaptureWindow::Image, application.primaryScreen(), viewer->engine()));
+            viewer->hide();
+            capture->show();
+            SelectionEditor::instance()->reset();
+            SelectionEditor::instance()->selection()->setRect({120, 100, 480, 320});
+            QTimer::singleShot(1000, &application, [&application, capture, destination]() {
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_REGION_DRAG")) {
+                    SelectionEditor::instance()->selection()->setRect({});
+                    QTest::mousePress(capture.get(), Qt::LeftButton, Qt::NoModifier, QPoint(80, 100));
+                    QTest::mouseMove(capture.get(), QPoint(480, 400), 30);
+                    QTest::mouseRelease(capture.get(), Qt::LeftButton, Qt::NoModifier, QPoint(480, 400));
+                    const auto rect = SelectionEditor::instance()->selection()->rectF();
+                    if (qAbs(rect.x() - 80) > 1 || qAbs(rect.y() - 100) > 1
+                        || qAbs(rect.width() - 400) > 1 || qAbs(rect.height() - 300) > 1) {
+                        qCritical() << "NkShot region drag mismatch" << rect;
+                        application.exit(17);
+                        return;
+                    }
+                    QTest::qWait(400);
+                    qInfo() << "NkShot actual selection-window mouse-drag regression passed" << rect;
+                }
+                const auto pixels = capture->grabWindow();
+                const bool saved = !pixels.isNull() && pixels.save(destination);
+                qInfo() << "NkShot actual CaptureOverlay with synthetic input:" << destination << pixels.size();
+                application.exit(saved ? 0 : 16);
+            });
             return;
         }
         viewer->setAnnotating(qEnvironmentVariableIsSet("NKSHOT_TEST_EDITING"));
