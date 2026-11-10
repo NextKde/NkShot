@@ -6,6 +6,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls as QQC
+import Kos.Ui as Kos
 import org.kde.kirigami as Kirigami
 import org.kde.spectacle.private
 import org.kde.kquickimageeditor
@@ -34,55 +35,114 @@ EmptyPage {
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
 
+    // Primary actions stay visible; the original secondary actions remain
+    // available in More rather than competing with the image being edited.
+    component ViewerButton: TtToolButton {
+        implicitHeight: 36
+        implicitWidth: Math.max(40, implicitContentWidth + 24)
+        leftPadding: 12
+        rightPadding: 12
+        display: root.width < 720 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
+        background: Kos.KosSurface {
+            fillColor: parent.checked ? Kos.AppTheme.controlBackground
+                : parent.hovered ? Kos.AppTheme.contentSecondaryBackground : "transparent"
+            strokeColor: "transparent"
+            strokeWidth: 0
+            radius: 10
+            elevation: 0
+            hovered: parent.hovered
+            pressed: parent.down
+            focused: parent.visualFocus
+            showInnerHighlight: false
+        }
+    }
+
     header: QQC.ToolBar {
         id: header
-        contentItem: ButtonGrid {
-            id: mainToolBarContents
-            animationsEnabled: true
-            AnimatedLoader {
-                state: contextWindow.annotating ? "active" : "inactive"
-                sourceComponent: UndoRedoGroup {
-                    buttonHeight: QmlUtils.iconTextButtonHeight
-                    spacing: mainToolBarContents.spacing
-                }
+        leftPadding: 12
+        rightPadding: 12
+        topPadding: 10
+        bottomPadding: 10
+        background: Rectangle {
+            color: Kos.AppTheme.contentSecondaryBackground
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: Kos.AppTheme.border
             }
-            TtToolButton {
-                display: TtToolButton.IconOnly
-                visible: action.enabled
-                action: SaveAction {}
+        }
+        contentItem: RowLayout {
+            spacing: 6
+            ViewerButton {
+                icon.name: "camera-photo"
+                text: i18nc("@action", "Capture")
+                Accessible.role: Accessible.ButtonMenu
+                onClicked: ScreenshotModeMenu.popup(this)
             }
-            TtToolButton {
-                display: SpectacleCore.videoMode ? TtToolButton.TextBesideIcon : TtToolButton.IconOnly
-                action: SaveAsAction {}
-            }
-            TtToolButton {
-                display: TtToolButton.IconOnly
-                visible: action.enabled
-                action: CopyImageAction {}
-            }
-             
-            TtToolButton {
-                display: TtToolButton.IconOnly
-                visible: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable
-                action: OcrAction {}
-            }
-             
-            // We only show this in video mode to save space in screenshot mode
-            TtToolButton {
-                visible: SpectacleCore.videoMode
-                action: CopyLocationAction {}
-            }
-            ExportMenuButton {}
-            TtToolButton {
+            QQC.ToolSeparator { Layout.preferredHeight: 24 }
+            ViewerButton {
                 visible: action.enabled
                 action: EditAction {}
             }
-            QQC.ToolSeparator {
-                height: QmlUtils.iconTextButtonHeight
+            Item { Layout.fillWidth: true; Layout.minimumWidth: 12 }
+            UndoRedoGroup {
+                visible: contextWindow.annotating
+                buttonHeight: 36
+                animationsEnabled: !Settings.reduceUiMotion
             }
-            ScreenshotModeMenuButton {}
-            RecordingModeMenuButton {}
-            OptionsMenuButton {}
+            ViewerButton {
+                visible: action.enabled
+                action: CopyImageAction {}
+            }
+            ViewerButton {
+                visible: action.enabled
+                action: SaveAction {}
+            }
+            ViewerButton {
+                id: moreButton
+                text: i18nc("@action", "More")
+                icon.name: "view-more-symbolic"
+                display: QQC.AbstractButton.IconOnly
+                Accessible.role: Accessible.ButtonMenu
+                onClicked: moreMenu.popup()
+                QQC.Menu {
+                    id: moreMenu
+                    objectName: "nkshotMoreMenu"
+                    y: moreButton.height + 6
+                    QQC.MenuItem { action: SaveAsAction {} }
+                    QQC.MenuItem {
+                        visible: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable
+                        height: visible ? implicitHeight : 0
+                        action: OcrAction {}
+                    }
+                    QQC.MenuItem {
+                        visible: SpectacleCore.videoMode
+                        height: visible ? implicitHeight : 0
+                        action: CopyLocationAction {}
+                    }
+                    QQC.MenuItem {
+                        visible: !SpectacleCore.videoMode
+                        height: visible ? implicitHeight : 0
+                        text: i18nc("@action", "Export")
+                        icon.name: "document-share"
+                        onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
+                    }
+                    QQC.MenuSeparator {}
+                    QQC.MenuItem {
+                        enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
+                        text: i18nc("@action", "New Recording")
+                        icon.name: "media-record"
+                        onTriggered: Qt.callLater(function() { RecordingModeMenu.popup(moreButton) })
+                    }
+                    QQC.MenuItem {
+                        text: i18nc("@action", "Options")
+                        icon.name: "configure"
+                        onTriggered: Qt.callLater(function() { OptionsMenu.popup(moreButton) })
+                    }
+                }
+            }
         }
     }
 

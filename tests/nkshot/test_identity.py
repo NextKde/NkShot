@@ -109,7 +109,9 @@ class IdentityTests(unittest.TestCase):
 
     def test_recording_and_ocr_gates_retained(self):
         viewer = read('src/Gui/ViewerPage.qml')
-        self.assertIn('RecordingModeMenuButton {}', viewer)
+        self.assertIn('RecordingModeMenu.popup(moreButton)', viewer)
+        self.assertIn('supportedRecordingModes !== VideoPlatform.NoRecordingModes', viewer)
+        self.assertIn('action: OcrAction {}', viewer)
         self.assertIn('SpectacleCore.ocrAvailable', viewer)
         self.assertIn('!SpectacleCore.videoMode', viewer)
 

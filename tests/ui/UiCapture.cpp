@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QStandardPaths>
 #include <QPointer>
+#include <QQuickItem>
 #include <QTimer>
 
 void installUiCaptureHook(QApplication &application)
@@ -48,6 +49,14 @@ void installUiCaptureHook(QApplication &application)
             const int height = dimensions[1].toInt();
             if (width >= 320 && width <= 3840 && height >= 240 && height <= 2160) {
                 viewer->resize(width, height);
+            }
+        }
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_MORE")) {
+            auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+            if (!menu || !QMetaObject::invokeMethod(menu, "open")) {
+                qCritical() << "NkShot UI capture: More menu unavailable";
+                application.exit(5);
+                return;
             }
         }
         QTimer::singleShot(500, &application, [&application, viewer, destination]() {

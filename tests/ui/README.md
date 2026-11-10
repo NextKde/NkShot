@@ -24,3 +24,5 @@ only its software rendering node uses the same document's composed image. GPU
 platforms retain the upstream paint node. Shader-only viewport color/gamma preview
 adjustments are not implemented in this fallback; committed document adjustments
 are rendered normally. NkShot currently does not set those preview properties.
+
+Set `NKSHOT_TEST_MORE=1` to open the actual More menu before capture.

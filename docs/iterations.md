@@ -66,3 +66,23 @@ Not yet validated: individual annotation gestures, save/copy interaction, GPU
 material appearance, Wayland capture/recording, viewport-only color/gamma preview
 on software. No desktop/session security limits were bypassed. Next: editor
 interaction regression tests and high-frequency/secondary action layout.
+
+## 004 — Primary action hierarchy and shared surfaces
+
+Keep Capture / Edit / Copy / Save visible; aggregate Save As / OCR / Export /
+Recording / Options in More. Preserve the original actions and platform gates.
+Use unmodified NextKdeAppDemo KosSurface for calm, rounded solid toolbar buttons.
+At narrow widths, icon-only controls retain their text/accessibility/tooltips.
+
+Verified: each QML/C++ step incrementally compiled; filename CTest 1/1 passed.
+The recording source check was updated to verify the actual menu route and
+supportedRecordingModes gate rather than requiring the removed button class.
+Static checks 14/14 pass. Actual window renders reviewed at
+[960px](screenshots/004-editor-toolbar.png),
+[640px](screenshots/004-editor-toolbar-narrow.png), and with the
+[More menu open](screenshots/004-editor-more.png). No primary-action clipping was
+observed. No full native-menu invocation/save/clipboard interaction test yet.
+
+The image is intentionally a synthetic fixture. These are software-rendered
+window captures, not glass-effect or complete Apple-style acceptance. The
+annotation sidebar and native menu styling still need a coordinated review.
