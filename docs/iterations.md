@@ -148,3 +148,21 @@ every tool and native clipboard/save flows are still pending interaction tests.
 Remaining visual work: tool grouping/current-tool indication, coherent property
 popover, modern zoom controls, dark/high-contrast review. No finished Apple-style
 claim or GPU-glass acceptance is made.
+
+## 008 — Zoom controls and truthful selected-tool state
+
+Replace the permanent numeric zoom field with compact minus / percentage / plus
+controls. Percentage opens Fit to view, Actual size and an editable custom value,
+so numeric entry is retained. More tools now shows the selected secondary tool
+and menu check state. More surfaces use the unmodified KosSurface component.
+
+Visual review caught a zoom popup overflowing the right edge. After correcting
+its anchor and rebuilding, the actual [640px popup capture](screenshots/008-editor-zoom-final.png)
+fits inside the window. Blur is selected through the test hook so its existing
+strength control remains visible. Build steps 018–020 succeeded; CTest 2/2 and
+static checks 14/14 passed. The prior invalid zoom TextInput Connections warning
+is removed with the replaced permanent field. No claims about all popup
+interactions, clipboard, Wayland capture or GPU material acceptance.
+
+Next: move property groups into a persistent, non-clipping panel and review dark
+appearance. Preserve the existing 250ms property-transaction commit semantics.

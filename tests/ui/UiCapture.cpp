@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
+#include "SpectacleCore.h"
+#include <KQuickImageEditor/AnnotationDocument>
+#include <KQuickImageEditor/AnnotationTool>
 
 #include <QApplication>
 #include <QDebug>
@@ -43,6 +46,12 @@ void installUiCaptureHook(QApplication &application)
             return;
         }
         viewer->setAnnotating(qEnvironmentVariableIsSet("NKSHOT_TEST_EDITING"));
+        const auto testTool = qEnvironmentVariable("NKSHOT_TEST_TOOL");
+        if (testTool == QStringLiteral("text")) {
+            SpectacleCore::instance()->annotationDocument()->tool()->setType(AnnotationTool::TextTool);
+        } else if (testTool == QStringLiteral("blur")) {
+            SpectacleCore::instance()->annotationDocument()->tool()->setType(AnnotationTool::BlurTool);
+        }
         const auto dimensions = qEnvironmentVariable("NKSHOT_TEST_UI_SIZE", QStringLiteral("960x660")).split(u'x');
         if (dimensions.size() == 2) {
             const int width = dimensions[0].toInt();
@@ -51,8 +60,10 @@ void installUiCaptureHook(QApplication &application)
                 viewer->resize(width, height);
             }
         }
-        if (qEnvironmentVariableIsSet("NKSHOT_TEST_MORE") || qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")) {
-            const auto menuName = qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_MORE") || qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")
+            || qEnvironmentVariableIsSet("NKSHOT_TEST_ZOOM")) {
+            const auto menuName = qEnvironmentVariableIsSet("NKSHOT_TEST_ZOOM") ? QStringLiteral("nkshotZoomPopup")
+                : qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")
                 ? QStringLiteral("nkshotExtraToolsMenu") : QStringLiteral("nkshotMoreMenu");
             auto menu = viewer->rootObject()->findChild<QObject *>(menuName);
             if (!menu || !QMetaObject::invokeMethod(menu, "open")) {

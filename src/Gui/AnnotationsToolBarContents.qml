@@ -239,36 +239,59 @@ ButtonGrid {
         visible: root.essentialsOnly
         implicitHeight: 36
         display: QQC.AbstractButton.IconOnly
-        text: i18nc("@action", "More tools")
-        icon.name: "view-more-symbolic"
+        readonly property var secondaryTools: [AnnotationTool.HighlighterTool, AnnotationTool.LineTool,
+            AnnotationTool.EllipseTool, AnnotationTool.BlurTool, AnnotationTool.NumberTool]
+        readonly property var secondaryIcons: ["draw-highlight", "draw-line", "draw-ellipse", "blur", "draw-number"]
+        readonly property var secondaryNames: [i18nc("@action", "Highlighter"), i18nc("@action", "Line"),
+            i18nc("@action", "Ellipse"), i18nc("@action", "Blur"), i18nc("@action", "Number")]
+        readonly property int selectedIndex: secondaryTools.indexOf(root.toolType)
+        checked: selectedIndex >= 0
+        text: selectedIndex >= 0 ? secondaryNames[selectedIndex] : i18nc("@action", "More tools")
+        icon.name: selectedIndex >= 0 ? secondaryIcons[selectedIndex] : "view-more-symbolic"
         onClicked: extraToolsMenu.popup()
         QQC.Menu {
             id: extraToolsMenu
             objectName: "nkshotExtraToolsMenu"
+            padding: 6
+            background: Kos.KosSurface {
+                fillColor: Kos.AppTheme.contentBackground
+                radius: 14
+                elevation: 0.5
+            }
             y: -height - 8
             QQC.MenuItem {
                 text: i18nc("@action", "Highlighter")
                 icon.name: "draw-highlight"
+                checkable: true
+                checked: root.toolType === AnnotationTool.HighlighterTool
                 onTriggered: root.tool.type = AnnotationTool.HighlighterTool
             }
             QQC.MenuItem {
                 text: i18nc("@action", "Line")
                 icon.name: "draw-line"
+                checkable: true
+                checked: root.toolType === AnnotationTool.LineTool
                 onTriggered: root.tool.type = AnnotationTool.LineTool
             }
             QQC.MenuItem {
                 text: i18nc("@action", "Ellipse")
                 icon.name: "draw-ellipse"
+                checkable: true
+                checked: root.toolType === AnnotationTool.EllipseTool
                 onTriggered: root.tool.type = AnnotationTool.EllipseTool
             }
             QQC.MenuItem {
                 text: i18nc("@action", "Blur")
                 icon.name: "blur"
+                checkable: true
+                checked: root.toolType === AnnotationTool.BlurTool
                 onTriggered: root.tool.type = AnnotationTool.BlurTool
             }
             QQC.MenuItem {
                 text: i18nc("@action", "Number")
                 icon.name: "draw-number"
+                checkable: true
+                checked: root.toolType === AnnotationTool.NumberTool
                 onTriggered: root.tool.type = AnnotationTool.NumberTool
             }
         }

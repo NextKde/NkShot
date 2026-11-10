@@ -111,6 +111,12 @@ EmptyPage {
                 QQC.Menu {
                     id: moreMenu
                     objectName: "nkshotMoreMenu"
+                    padding: 6
+                    background: Kos.KosSurface {
+                        fillColor: Kos.AppTheme.contentBackground
+                        radius: 14
+                        elevation: 0.5
+                    }
                     y: moreButton.height + 6
                     QQC.MenuItem { action: SaveAsAction {} }
                     QQC.MenuItem {
@@ -257,44 +263,81 @@ EmptyPage {
                     }
                     source: "AnnotationOptionsToolBarContents.qml"
                 }
-                QQC.ToolSeparator {
-                    Layout.fillHeight: true
-                    visible: loader.implicitWidth
-                        + implicitWidth
-                        + zoomLabel.implicitWidth
-                        + zoomEditor.implicitWidth
-                        + parent.spacing * 3 >= parent.width
+                RowLayout {
+                    id: zoomControls
+                    spacing: 2
+                    ViewerButton {
+                        implicitHeight: 28
+                        implicitWidth: 28
+                        leftPadding: 6
+                        rightPadding: 6
+                        display: QQC.AbstractButton.IconOnly
+                        text: i18nc("@action", "Zoom out")
+                        icon.name: "zoom-out"
+                        enabled: contentLoader.item.currentZoom > contentLoader.item.minZoom
+                        onClicked: contentLoader.item.zoomOut()
+                    }
+                    ViewerButton {
+                        id: zoomButton
+                        implicitHeight: 28
+                        implicitWidth: 64
+                        display: QQC.AbstractButton.TextOnly
+                        text: Math.round(contentLoader.item.currentZoom * 100) + "%"
+                        Accessible.name: i18nc("@action", "Image zoom")
+                        onClicked: zoomPopup.open()
+                        QQC.Popup {
+                            id: zoomPopup
+                            objectName: "nkshotZoomPopup"
+                            x: zoomButton.width - width
+                            y: -height - 8
+                            padding: 12
+                            background: Kos.KosSurface {
+                                fillColor: Kos.AppTheme.contentBackground
+                                radius: 14
+                                elevation: 0.5
+                            }
+                            contentItem: ColumnLayout {
+                                QQC.Button {
+                                    text: i18nc("@action", "Fit to view")
+                                    Layout.fillWidth: true
+                                    onClicked: {
+                                        contentLoader.item.zoomToPercent(Math.min(1, contentLoader.item.fitZoom))
+                                        zoomPopup.close()
+                                    }
+                                }
+                                QQC.Button {
+                                    text: i18nc("@action", "Actual size")
+                                    Layout.fillWidth: true
+                                    onClicked: { contentLoader.item.zoomToPercent(1); zoomPopup.close() }
+                                }
+                                QQC.SpinBox {
+                                    id: zoomEditor
+                                    editable: true
+                                    from: Math.ceil(contentLoader.item.minZoom * 100)
+                                    to: Math.floor(contentLoader.item.maxZoom * 100)
+                                    stepSize: 25
+                                    value: Math.round(contentLoader.item.currentZoom * 100)
+                                    Accessible.name: i18nc("@label", "Custom zoom percentage")
+                                    textFromValue: (value, locale) => Number(value).toLocaleString(locale, 'f', 0) + locale.percent
+                                    valueFromText: (text, locale) => Number.fromLocaleString(locale, text.replace(/\D/g, ''))
+                                    onValueModified: contentLoader.item.zoomToPercent(value / 100)
+                                }
+                            }
+                        }
+                    }
+                    ViewerButton {
+                        implicitHeight: 28
+                        implicitWidth: 28
+                        leftPadding: 6
+                        rightPadding: 6
+                        display: QQC.AbstractButton.IconOnly
+                        text: i18nc("@action", "Zoom in")
+                        icon.name: "zoom-in"
+                        enabled: contentLoader.item.currentZoom < contentLoader.item.maxZoom
+                        onClicked: contentLoader.item.zoomIn()
+                    }
                 }
-                QQC.Label {
-                    id: zoomLabel
-                    text: i18n("Zoom:")
-                }
-                QQC.SpinBox {
-                    id: zoomEditor
-                    from: contentLoader.item.minZoom * 100
-                    to: contentLoader.item.maxZoom * 100
-                    stepSize: 25
-                    value: contentLoader.item.currentZoom * 100
-                    textFromValue: (value, locale) => {
-                        return Number(Math.round(value)).toLocaleString(locale, 'f', 0) + locale.percent
-                    }
-                    valueFromText: (text, locale) => {
-                        return Number.fromLocaleString(locale, text.replace(/\D/g,''))
-                    }
-                    QQC.ToolTip.text: i18n("Image Zoom")
-                    QQC.ToolTip.visible: hovered
-                    QQC.ToolTip.delay: Kirigami.Units.toolTipDelay
-                    Binding {
-                        target: zoomEditor.contentItem
-                        property: "horizontalAlignment"
-                        value: Text.AlignRight
-                        restoreMode: Binding.RestoreNone
-                    }
-                    TextContextMenuConnection {
-                        target: zoomEditor.contentItem
-                    }
-                    onValueModified: contentLoader.item.zoomToPercent(Math.round(value) / 100)
-                }
+
             }
         }
     }
