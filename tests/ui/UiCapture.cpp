@@ -10,6 +10,8 @@
 #include <QApplication>
 #include <QDebug>
 #include <QImage>
+#include <QClipboard>
+#include <QFileInfo>
 #include <QIcon>
 #include <QDir>
 #include <QStandardPaths>
@@ -74,6 +76,17 @@ void installUiCaptureHook(QApplication &application)
         } else if (testTool == QStringLiteral("blur")) {
             SpectacleCore::instance()->annotationDocument()->tool()->setType(AnnotationTool::BlurTool);
         }
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_PROPERTY_TRANSACTION")) {
+            auto document = SpectacleCore::instance()->annotationDocument();
+            document->tool()->setType(AnnotationTool::RectangleTool);
+            document->tool()->setStrokeWidth(4);
+            document->tool()->setStrokeColor(QColor(QStringLiteral("#ff7043")));
+            document->beginItem({100, 100});
+            document->continueItem({340, 250});
+            document->finishItem();
+            document->tool()->setType(AnnotationTool::SelectTool);
+            document->selectItem({90, 90, 270, 180});
+        }
         const auto dimensions = qEnvironmentVariable("NKSHOT_TEST_UI_SIZE", QStringLiteral("960x660")).split(u'x');
         if (dimensions.size() == 2) {
             const int width = dimensions[0].toInt();
@@ -99,6 +112,70 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_PROPERTY_TRANSACTION")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));
+                auto popup = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotPropertiesPopup"));
+                const auto before = document->renderToImage();
+                if (!spin || !popup || !spin->setProperty("value", 12)) {
+                    application.exit(8);
+                    return;
+                }
+                // Close immediately, including before Qt.callLater starts the commit timer.
+                QMetaObject::invokeMethod(popup, "close");
+                QTest::qWait(300);
+                if (!QTest::qWaitFor([document] { return document->undoStackDepth() == 2; }, 1000)) {
+                    qCritical() << "NkShot property close test: missing undo transaction";
+                    application.exit(9);
+                    return;
+                }
+                const auto changed = document->renderToImage();
+                document->undo();
+                if (changed == before || document->renderToImage() != before) {
+                    qCritical() << "NkShot property close test: undo pixels differ";
+                    application.exit(10);
+                    return;
+                }
+                document->redo();
+                if (document->renderToImage() != changed) {
+                    application.exit(11);
+                    return;
+                }
+                QMetaObject::invokeMethod(popup, "open");
+                qInfo() << "NkShot actual QML property-change/close/undo/redo regression passed";
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_COPY_SAVE")) {
+                const auto output = SpectacleCore::instance()->outputUrl();
+                if (!output.isLocalFile() || !QFileInfo(output.toLocalFile()).fileName().startsWith(QStringLiteral("nkshot-ui-test-"))) {
+                    qCritical() << "NkShot export test needs explicit nkshot-ui-test-* output file";
+                    application.exit(12);
+                    return;
+                }
+                if (QFileInfo::exists(output.toLocalFile())) {
+                    qCritical() << "NkShot export test requires a fresh output path";
+                    application.exit(15);
+                    return;
+                }
+                const auto expected = SpectacleCore::instance()->annotationDocument()->renderToImage();
+                viewer->copyImage();
+                if (!QTest::qWaitFor([expected] {
+                    return QApplication::clipboard()->image().convertToFormat(expected.format()) == expected;
+                }, 1000)) {
+                    qCritical() << "NkShot Copy action pixels differ";
+                    application.exit(13);
+                    return;
+                }
+                viewer->save();
+                if (!QTest::qWaitFor([expected, output] {
+                    return QImage(output.toLocalFile()).convertToFormat(expected.format()) == expected;
+                }, 1000)) {
+                    qCritical() << "NkShot Save action pixels differ";
+                    application.exit(14);
+                    return;
+                }
+                qInfo() << "NkShot actual Copy and Save action pixel regressions passed";
+                QTest::qWait(800);
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_CONTEXT_MENU")) {
                 auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));

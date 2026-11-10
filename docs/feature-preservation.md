@@ -7,10 +7,10 @@ A retained route is not an end-to-end feature acceptance.
 | --- | --- | --- |
 | Area/window/fullscreen screenshots, delay and pointer options | Capture menu and unchanged platforms/options | Compiled; real desktop capture blocked by unavailable compositor/session |
 | Recording and audio | More → New Recording; original KPipeWire 6.8.3 backend | Compiled; platform capability gate retained; recording not run |
-| Copy/save/save-as/export | Copy/Save main bar; More menu for secondary actions | Original actions retained; editor PNG model save verified, clipboard/native dialogs not exercised |
+| Copy/save/save-as/export | Copy/Save main bar; More menu for secondary actions | Actual ViewerWindow Copy/Save pixels verified after edits; explicit --output input-preservation verified; native Save As dialog pending |
 | Pan/crop/select/freehand/arrow/rectangle/pixelate/text | Floating dock | All routes retained; model and viewport regression tests partly cover editing |
 | Highlighter/line/ellipse/blur/number | More tools, with selected icon/check state | All routes retained; menu rendered; complete per-tool gesture matrix pending |
-| Stroke/fill/strength/font/shadow/number properties | Existing contextual properties | Original semantics retained; visual redesign pending; no silent removal |
+| Stroke/fill/strength/font/shadow/number properties | Existing contextual properties | Persistent contextual panel; actual QML stroke change/close/undo/redo verified; remaining property-dialog/IME flows pending |
 | Undo/redo/crop | Main bar, shortcuts and original document model | Pixel/model and actual viewport regression tests pass for documented cases |
 | Zoom/pan | Minus/plus, popup Fit/Actual/custom value, wheel/pinch/shortcuts | Controls render; original coordinate model retained; extended DPR tests ongoing |
 | OCR | More, only when original OCR capability is available | Initialization notification and synthetic English asynchronous recognition/clipboard tested; no general or Chinese accuracy claim |

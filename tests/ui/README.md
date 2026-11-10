@@ -36,3 +36,27 @@ dark QPalette to the actual offscreen application; it does not post-process pixe
 QTest right-button click to an editable stroke input and require the native menu
 to become visible within one second. The menu is closed before the window capture.
 UI-capture builds link QtTest; default release builds do not.
+
+## Edit/property/Copy/Save transaction test
+
+Use a fresh output filename beginning with `nkshot-ui-test-` and append
+`--output /tmp/nkshot-ui-test-edited.png` to the viewer command. Set
+`NKSHOT_TEST_PROPERTY_TRANSACTION=1 NKSHOT_TEST_PROPERTIES=1 NKSHOT_TEST_COPY_SAVE=1`.
+This creates a rectangle on the synthetic image, changes stroke width through the
+actual QML control, closes immediately, checks undo/redo, and checks the actual
+Copy/Save action pixels. Existing export paths are rejected.
+
+## Vulkan component material probe
+
+```sh
+cmake --build build --target kos_material_probe
+QT_QPA_PLATFORM=vkkhrdisplay QT_QPA_DISABLE_INPUT=1 \
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
+./build/bin/kos_material_probe /tmp/kos-material
+```
+
+This explicitly requested target uses QQuickRenderControl and a Vulkan texture
+render target. Outputs are **component harness images**, not screenshots of the
+application window or desktop. It uses existing CPU Mesa Vulkan support; no
+system security settings, compositor permissions or input-device access change.
+The baseline/liquid/reduced-transparency sampling states must be false/true/false.

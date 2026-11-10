@@ -983,6 +983,20 @@ void SpectacleCore::activate(const QStringList &arguments, const QString &workin
         }
     }
 
+    // Resolve the explicit destination before the edit-existing branch returns.
+    // Otherwise --output is silently ignored and Save overwrites the input.
+    if (m_cliOptions[Option::Output]) {
+        m_outputUrl = QUrl::fromUserInput(parser.value(CommandLineOptions::self()->output),
+                                          QDir::currentPath(), QUrl::AssumeLocalFile);
+        if (!m_outputUrl.isValid()) {
+            m_cliOptions[Option::Output] = false;
+            m_outputUrl.clear();
+        }
+    } else {
+        m_outputUrl.clear();
+    }
+
+
     if (m_cliOptions[Option::EditExisting]) {
         auto input = parser.value(CommandLineOptions::self()->editExisting);
         m_editExistingUrl = QUrl::fromUserInput(input, QDir::currentPath(), QUrl::AssumeLocalFile);
@@ -1011,16 +1025,6 @@ void SpectacleCore::activate(const QStringList &arguments, const QString &workin
         m_editExistingUrl.clear();
     }
 
-    if (m_cliOptions[Option::Output]) {
-        m_outputUrl = QUrl::fromUserInput(parser.value(CommandLineOptions::self()->output),
-                                          QDir::currentPath(), QUrl::AssumeLocalFile);
-        if (!m_outputUrl.isValid()) {
-            m_cliOptions[Option::Output] = false;
-            m_outputUrl.clear();
-        }
-    } else {
-        m_outputUrl.clear();
-    }
 
     // Determine grab mode
     using CaptureMode = CaptureModeModel::CaptureMode;

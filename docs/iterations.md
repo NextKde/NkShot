@@ -292,3 +292,37 @@ builds link QtTest; normal release builds remain capture-hook-free.
 Not claimed: Chinese OCR accuracy, arbitrary document recognition accuracy,
 translation, real desktop clipboard ownership after exit, text IME or GPU/Wayland
 acceptance. OCR data/fonts used in the test are official installed dependencies.
+
+## 015 — Actual edit/export transactions and RHI material validation
+
+The full-window test changes an actual QML stroke control, immediately closes its
+property popup, and verifies undo/redo pixel equality. It then calls the real
+ViewerWindow Copy and Save actions and compares clipboard/exported pixels with
+the annotated document. This found --edit-existing returned before parsing
+--output, so Save could overwrite the input despite an explicit destination.
+Resolve output before that branch. The fresh-output test now passes and the input
+SHA256 is unchanged. The test refuses pre-existing export files to avoid stale
+image false positives.
+
+Verified: incremental builds through 040; CTest 4/4 and static checks 15/15.
+[Actual application after property/Copy/Save tests](screenshots/015-editor-action-tests.png)
+was reviewed. Its visible save/copy notifications still occupy too much space,
+which is recorded as the next product-layout refinement, not hidden as complete.
+A test-process shutdown incubation warning remains after the export notifications;
+it is not a demonstrated normal-session crash.
+
+### Separate component experiment (not the application screenshot)
+
+Existing Mesa/llvmpipe and official Qt vkkhrdisplay support Vulkan RHI texture
+rendering through QQuickRenderControl without a desktop socket. Add the explicit
+EXCLUDE_FROM_ALL kos_material_probe target, loading the real pinned Kos.Ui
+LiquidBackdrop/LiquidPanelSurface and QSB. Source and consuming panel are siblings,
+so the panel does not sample itself or foreground text.
+
+Actual component outputs: [baseline](screenshots/material-probe-baseline.png),
+[liquid](screenshots/material-probe-liquid.png),
+[reduced transparency](screenshots/material-probe-reduced-transparency.png).
+Sampling states were false/true/false; shader execution and visible refraction/
+softening were verified, with no QML/shader errors. The expected missing display
+extension notice does not prevent offscreen texture rendering. This is a CPU
+Vulkan driver, not hardware GPU, a ViewerWindow, or a Wayland capture acceptance.

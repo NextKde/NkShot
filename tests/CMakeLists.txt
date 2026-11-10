@@ -58,3 +58,7 @@ target_compile_options(ocr_manager_test PRIVATE -fexceptions)
 target_include_directories(ocr_manager_test PRIVATE ${PROJECT_BINARY_DIR}/src)
 set_tests_properties(ocr_manager_test PROPERTIES TIMEOUT 30
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Explicit opt-in component capture; no real desktop/Wayland claim.
+add_executable(kos_material_probe EXCLUDE_FROM_ALL ui/KosMaterialProbe.cpp)
+target_link_libraries(kos_material_probe PRIVATE Qt::Quick Qt::GuiPrivate Kos::Ui Kos::UiPlugin)
