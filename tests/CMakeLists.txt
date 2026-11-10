@@ -62,3 +62,8 @@ set_tests_properties(ocr_manager_test PROPERTIES TIMEOUT 30
 # Explicit opt-in component capture; no real desktop/Wayland claim.
 add_executable(kos_material_probe EXCLUDE_FROM_ALL ui/KosMaterialProbe.cpp)
 target_link_libraries(kos_material_probe PRIVATE Qt::Quick Qt::GuiPrivate Kos::Ui Kos::UiPlugin)
+
+# Local exact-overlap core, not an automatic desktop scrolling claim.
+ecm_add_test(VerticalStitcherTest.cpp ../src/Imaging/VerticalStitcher.cpp
+    TEST_NAME vertical_stitcher_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(vertical_stitcher_test PROPERTIES TIMEOUT 20)

@@ -638,3 +638,16 @@ in minimum size, normal dark and timeout scenarios. All exit0, CTest 4/4 and
 static checks 16/16 pass. Reviewed [minimum size](screenshots/032-pin-compact.png)
 and [dark feedback](screenshots/032-pin-dark.png). Real pin windows, synthetic
 image input/software rendering only; compositor stacking remains unverified.
+
+## 033 — Conservative offline vertical composition core
+
+Add a Qt Gui-only local stitcher for future scrolling capture/photo reuse. Find
+unique exact vertical overlaps, verify pixels after hash matching, preserve
+alpha/DPR/color space, and reject ambiguity, duplicates, incompatible images or
+oversized output. It does not yet add a menu or control another application.
+
+Incremental build initially caught a missing QColorSpace include; fixed and
+rebuilt. New QtTest has 10 passed, 0 skipped. Three frames reconstruct exact long
+image pixels; rejection/ownership/alpha/DPR cases pass. Aggregate CTest now 5/5;
+static tests 16/16 pass. See [contract](local-image-tools.md). No UI changed, so
+no new UI capture is claimed; automatic scrolling remains unimplemented.
