@@ -186,6 +186,53 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_GESTURE")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                auto viewport = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnnotationViewport"));
+                if (!viewport) { application.exit(35); return; }
+                const auto before = document->renderToImage();
+                const auto originalRect = document->canvasRect();
+                document->tool()->setType(AnnotationTool::CropTool);
+                QTest::qWait(200);
+                const auto start = viewport->mapToScene(QPointF(viewport->width()*0.18, viewport->height()*0.18)).toPoint();
+                const auto end = viewport->mapToScene(QPointF(viewport->width()*0.72, viewport->height()*0.72)).toPoint();
+                const auto middle = (start + end) / 2;
+                auto drag = [viewer, start, end] {
+                    QTest::mousePress(viewer, Qt::LeftButton, Qt::NoModifier, start);
+                    QTest::mouseMove(viewer, (start + end) / 2, 20);
+                    QTest::mouseMove(viewer, end, 20);
+                    QTest::mouseRelease(viewer, Qt::LeftButton, Qt::NoModifier, end);
+                };
+                drag();
+                QTest::mouseClick(viewer, Qt::RightButton, Qt::NoModifier, middle);
+                QTest::qWait(600); // TapHandler single-tap waits for the double-tap interval.
+                if (!samePixels(document->renderToImage(), before) || document->undoStackDepth() != 0 || !document->tool()->geometry().isEmpty()) { application.exit(36); return; }
+                drag();
+                QTest::qWait(100);
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, middle, 20);
+                QTest::qWait(80);
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, middle, 20);
+                if (!QTest::qWaitFor([document] { return document->undoStackDepth() == 1; }, 1000)) {
+                    qCritical() << "NkShot crop double click failed" << document->tool()->geometry();
+                    viewer->grabWindow().save(QStringLiteral("/build/screenshots/030-crop-failed.png"));
+                    application.exit(37); return;
+                }
+                const auto cropped = document->renderToImage();
+                const auto rect = document->canvasRect().toRect();
+                if (rect.width() >= originalRect.width() || rect.height() >= originalRect.height()
+                    || !samePixels(cropped, before.copy(rect))) { qCritical() << "crop pixel comparison" << document->canvasRect() << cropped.size() << rect; application.exit(38); return; }
+                QTest::keyClick(viewer, Qt::Key_Z, Qt::ControlModifier);
+                if (!QTest::qWaitFor([document, before] { return samePixels(document->renderToImage(), before); }, 1000)) {
+                    qCritical() << "NkShot actual crop undo shortcut failed"; application.exit(39); return;
+                }
+                QTest::keyClick(viewer, Qt::Key_Z, Qt::ControlModifier | Qt::ShiftModifier);
+                if (!QTest::qWaitFor([document, cropped] { return samePixels(document->renderToImage(), cropped); }, 1000)) {
+                    qCritical() << "NkShot actual crop redo shortcut failed"; application.exit(40); return;
+                }
+                document->tool()->setType(AnnotationTool::NoTool);
+                QTest::qWait(300);
+                qInfo() << "NkShot actual crop cancel/accept and keyboard undo/redo passed" << rect;
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_TEXT_INPUT")) {
                 auto document = SpectacleCore::instance()->annotationDocument();
                 auto viewport = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnnotationViewport"));

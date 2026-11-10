@@ -587,3 +587,20 @@ checks 16/16 pass. Reviewed [text annotation](screenshots/029-text-ime.png), an
 unmodified software-rendered application-window grab with synthetic image input.
 This checks Qt's input-method commit path, not integration with a real installed
 Fcitx/IBus candidate panel or every writing system.
+
+## 030 — Actual crop cancellation, double-tap acceptance and keyboard history
+
+Exercise the actual crop overlay: drag, right-click clear with unchanged image
+and empty selection, drag again, double-tap accept, compare cropped pixels with
+the corresponding source rectangle, and invoke real Ctrl+Z/Ctrl+Shift+Z.
+The harness must send intermediate pointer movement for DragHandler activation
+and explicit click timestamps: QTest's default click delay deliberately separates
+double-clicks. Compare the crop's rounded pixel rectangle, not a larger outward
+aligned rectangle, when logical dimensions are fractional.
+
+Incremental compilation and final actual-window scenario exit0. The verified
+crop is 518×324 at source origin (173,108); keyboard undo/redo restores exact
+pixels. CTest 4/4 and static tests 16/16 pass. Reviewed
+[cropped window](screenshots/030-crop-gesture.png), with synthetic input/software
+rendering. Update the preservation map to distinguish now-tested editing, OCR
+and dependency paths from remaining real desktop/recording gaps.

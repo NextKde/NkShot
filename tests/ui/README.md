@@ -93,3 +93,6 @@ to exercise actual window mouse gestures and pixel/undo/redo assertions.
 Latin key events and a Chinese preedit/commit event, then validates annotation
 text and undo/redo pixels. Requires a CJK font for the visual fixture; it does not
 test a real Fcitx/IBus candidate-selection session.
+
+`NKSHOT_TEST_CROP_GESTURE=1` with editing enabled tests actual drag/right-click
+cancel, timed double-click acceptance, crop pixels and keyboard undo/redo.
