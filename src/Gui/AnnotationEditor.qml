@@ -11,6 +11,7 @@ import org.kde.spectacle.private
 
 PortableAnnotationViewport {
     id: root
+    objectName: "nkshotAnnotationViewport"
 
     // Inject the image model so a future photo editor can reuse this canvas.
     required property AnnotationDocument editorDocument

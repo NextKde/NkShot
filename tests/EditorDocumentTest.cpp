@@ -49,23 +49,31 @@ private Q_SLOTS:
     }
     void mouseGestureAtScale_data()
     {
+        QTest::addColumn<int>("tool");
         QTest::addColumn<qreal>("zoom");
         QTest::addColumn<qreal>("imageDpr");
         for (qreal zoom : {0.5, 1.0, 2.0}) {
             for (qreal dpr : {1.0, 1.25, 1.5, 2.0}) {
-                const auto name = QStringLiteral("zoom-%1-imageDpr-%2").arg(zoom).arg(dpr).toLatin1();
-                QTest::newRow(name.constData()) << zoom << dpr;
+                for (auto tool : {AnnotationTool::RectangleTool, AnnotationTool::BlurTool, AnnotationTool::PixelateTool}) {
+                    const auto name = QStringLiteral("tool-%1-zoom-%2-imageDpr-%3").arg(int(tool)).arg(zoom).arg(dpr).toLatin1();
+                    QTest::newRow(name.constData()) << int(tool) << zoom << dpr;
+                }
             }
         }
     }
     void mouseGestureAtScale()
     {
+        QFETCH(int, tool);
         QFETCH(qreal, zoom);
         QFETCH(qreal, imageDpr);
         AnnotationDocument document;
         QImage source(QSize(100 * imageDpr, 80 * imageDpr), QImage::Format_ARGB32_Premultiplied);
         source.setDevicePixelRatio(imageDpr);
-        source.fill(Qt::white);
+        for (int y = 0; y < source.height(); ++y) {
+            for (int x = 0; x < source.width(); ++x) {
+                source.setPixelColor(x, y, QColor((x * 37 + y * 13) % 256, (x * 17) % 256, (y * 29) % 256));
+            }
+        }
         document.setBaseImage(source);
         const auto before = document.renderToImage();
         QQuickWindow window;
@@ -77,9 +85,10 @@ private Q_SLOTS:
         viewport.setScale(zoom);
         viewport.setViewportRect({0, 0, 100, 80});
         viewport.setDocument(&document);
-        document.tool()->setType(AnnotationTool::RectangleTool);
+        document.tool()->setType(static_cast<AnnotationTool::Tool>(tool));
         document.tool()->setStrokeColor(Qt::blue);
         document.tool()->setStrokeWidth(4);
+        document.tool()->setStrength(0.6);
         document.tool()->setShadow(false); // Isolate geometry from shadow rasterization.
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -95,9 +104,10 @@ private Q_SLOTS:
         // not merely that some pixels changed after a mouse event.
         AnnotationDocument expected;
         expected.setBaseImage(source);
-        expected.tool()->setType(AnnotationTool::RectangleTool);
+        expected.tool()->setType(static_cast<AnnotationTool::Tool>(tool));
         expected.tool()->setStrokeColor(Qt::blue);
         expected.tool()->setStrokeWidth(4);
+        expected.tool()->setStrength(0.6);
         expected.tool()->setShadow(false);
         // AnnotationViewport rounds local input to the window's device pixels.
         const auto snapped = [&window](QPointF point) {

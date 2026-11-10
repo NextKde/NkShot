@@ -185,6 +185,31 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            const auto redaction = qEnvironmentVariable("NKSHOT_TEST_REDACTION");
+            if (redaction == QStringLiteral("blur") || redaction == QStringLiteral("pixelate")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                auto viewport = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnnotationViewport"));
+                if (!viewport) { application.exit(28); return; }
+                const auto before = document->renderToImage();
+                document->tool()->setType(redaction == QStringLiteral("blur") ? AnnotationTool::BlurTool : AnnotationTool::PixelateTool);
+                document->tool()->setStrength(0.6);
+                const auto start = viewport->mapToScene(QPointF(viewport->width()*0.12, viewport->height()*0.2)).toPoint();
+                const auto end = viewport->mapToScene(QPointF(viewport->width()*0.65, viewport->height()*0.7)).toPoint();
+                QTest::mousePress(viewer, Qt::LeftButton, Qt::NoModifier, start);
+                QTest::mouseMove(viewer, end);
+                QTest::mouseRelease(viewer, Qt::LeftButton, Qt::NoModifier, end);
+                if (!QTest::qWaitFor([document] { return document->undoStackDepth() == 1; }, 1000)) { application.exit(29); return; }
+                const auto changed = document->renderToImage();
+                document->undo();
+                const bool restored = samePixels(document->renderToImage(), before);
+                document->redo();
+                if (samePixels(changed, before) || !restored || !samePixels(document->renderToImage(), changed)) {
+                    qCritical() << "NkShot actual redaction gesture regression failed" << "unchanged" << samePixels(changed, before) << "undo" << restored << "redo" << samePixels(document->renderToImage(), changed);
+                    application.exit(30); return;
+                }
+                QTest::qWait(200);
+                qInfo() << "NkShot actual redaction gesture and undo/redo passed" << redaction;
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_SECOND_DOCUMENT")) {
                 auto original = SpectacleCore::instance()->annotationDocument();
                 const auto originalPixels = original->renderToImage();

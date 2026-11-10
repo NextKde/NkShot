@@ -83,3 +83,8 @@ Allow at least 30 seconds for the complete process. Persistent warnings must rem
 `NKSHOT_TEST_SECOND_DOCUMENT=1` injects an independent document into actual
 editor controls, clicks tool/undo/redo, edits a property and confirms the original
 screenshot document remains unchanged. Use with `NKSHOT_TEST_EDITING=1`.
+
+Generate a patterned redaction fixture with
+`python3 tests/ui/make_fixture.py /path/to/redaction.ppm --texture`.
+Use it with `NKSHOT_TEST_EDITING=1 NKSHOT_TEST_REDACTION=blur` (or `pixelate`)
+to exercise actual window mouse gestures and pixel/undo/redo assertions.

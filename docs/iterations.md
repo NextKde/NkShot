@@ -525,3 +525,21 @@ may report pending QML incubations, as in prior dev captures. Reviewed
 [restored window](screenshots/025-document-isolation.png), synthetic pixels and
 software rendering only. This verifies control isolation in the app host, not
 a separately packaged editor SDK.
+
+## 026 — Blur/pixelate gestures across zoom and DPR
+
+Expand the actual viewport mouse-drag coordinate regression from rectangle alone
+to rectangle, blur and pixelate, at three zoom levels and four image DPRs. Use
+patterned source pixels so redaction effects are observable. Compare against an
+independent document-coordinate gesture and verify exact undo/redo output.
+The editor test now passes 46 cases in each of eight process configurations
+(window scale 1/1.25/1.5/2 × basic/threaded software render loop).
+
+Also drive actual ViewerWindow blur and pixelate mouse gestures, verify changed
+pixels and undo/redo, and review [blur](screenshots/026-blur-gesture.png) and
+[pixelate](screenshots/026-pixelate-gesture.png). A flat, grid-aligned initial
+fixture made pixelation correctly leave pixels unchanged; add the explicit
+--texture fixture mode rather than weaken the changed-pixel assertion.
+Incremental application/test builds, CTest 4/4 and static checks 16/16 pass.
+These tests verify operation/coordinates, not that blur/pixelation makes private
+information unrecoverable. Synthetic input/software rendering only.
