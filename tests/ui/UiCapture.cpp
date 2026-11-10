@@ -64,7 +64,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -266,6 +266,51 @@ void installUiCaptureHook(QApplication &application)
                     copy->mapToScene(QPointF(copy->width()/2, copy->height()/2)).toPoint());
                 if (QApplication::clipboard()->text() != result->recognizedText() || !copy->property("copied").toBool()) {
                     application.exit(95); return;
+                }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE")) {
+                    QTemporaryDir folder;
+                    const auto output = folder.filePath(QStringLiteral("recognized.txt"));
+                    auto save = visualItem(result->contentItem(), QStringLiteral("nkshotOcrSave"));
+                    auto status = visualItem(result->contentItem(), QStringLiteral("nkshotOcrSaveStatus"));
+                    if (!folder.isValid() || !save || !status) { application.exit(100); return; }
+                    auto openDialog = [&]() -> QFileDialog * {
+                        QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier,
+                            save->mapToScene(QPointF(save->width()/2, save->height()/2)).toPoint());
+                        QTest::qWait(200);
+                        for (auto widget : QApplication::topLevelWidgets())
+                            if (widget->objectName() == QStringLiteral("nkshotOcrSaveDialog")) return qobject_cast<QFileDialog *>(widget);
+                        return nullptr;
+                    };
+                    QPointer<QFileDialog> dialog = openDialog();
+                    if (!dialog) { application.exit(101); return; }
+                    result->saveAs();
+                    int count = 0;
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotOcrSaveDialog")) ++count;
+                    if (count != 1) { application.exit(102); return; }
+                    dialog->reject();
+                    if (!QTest::qWaitFor([&] { return dialog.isNull(); }, 1000) || QFileInfo::exists(output)) {
+                        application.exit(103); return;
+                    }
+                    for (const auto &path : {folder.filePath(QStringLiteral("rejected.png")), output}) {
+                        dialog = openDialog();
+                        auto filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+                        if (!filename) { application.exit(104); return; }
+                        filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, path);
+                        if (!QTest::qWaitFor([&] { return dialog->selectedFiles() == QStringList{path}; }, 1000)
+                            || !QMetaObject::invokeMethod(dialog, "accept")
+                            || !QTest::qWaitFor([&] { return dialog.isNull(); }, 1000)) { application.exit(105); return; }
+                        if (path.endsWith(QStringLiteral(".png"))
+                            && (QFileInfo::exists(path) || !status->property("text").toString().contains(QStringLiteral(".txt")))) {
+                            application.exit(106); return;
+                        }
+                    }
+                    QFile textFile(output);
+                    if (!textFile.open(QIODevice::ReadOnly) || textFile.readAll() != result->recognizedText().toUtf8()
+                        || status->property("text").toString() != QStringLiteral("Text saved")
+                        || !samePixels(document->renderToImage(), original)) { application.exit(107); return; }
+                    QTest::qWait(200);
+                    qInfo() << "NkShot OCR UTF-8 save, cancel/reopen/reuse, wrong extension and source isolation passed";
                 }
                 if (!result->grabWindow().save(destination)) { application.exit(96); return; }
                 QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier,

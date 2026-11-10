@@ -833,3 +833,21 @@ and Chinese cases pass. Reviewed [light](screenshots/043-ocr-light.png),
 and [Chinese](screenshots/043-ocr-chinese.png) software-rendered windows.
 The harness invokes the real core OCR entry point, not the menu action; this is
 not a general OCR-accuracy benchmark, desktop-notification test or GPU test.
+
+## 044 — Save recognized text locally
+
+The OCR result now offers Save text as and Ctrl+S/Ctrl+Shift+S. A non-blocking
+file picker writes a UTF-8 .txt using QSaveFile atomic replacement, without
+changing the image, clipboard or recognition result. Repeated requests reuse one
+picker; cancelling creates nothing. Invalid extensions and write/commit errors
+receive inline feedback. Closing the result owns and cleans up its picker.
+
+Final build, CTest 5/5 and static checks 16/16 pass. Real English/Chinese OCR UI
+tests click Save, cancel/reopen, repeat the action, reject a .png extension,
+then compare the saved bytes exactly with recognizedText.toUtf8(). Original
+image pixels remain unchanged. Light/dark/compact/Chinese variants pass, including
+prior selection/copy/close tests. Reviewed [light](screenshots/044-ocr-save-light.png),
+[dark](screenshots/044-ocr-save-dark.png), [compact](screenshots/044-ocr-save-compact.png)
+and [Chinese](screenshots/044-ocr-save-chinese.png).
+Tests use widget file pickers and synthetic images; native portals, existing-file
+overwrite prompts and filesystem failure injection remain unverified.

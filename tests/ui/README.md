@@ -141,3 +141,9 @@ Close destruction. Add `NKSHOT_TEST_OCR_CHINESE=1` for the installed chi_sim mod
 `NKSHOT_TEST_OCR_COMPACT=1` for 360×260, or `NKSHOT_TEST_DARK=1`. This invokes the
 core action, not a menu click, and does not establish real-world OCR accuracy or
 native desktop notification delivery.
+
+Add `NKSHOT_TEST_OCR_SAVE=1` to OCR_RESULT to use widget dialogs and test actual
+Save clicks, cancellation/reopen, repeated-dialog reuse, rejected .png extension,
+exact UTF-8 file bytes and source isolation. Run light/dark/compact/Chinese
+variants. Native portal behavior, overwrite prompts and disk failures are not
+covered by this harness.

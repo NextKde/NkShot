@@ -45,6 +45,16 @@ QQC.Pane {
                 }
             }
             QQC.ToolButton {
+                objectName: "nkshotOcrSave"
+                text: i18nc("@action", "Save text as…")
+                icon.name: "document-save-as"
+                icon.color: Kos.AppTheme.paletteText
+                display: QQC.AbstractButton.IconOnly
+                QQC.ToolTip.text: text
+                QQC.ToolTip.visible: hovered
+                onClicked: ocrWindow.saveAs()
+            }
+            QQC.ToolButton {
                 objectName: "nkshotOcrClose"
                 text: i18nc("@action", "Close")
                 icon.name: "dialog-close"
@@ -61,6 +71,19 @@ QQC.Pane {
             wrapMode: Text.Wrap
             color: Kos.AppTheme.mutedText
             font.pixelSize: 12
+        }
+        QQC.Label {
+            id: saveStatus
+            objectName: "nkshotOcrSaveStatus"
+            Layout.fillWidth: true
+            visible: text.length > 0
+            wrapMode: Text.Wrap
+            color: Kos.AppTheme.paletteText
+            font.pixelSize: 12
+            Connections {
+                target: ocrWindow
+                function onSaveFinished(message, success) { saveStatus.text = message }
+            }
         }
         QQC.ScrollView {
             Layout.fillWidth: true
