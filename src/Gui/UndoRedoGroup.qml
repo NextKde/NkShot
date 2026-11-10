@@ -10,6 +10,7 @@ import org.kde.kquickimageeditor
 
 Grid {
     id: root
+    objectName: "nkshotHistoryControls"
     required property AnnotationDocument editorDocument
     property int buttonFocusPolicy: Qt.StrongFocus
     property real buttonHeight: undoButton.implicitHeight
@@ -24,6 +25,7 @@ Grid {
     }
 
     TtToolButton {
+        objectName: "nkshotUndo"
         id: undoButton
         enabled: root.editorDocument.undoStackDepth > 0
         height: root.buttonHeight
@@ -36,6 +38,7 @@ Grid {
     }
 
     TtToolButton {
+        objectName: "nkshotRedo"
         enabled: root.editorDocument.redoStackDepth > 0
         height: root.buttonHeight
         focusPolicy: root.buttonFocusPolicy

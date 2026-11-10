@@ -79,3 +79,7 @@ and verifies stable workbench geometry. It does not invoke external file handler
 Add `NKSHOT_TEST_NOTIFICATION_TIMEOUT=1` to the notification test to wait for the
 real ten-second transient-message expiry while its row is scrolled out of view.
 Allow at least 30 seconds for the complete process. Persistent warnings must remain.
+
+`NKSHOT_TEST_SECOND_DOCUMENT=1` injects an independent document into actual
+editor controls, clicks tool/undo/redo, edits a property and confirms the original
+screenshot document remains unchanged. Use with `NKSHOT_TEST_EDITING=1`.

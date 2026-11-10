@@ -11,6 +11,7 @@ import org.kde.kquickimageeditor
 
 Grid {
     id: root
+    objectName: "nkshotToolProperties"
     required property AnnotationDocument editorDocument
     property bool verticalLayout: false
     columns: verticalLayout ? 1 : -1

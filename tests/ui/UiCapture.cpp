@@ -185,6 +185,65 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_SECOND_DOCUMENT")) {
+                auto original = SpectacleCore::instance()->annotationDocument();
+                const auto originalPixels = original->renderToImage();
+                const auto originalTool = original->tool()->type();
+                const auto originalDepth = original->undoStackDepth();
+                AnnotationDocument alternate;
+                QImage blank(100, 80, QImage::Format_ARGB32_Premultiplied);
+                blank.fill(Qt::white);
+                alternate.setBaseImage(blank);
+                alternate.tool()->setType(AnnotationTool::RectangleTool);
+                alternate.tool()->setStrokeWidth(4);
+                alternate.beginItem({20,20}); alternate.continueItem({70,60}); alternate.finishItem();
+                auto palette = visualItem(viewer->contentItem(), QStringLiteral("nkshotToolPalette"));
+                auto history = visualItem(viewer->contentItem(), QStringLiteral("nkshotHistoryControls"));
+                auto properties = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotToolProperties"));
+                if (!palette || !history || !properties) { application.exit(26); return; }
+                for (QObject *control : {static_cast<QObject *>(palette), static_cast<QObject *>(history), properties})
+                    control->setProperty("editorDocument", QVariant::fromValue(&alternate));
+                QTest::qWait(100);
+                auto click = [viewer](QQuickItem *item) {
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint());
+                };
+                auto freehand = visualItem(viewer->contentItem(), QStringLiteral("nkshotFreehandTool"));
+                auto undo = visualItem(viewer->contentItem(), QStringLiteral("nkshotUndo"));
+                auto redo = visualItem(viewer->contentItem(), QStringLiteral("nkshotRedo"));
+                bool passed = freehand && undo && redo;
+                if (passed) {
+                    click(freehand);
+                    passed &= alternate.tool()->type() == AnnotationTool::FreehandTool;
+                    click(undo);
+                    passed &= alternate.undoStackDepth() == 0 && samePixels(alternate.renderToImage(), blank);
+                    click(redo);
+                    passed &= alternate.undoStackDepth() == 1;
+                }
+                // Exercise the actual property editor against the alternate document.
+                passed &= properties->property("document").value<AnnotationDocument *>() == &alternate;
+                alternate.tool()->setType(AnnotationTool::SelectTool);
+                alternate.selectItem({15,15,60,50});
+                const auto beforeProperties = alternate.renderToImage();
+                auto popup = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotPropertiesPopup"));
+                if (popup) {
+                    QMetaObject::invokeMethod(popup, "open");
+                    QTest::qWait(100);
+                    // Changing tool/document may recreate the Loader's spin box.
+                    auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));
+                    if (spin) spin->setProperty("value", 12);
+                    else passed = false;
+                    QMetaObject::invokeMethod(popup, "close");
+                    passed &= QTest::qWaitFor([&alternate] { return alternate.undoStackDepth() == 2; }, 1000);
+                    passed &= !samePixels(alternate.renderToImage(), beforeProperties);
+                } else { passed = false; }
+                passed &= original->tool()->type() == originalTool && original->undoStackDepth() == originalDepth
+                    && samePixels(original->renderToImage(), originalPixels);
+                for (QObject *control : {static_cast<QObject *>(palette), static_cast<QObject *>(history), properties})
+                    control->setProperty("editorDocument", QVariant::fromValue(original));
+                QTest::qWait(200); // settle bindings before the alternate document is destroyed
+                if (!passed) { qCritical() << "NkShot second-document control isolation failed"; application.exit(27); return; }
+                qInfo() << "NkShot second-document actual tool/undo/redo clicks and property edit isolated from screenshot document";
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PROPERTY_TRANSACTION")) {
                 auto document = SpectacleCore::instance()->annotationDocument();
                 auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));

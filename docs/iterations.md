@@ -507,3 +507,21 @@ document dependency checks. Reviewed [editor](screenshots/024-editor-document.pn
 and [capture](screenshots/024-capture-document.png) for unintended layout changes.
 Both are real development windows using synthetic input/software rendering.
 Standalone alternate-document control hosting has not yet been runtime-tested.
+
+## 025 — Actual second-document control isolation
+
+The dev harness injects a separate 100×80 document into the actual palette,
+undo/redo group and property controls. Real mouse clicks select freehand and
+undo/redo only the alternate document. A real property spin-box edit and popup
+close commits a second history entry there. The original screenshot's tool,
+history depth and pixels remain unchanged. Restore original ownership before
+destroying the alternate document.
+
+Incremental builds, the actual-window isolation scenario, CTest 4/4 and static
+checks 16/16 pass. The expanded harness initially retained a spin-box pointer
+across a Loader recreation and crashed; reacquire the actual control after
+settling the document/tool transition. Final process exits 0. Forced teardown
+may report pending QML incubations, as in prior dev captures. Reviewed
+[restored window](screenshots/025-document-isolation.png), synthetic pixels and
+software rendering only. This verifies control isolation in the app host, not
+a separately packaged editor SDK.

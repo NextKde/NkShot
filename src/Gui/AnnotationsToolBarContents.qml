@@ -11,6 +11,7 @@ import org.kde.kquickimageeditor
 
 ButtonGrid {
     id: root
+    objectName: "nkshotToolPalette"
     required property AnnotationDocument editorDocument
     property bool paletteMode: false
     property bool essentialsOnly: false
@@ -152,6 +153,7 @@ ButtonGrid {
         onClicked: root.tool.type = AnnotationTool.SelectTool
     }
     ToolButton {
+        objectName: "nkshotFreehandTool"
         id: freehandButton
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar freehand line tool", "Freehand")
