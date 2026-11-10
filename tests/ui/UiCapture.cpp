@@ -16,6 +16,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QImage>
+#include <QInputMethodEvent>
 #include <QClipboard>
 #include <QFileInfo>
 #include <QIcon>
@@ -184,6 +185,45 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_TEXT_INPUT")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                auto viewport = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnnotationViewport"));
+                if (!viewport) { application.exit(31); return; }
+                const auto before = document->renderToImage();
+                document->tool()->setType(AnnotationTool::TextTool);
+                QFont font(QStringLiteral("Noto Sans CJK SC")); font.setPixelSize(32);
+                document->tool()->setFont(font);
+                document->tool()->setFontColor(Qt::black);
+                const auto point = viewport->mapToScene(QPointF(viewport->width()*0.25, viewport->height()*0.3)).toPoint();
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, point);
+                QTest::qWait(200);
+                for (char key : QByteArray("NkShot ")) QTest::keyClick(viewer, key);
+                auto focus = viewer->focusObject();
+                if (!focus) { application.exit(34); return; }
+                QInputMethodEvent preedit(QStringLiteral("zhongwen"), {});
+                QApplication::sendEvent(focus, &preedit);
+                QInputMethodEvent commit;
+                commit.setCommitString(QStringLiteral("中文"));
+                QApplication::sendEvent(focus, &commit);
+                QTest::qWait(500);
+                auto selected = document->property("selectedItem").value<QObject *>();
+                if (!selected || selected->property("text").toString() != QStringLiteral("NkShot 中文")) {
+                    qCritical() << "NkShot keyboard/IME text mismatch" << (selected ? selected->property("text") : QVariant());
+                    application.exit(32); return;
+                }
+                document->tool()->setType(AnnotationTool::NoTool);
+                document->deselectItem();
+                const auto changed = document->renderToImage();
+                const auto depth = document->undoStackDepth();
+                for (int i = 0; i < depth; ++i) document->undo();
+                const bool restored = samePixels(document->renderToImage(), before);
+                for (int i = 0; i < depth; ++i) document->redo();
+                if (!depth || samePixels(changed, before) || !restored || !samePixels(document->renderToImage(), changed)) {
+                    application.exit(33); return;
+                }
+                QTest::qWait(200);
+                qInfo() << "NkShot actual keyboard and Chinese IME commit plus undo/redo passed";
             }
             const auto redaction = qEnvironmentVariable("NKSHOT_TEST_REDACTION");
             if (redaction == QStringLiteral("blur") || redaction == QStringLiteral("pixelate")) {

@@ -88,3 +88,8 @@ Generate a patterned redaction fixture with
 `python3 tests/ui/make_fixture.py /path/to/redaction.ppm --texture`.
 Use it with `NKSHOT_TEST_EDITING=1 NKSHOT_TEST_REDACTION=blur` (or `pixelate`)
 to exercise actual window mouse gestures and pixel/undo/redo assertions.
+
+`NKSHOT_TEST_TEXT_INPUT=1` with editing enabled clicks the real canvas, sends
+Latin key events and a Chinese preedit/commit event, then validates annotation
+text and undo/redo pixels. Requires a CJK font for the visual fixture; it does not
+test a real Fcitx/IBus candidate-selection session.

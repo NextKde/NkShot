@@ -572,3 +572,18 @@ root for the fixture, without modifying the host or distributing the font.
 On machines without chi_sim data or CJK font this optional Chinese case reports
 a named skip. One clean synthetic phrase does not establish general OCR accuracy.
 No application UI changed, so no new UI screenshot is claimed.
+
+## 029 — Actual text annotation keyboard and IME event path
+
+Create a text annotation by clicking the actual application canvas, type Latin
+characters via QTest key events, then send a Chinese preedit/commit event to the
+focused text control. Assert the selected annotation reads exactly NkShot 中文,
+that rendered pixels change, and all text history can be undone/redone without
+altering the original image. Set explicit test font after changing tool mode,
+so restored per-tool preferences cannot override the fixture's intended size.
+
+Incremental builds and the actual window scenario exit0. CTest 4/4 and static
+checks 16/16 pass. Reviewed [text annotation](screenshots/029-text-ime.png), an
+unmodified software-rendered application-window grab with synthetic image input.
+This checks Qt's input-method commit path, not integration with a real installed
+Fcitx/IBus candidate panel or every writing system.
