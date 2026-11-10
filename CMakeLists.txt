@@ -37,6 +37,7 @@ include(ECMDeprecationSettings)
 include(ECMFindQmlModule)
 
 option(WITH_X11 "Enable X11 support" ON)
+option(NKSHOT_ENABLE_UI_CAPTURE "Enable developer-only deterministic viewer capture" OFF)
 
 # find dependencies
 

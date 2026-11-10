@@ -46,3 +46,23 @@ cache was generated, removing the missing PNG MIME warning.
 Not accepted yet: a live D-Bus service/coexistence test and screenshot backend.
 The smoke launch was stopped by its test timeout, not by a full interactive test.
 A pre-existing zoom-field context-menu signal warning remains to investigate.
+
+## 003 — Real editor render and software canvas fallback
+
+The first actual offscreen capture exposed a white image canvas and missing icons.
+The upstream annotation viewport uses a custom GPU material unsupported by Qt's
+software scene graph. Add PortableAnnotationViewport, keeping the original
+AnnotationDocument/input API and GPU renderer while displaying the document's
+composited image on software platforms. An opt-in developer-only capture hook
+restores the otherwise absent offscreen icon theme and saves the real window.
+
+Verified: incremental C++/QML compile/link passed; filename CTest 1/1 and static
+checks 14/14 passed. Actual editor launch exited successfully and produced
+[the unmodified 960×660 window capture](screenshots/003-editor-software.png),
+with the synthetic test image and annotation icons visible. This is the existing
+editor layout, **not Apple-style UI acceptance**.
+
+Not yet validated: individual annotation gestures, save/copy interaction, GPU
+material appearance, Wayland capture/recording, viewport-only color/gamma preview
+on software. No desktop/session security limits were bypassed. Next: editor
+interaction regression tests and high-frequency/secondary action layout.

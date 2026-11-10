@@ -9,7 +9,7 @@ import QtQuick.Layouts
 import org.kde.kquickimageeditor
 import org.kde.spectacle.private
 
-AnnotationViewport {
+PortableAnnotationViewport {
     id: root
 
     document: SpectacleCore.annotationDocument

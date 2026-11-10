@@ -17,6 +17,11 @@ ecm_qt_declare_logging_category(SPECTACLE_SRCS
 )
 
 add_executable(spectacle)
+if(NKSHOT_ENABLE_UI_CAPTURE)
+    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp)
+    target_include_directories(spectacle PRIVATE ${PROJECT_SOURCE_DIR}/tests/ui)
+    target_compile_definitions(spectacle PRIVATE NKSHOT_ENABLE_UI_CAPTURE=1)
+endif()
 # Preserve upstream internal target/module names; isolate the installed binary.
 set_target_properties(spectacle PROPERTIES OUTPUT_NAME nkshot)
 qt_add_qml_module(spectacle URI ${SPECTACLE_QML_URI} DEPENDENCIES QtCore QtQuick)
@@ -28,6 +33,8 @@ target_sources(spectacle PRIVATE
     ExportManager.cpp
     Geometry.cpp
     OcrManager.cpp
+    Gui/PortableAnnotationViewport.cpp
+    Gui/PortableAnnotationViewport.h
     Gui/CaptureWindow.cpp
     Gui/ExportMenu.cpp
     Gui/HelpMenu.cpp

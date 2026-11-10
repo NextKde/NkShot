@@ -12,6 +12,9 @@
 #include "SpectacleDBusAdapter.h"
 #include "ScreenShotEffect.h"
 #include "settings.h"
+#ifdef NKSHOT_ENABLE_UI_CAPTURE
+#include "UiCapture.h"
+#endif
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -36,6 +39,9 @@ int main(int argc, char **argv)
     QCoreApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QIcon::setFallbackThemeName(u"breeze"_s);
     QApplication app(argc, argv);
+#ifdef NKSHOT_ENABLE_UI_CAPTURE
+    installUiCaptureHook(app);
+#endif
 
     KLocalizedString::setApplicationDomain(QByteArrayLiteral("nkshot"));
     QCoreApplication::setOrganizationDomain(u"nextkde.org"_s);
