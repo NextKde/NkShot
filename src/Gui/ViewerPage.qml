@@ -47,13 +47,17 @@ EmptyPage {
     // Primary actions stay visible; the original secondary actions remain
     // available in More rather than competing with the image being edited.
     component ViewerButton: TtToolButton {
+        property bool primaryAction: false
+        icon.width: 18
+        icon.height: 18
+        palette.buttonText: primaryAction ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
         implicitHeight: 36
         implicitWidth: Math.max(40, implicitContentWidth + 24)
         leftPadding: 12
         rightPadding: 12
         display: root.width < 720 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
         background: Kos.KosSurface {
-            fillColor: parent.checked ? Kos.AppTheme.controlBackground
+            fillColor: parent.primaryAction ? Kos.AppTheme.accent : parent.checked ? Kos.AppTheme.controlBackground
                 : parent.hovered ? Kos.AppTheme.contentSecondaryBackground : "transparent"
             strokeColor: "transparent"
             strokeWidth: 0
@@ -86,7 +90,7 @@ EmptyPage {
             spacing: 6
             ViewerButton {
                 icon.name: "camera-photo"
-                text: i18nc("@action", "Capture")
+                text: i18nc("@action", "New Screenshot")
                 Accessible.role: Accessible.ButtonMenu
                 onClicked: ScreenshotModeMenu.popup(this)
             }
@@ -94,6 +98,25 @@ EmptyPage {
             ViewerButton {
                 visible: action.enabled
                 action: EditAction {}
+            }
+            Item { Layout.fillWidth: true; Layout.minimumWidth: 12 }
+            ColumnLayout {
+                visible: root.width >= 800
+                spacing: 2
+                QQC.Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: SpectacleCore.videoMode ? i18nc("@title", "Recording") : i18nc("@title", "Screenshot")
+                    font.weight: Font.DemiBold
+                    color: Kos.AppTheme.paletteText
+                }
+                QQC.Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: !SpectacleCore.videoMode
+                    text: Math.round(SpectacleCore.annotationDocument.canvasRect.width) + " × "
+                        + Math.round(SpectacleCore.annotationDocument.canvasRect.height)
+                    font.pixelSize: 11
+                    color: Kos.AppTheme.mutedText
+                }
             }
             Item { Layout.fillWidth: true; Layout.minimumWidth: 12 }
             UndoRedoGroup {
@@ -108,6 +131,7 @@ EmptyPage {
             }
             ViewerButton {
                 visible: action.enabled
+                primaryAction: true
                 action: SaveAction {}
             }
             ViewerButton {
@@ -222,8 +246,8 @@ EmptyPage {
         z: 2
         leftPadding: 10
         rightPadding: 10
-        topPadding: 12
-        bottomPadding: 12
+        topPadding: 7
+        bottomPadding: 7
         contentItem: RowLayout {
             spacing: 6
             AnnotationsToolBarContents {

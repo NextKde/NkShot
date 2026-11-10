@@ -3,6 +3,7 @@
  */
 
 import QtQuick
+import Kos.Ui as Kos
 import QtQuick.Controls as QQC
 import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
@@ -56,6 +57,18 @@ Grid {
         display: root.displayMode
     }
 
+    component PropertySpinBox: QQC.SpinBox {
+        implicitHeight: 32
+        background: Kos.KosSurface {
+            fillColor: Kos.AppTheme.fieldSurface
+            strokeColor: parent.activeFocus ? Kos.AppTheme.accent : Kos.AppTheme.border
+            strokeWidth: 1
+            radius: 8
+            elevation: 0
+            showInnerHighlight: false
+        }
+    }
+
     Loader { // stroke
         id: strokeLoader
         visible: active
@@ -63,7 +76,7 @@ Grid {
         sourceComponent: Row {
             spacing: root.spacing
 
-            QQC.CheckBox {
+            Kos.KosCheckBox {
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Stroke:")
                 checked: colorRect.color.a > 0
@@ -74,7 +87,7 @@ Grid {
                 }
             }
 
-            QQC.SpinBox {
+            PropertySpinBox {
                 id: spinBox
                 objectName: "nkshotStrokeWidth"
                 function setStrokeWidth() {
@@ -170,7 +183,7 @@ Grid {
         sourceComponent: Row {
             spacing: root.spacing
 
-            QQC.CheckBox {
+            Kos.KosCheckBox {
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Fill:")
                 checked: colorRect.color.a > 0
@@ -339,7 +352,7 @@ Grid {
                 text: i18n("Number:")
             }
 
-            QQC.SpinBox {
+            PropertySpinBox {
                 id: spinBox
                 readonly property int number: root.useSelectionOptions ? root.selectedItem.number : root.tool.number
                 anchors.verticalCenter: parent.verticalCenter
@@ -380,7 +393,7 @@ Grid {
         width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
-    QQC.CheckBox {
+    Kos.KosCheckBox {
         id: shadowCheckBox
         visible: root.options & AnnotationTool.ShadowOption
         text: i18n("Shadow")

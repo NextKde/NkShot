@@ -81,6 +81,8 @@ ButtonGrid {
 
     component ToolButton: QQC.ToolButton {
         id: button
+        icon.width: 18
+        icon.height: 18
         opacity: enabled ? 1 : 0.38
         icon.color: palette.buttonText
         property string extraHelp: ""

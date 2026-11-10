@@ -666,3 +666,20 @@ isolation, in normal/light, minimum-size and dark windows. CTest 5/5 and identit
 checks 16/16 pass. Test files are temporary and cleaned up. Native desktop file
 portals, overwrite prompts and compositor stacking remain unverified. Captures
 use synthetic input and software rendering, not real desktop screenshots.
+
+## 035 — Clearer editor hierarchy and shared controls
+
+Give Save a primary accent surface, keep Copy secondary, label capture as New
+Screenshot, and add a compact screenshot/recording heading with canvas dimensions
+on wide windows. Narrow windows retain icon actions and omit secondary metadata.
+Reduce the bottom palette from 60 to 50 px and use consistent 18 px icons.
+Replace legacy property checkboxes with the existing Kos.Ui control and give
+numeric fields a shared, restrained rounded field surface. Editing actions,
+shortcuts, undo history and secondary tools remain present.
+
+Incremental build, CTest 5/5, static checks 16/16 pass. Actual property transaction
+(change, close, undo/redo) passes. Reviewed actual [light](screenshots/035-editor-light.png),
+[dark](screenshots/035-editor-dark.png) and [640 px](screenshots/035-editor-narrow.png)
+windows. These are software-rendered synthetic-input captures. This stage improves
+hierarchy and controls, not GPU liquid-material verification or a finished Apple
+reproduction; the editor palette is still an opaque shared surface.
