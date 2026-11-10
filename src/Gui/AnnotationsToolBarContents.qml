@@ -125,11 +125,11 @@ ButtonGrid {
 
     // Used in the image viewer where one might want to drag and drop or pan around a viewport
     Loader {
-        active: root.showNoneButton
+        active: root.showNoneButton && !root.essentialsOnly
         visible: active
         sourceComponent: ToolButton {
             QQC.ButtonGroup.group: toolGroup
-            text: i18nc("@action:intoolbar no tool, to allow dragging", "None")
+            text: i18nc("@action:intoolbar no tool, to allow dragging", "Pan")
             icon.name: "transform-browse"
             onClicked: root.tool.type = AnnotationTool.NoTool
             // Setting checked in onCompleted so clicking the crop tool doesn't check this instead.
@@ -242,16 +242,30 @@ ButtonGrid {
         checked: root.toolType === AnnotationTool.NumberTool
         onClicked: root.tool.type = AnnotationTool.NumberTool
     }
+    component ExtraMenuItem: QQC.MenuItem {
+        id: menuItem
+        implicitHeight: 32
+        indicator: Text {
+            text: "✓"
+            visible: menuItem.checked
+            x: 7
+            y: (menuItem.height - height) / 2
+            color: Kos.AppTheme.paletteText
+            font.pixelSize: 14
+        }
+    }
     TtToolButton {
         id: extraToolsButton
+        objectName: "nkshotMoreToolsButton"
+        Accessible.role: Accessible.ButtonMenu
         visible: root.essentialsOnly
         implicitHeight: 36
         display: QQC.AbstractButton.IconOnly
         readonly property var secondaryTools: [AnnotationTool.HighlighterTool, AnnotationTool.LineTool,
-            AnnotationTool.EllipseTool, AnnotationTool.BlurTool, AnnotationTool.NumberTool]
-        readonly property var secondaryIcons: ["draw-highlight", "draw-line", "draw-ellipse", "blur", "draw-number"]
+            AnnotationTool.EllipseTool, AnnotationTool.BlurTool, AnnotationTool.NumberTool].concat(root.showNoneButton ? [AnnotationTool.NoTool] : [])
+        readonly property var secondaryIcons: ["draw-highlight", "draw-line", "draw-ellipse", "blur", "draw-number"].concat(root.showNoneButton ? ["transform-browse"] : [])
         readonly property var secondaryNames: [i18nc("@action", "Highlighter"), i18nc("@action", "Line"),
-            i18nc("@action", "Ellipse"), i18nc("@action", "Blur"), i18nc("@action", "Number")]
+            i18nc("@action", "Ellipse"), i18nc("@action", "Blur"), i18nc("@action", "Number")].concat(root.showNoneButton ? [i18nc("@action", "Pan")] : [])
         readonly property int selectedIndex: secondaryTools.indexOf(root.toolType)
         checked: selectedIndex >= 0
         text: selectedIndex >= 0 ? secondaryNames[selectedIndex] : i18nc("@action", "More tools")
@@ -275,50 +289,67 @@ ButtonGrid {
                 elevation: 0.5
             }
             y: -height - 8
-            QQC.MenuItem {
+            ExtraMenuItem {
+                objectName: "nkshotExtraPan"
+                visible: root.showNoneButton
+                height: visible ? implicitHeight : 0
+                text: i18nc("@action", "Pan image")
+                icon.name: "transform-browse"
+                icon.color: palette.buttonText
+                checkable: true
+                checked: root.toolType === AnnotationTool.NoTool
+                onTriggered: root.tool.type = AnnotationTool.NoTool
+            }
+            QQC.MenuSeparator { visible: root.showNoneButton; height: visible ? implicitHeight : 0 }
+            ExtraMenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
 
+                objectName: "nkshotExtraHighlighter"
                 text: i18nc("@action", "Highlighter")
                 icon.name: "draw-highlight"
                 checkable: true
                 checked: root.toolType === AnnotationTool.HighlighterTool
                 onTriggered: root.tool.type = AnnotationTool.HighlighterTool
             }
-            QQC.MenuItem {
+            ExtraMenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
 
+                objectName: "nkshotExtraLine"
                 text: i18nc("@action", "Line")
                 icon.name: "draw-line"
                 checkable: true
                 checked: root.toolType === AnnotationTool.LineTool
                 onTriggered: root.tool.type = AnnotationTool.LineTool
             }
-            QQC.MenuItem {
+            ExtraMenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
 
+                objectName: "nkshotExtraEllipse"
                 text: i18nc("@action", "Ellipse")
                 icon.name: "draw-ellipse"
                 checkable: true
                 checked: root.toolType === AnnotationTool.EllipseTool
                 onTriggered: root.tool.type = AnnotationTool.EllipseTool
             }
-            QQC.MenuItem {
+            ExtraMenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
 
+                objectName: "nkshotExtraBlur"
                 text: i18nc("@action", "Blur")
                 icon.name: "blur"
                 checkable: true
                 checked: root.toolType === AnnotationTool.BlurTool
                 onTriggered: root.tool.type = AnnotationTool.BlurTool
             }
-            QQC.MenuItem {
+            ExtraMenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
 
+                objectName: "nkshotExtraNumber"
                 text: i18nc("@action", "Number")
                 icon.name: "draw-number"
                 checkable: true

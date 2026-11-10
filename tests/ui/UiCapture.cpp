@@ -209,6 +209,33 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_SECONDARY_TOOLS")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotExtraToolsMenu"));
+                const auto original = document->renderToImage();
+                const auto depth = document->undoStackDepth();
+                const QList<QPair<QString, AnnotationTool::Tool>> cases = {
+                    {QStringLiteral("Highlighter"), AnnotationTool::HighlighterTool},
+                    {QStringLiteral("Line"), AnnotationTool::LineTool},
+                    {QStringLiteral("Ellipse"), AnnotationTool::EllipseTool},
+                    {QStringLiteral("Blur"), AnnotationTool::BlurTool},
+                    {QStringLiteral("Number"), AnnotationTool::NumberTool},
+                    {QStringLiteral("Pan"), AnnotationTool::NoTool},
+                };
+                for (const auto &test : cases) {
+                    if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(67); return; }
+                    QTest::qWait(200);
+                    auto item = visualItem(viewer->contentItem(), QStringLiteral("nkshotExtra") + test.first);
+                    if (!item) { application.exit(68); return; }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint());
+                    if (document->tool()->type() != test.second || !samePixels(document->renderToImage(), original)
+                        || document->undoStackDepth() != depth) { application.exit(69); return; }
+                }
+                QMetaObject::invokeMethod(menu, "open");
+                QTest::qWait(200);
+                qInfo() << "NkShot actual secondary-tool menu clicks, pan and unchanged document passed";
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN")) {
                 auto document = SpectacleCore::instance()->annotationDocument();
                 const auto original = document->renderToImage();

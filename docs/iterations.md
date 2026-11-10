@@ -736,3 +736,19 @@ wait assertion. Reviewed [light](screenshots/038-properties-light.png),
 [dark](screenshots/038-properties-dark.png) and [narrow](screenshots/038-properties-narrow.png)
 actual software windows. Native font/color dialogs, desktop capture and GPU
 optics remain outside this verification.
+
+## 039 — Seven primary tools and reachable secondary tools
+
+Keep crop, selection, freehand, arrow, rectangle, privacy pixelation and text on
+the editor's primary palette. Move the less-frequent pan mode into More tools,
+separated from highlighter, line, ellipse, blur and number. The menu reflects the
+selected secondary tool and now uses a simple checkmark rather than a grid of
+unchecked checkbox outlines. All original annotation modes remain available;
+the fullscreen capture palette does not offer the editor-only pan mode.
+
+Build, CTest 5/5 and static checks 16/16 pass. Real menu clicks select each of six
+secondary modes without changing document pixels or undo history, in light/dark/
+640 px states. Reviewed [light](screenshots/039-tools-light.png),
+[dark](screenshots/039-tools-dark.png), [narrow](screenshots/039-tools-narrow.png)
+and the [capture overlay](screenshots/039-capture-overlay.png). These use synthetic
+input/software rendering; real desktop capture and GPU optics remain unverified.
