@@ -118,6 +118,13 @@ EmptyPage {
                 onClicked: moreMenu.popup()
                 QQC.Menu {
                     id: moreMenu
+                    palette.windowText: Kos.AppTheme.paletteText
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    palette.base: Kos.AppTheme.contentBackground
+                    palette.button: Kos.AppTheme.controlBackground
+                    palette.light: Kos.AppTheme.border
+                    palette.mid: Kos.AppTheme.border
                     objectName: "nkshotMoreMenu"
                     padding: 6
                     background: Kos.KosSurface {
@@ -185,17 +192,61 @@ EmptyPage {
         rightPadding: 10
         topPadding: 12
         bottomPadding: 12
-        contentItem: AnnotationsToolBarContents {
-            id: annotationsToolBarContents
-            displayMode: QQC.AbstractButton.IconOnly
-            flow: Grid.LeftToRight
-            columns: -1
-            rows: 1
+        contentItem: RowLayout {
             spacing: 6
-            paletteMode: true
-            essentialsOnly: true
-            showUndoRedo: false
-            showNoneButton: true
+            AnnotationsToolBarContents {
+                id: annotationsToolBarContents
+                displayMode: QQC.AbstractButton.IconOnly
+                flow: Grid.LeftToRight
+                columns: -1
+                rows: 1
+                spacing: 6
+                paletteMode: true
+                essentialsOnly: true
+                showUndoRedo: false
+                showNoneButton: true
+            }
+            QQC.ToolSeparator { Layout.preferredHeight: 24 }
+            ViewerButton {
+                id: propertiesButton
+                implicitWidth: 36
+                leftPadding: 8
+                rightPadding: 8
+                display: QQC.AbstractButton.IconOnly
+                text: i18nc("@action", "Tool properties")
+                icon.name: "configure"
+                enabled: propertyContents.options !== AnnotationTool.NoOptions
+                onClicked: propertiesPopup.open()
+                QQC.Popup {
+                    id: propertiesPopup
+                    palette.windowText: Kos.AppTheme.paletteText
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    palette.base: Kos.AppTheme.contentBackground
+                    palette.button: Kos.AppTheme.controlBackground
+                    palette.light: Kos.AppTheme.border
+                    palette.mid: Kos.AppTheme.border
+                    objectName: "nkshotPropertiesPopup"
+                    width: Math.min(root.width - 32, Math.max(300, propertyContents.implicitWidth + 32))
+                    height: Math.min(root.height - 120, propertyContents.implicitHeight + 32)
+                    x: Math.max(16 - propertiesButton.mapToItem(root, 0, 0).x, propertiesButton.width - width)
+                    y: -height - 12
+                    padding: 16
+                    onClosed: propertyContents.flushPendingChanges()
+                    background: Kos.KosSurface {
+                        fillColor: Kos.AppTheme.contentBackground
+                        radius: 18
+                        elevation: 0.5
+                    }
+                    contentItem: QQC.ScrollView {
+                        clip: true
+                        AnnotationOptionsToolBarContents {
+                            id: propertyContents
+                            verticalLayout: true
+                        }
+                    }
+                }
+            }
         }
         background: Kos.KosSurface {
             fillColor: Kos.AppTheme.contentBackground
@@ -256,21 +307,7 @@ EmptyPage {
             contentHeight: QmlUtils.iconTextButtonHeight
             contentItem: RowLayout {
                 spacing: Kirigami.Units.mediumSpacing
-                AnimatedLoader {
-                    id: loader
-                    Layout.fillWidth: true
-                    active: opacity > 0
-                    visible: true
-                    state: if (SpectacleCore.annotationDocument.tool.options !== AnnotationTool.NoOptions
-                              || (SpectacleCore.annotationDocument.tool.type === AnnotationTool.SelectTool
-                                 && SpectacleCore.annotationDocument.selectedItem.options !== AnnotationTool.NoOptions)
-                    ) {
-                        return "active"
-                    } else {
-                        return "inactive"
-                    }
-                    source: "AnnotationOptionsToolBarContents.qml"
-                }
+                Item { Layout.fillWidth: true }
                 RowLayout {
                     id: zoomControls
                     spacing: 2
@@ -295,6 +332,13 @@ EmptyPage {
                         onClicked: zoomPopup.open()
                         QQC.Popup {
                             id: zoomPopup
+                    palette.windowText: Kos.AppTheme.paletteText
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    palette.base: Kos.AppTheme.contentBackground
+                    palette.button: Kos.AppTheme.controlBackground
+                    palette.light: Kos.AppTheme.border
+                    palette.mid: Kos.AppTheme.border
                             objectName: "nkshotZoomPopup"
                             x: zoomButton.width - width
                             y: -height - 8

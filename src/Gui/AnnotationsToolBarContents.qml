@@ -252,6 +252,13 @@ ButtonGrid {
         onClicked: extraToolsMenu.popup()
         QQC.Menu {
             id: extraToolsMenu
+                    palette.windowText: Kos.AppTheme.paletteText
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    palette.base: Kos.AppTheme.contentBackground
+                    palette.button: Kos.AppTheme.controlBackground
+                    palette.light: Kos.AppTheme.border
+                    palette.mid: Kos.AppTheme.border
             objectName: "nkshotExtraToolsMenu"
             padding: 6
             background: Kos.KosSurface {

@@ -9,8 +9,12 @@ import org.kde.kirigami as Kirigami
 import org.kde.spectacle.private
 import org.kde.kquickimageeditor
 
-Row {
+Grid {
     id: root
+    property bool verticalLayout: false
+    columns: verticalLayout ? 1 : -1
+    rows: verticalLayout ? -1 : 1
+    verticalItemAlignment: Grid.AlignVCenter
 
     readonly property AnnotationDocument document: SpectacleCore.annotationDocument
     readonly property AnnotationTool tool: document.tool
@@ -24,6 +28,13 @@ Row {
 
     clip: childrenRect.width > width || childrenRect.height > height
     spacing: Kirigami.Units.mediumSpacing
+
+    function flushPendingChanges() {
+        if (commitChangesTimer.running) {
+            commitChangesTimer.stop()
+            root.selectedItem.commitChanges()
+        }
+    }
 
     Timer {
         id: commitChangesTimer
@@ -45,7 +56,6 @@ Row {
 
     Loader { // stroke
         id: strokeLoader
-        anchors.verticalCenter: parent.verticalCenter
         visible: active
         active: root.options & AnnotationTool.StrokeOption
         sourceComponent: Row {
@@ -144,14 +154,14 @@ Row {
     }
 
     QQC.ToolSeparator {
-        anchors.verticalCenter: parent.verticalCenter
+        orientation: root.verticalLayout ? Qt.Horizontal : Qt.Vertical
         visible: strokeLoader.visible && (root.options & ~AnnotationTool.StrokeOption) > AnnotationTool.StrokeOption
-        height: QmlUtils.iconTextButtonHeight
+        height: root.verticalLayout ? 1 : QmlUtils.iconTextButtonHeight
+        width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
     Loader { // fill
         id: fillLoader
-        anchors.verticalCenter: parent.verticalCenter
         visible: active
         active: root.options & AnnotationTool.FillOption
         sourceComponent: Row {
@@ -192,14 +202,14 @@ Row {
     }
 
     QQC.ToolSeparator {
-        anchors.verticalCenter: parent.verticalCenter
+        orientation: root.verticalLayout ? Qt.Horizontal : Qt.Vertical
         visible: fillLoader.visible && (root.options & ~AnnotationTool.FillOption) > AnnotationTool.FillOption
-        height: QmlUtils.iconTextButtonHeight
+        height: root.verticalLayout ? 1 : QmlUtils.iconTextButtonHeight
+        width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
     Loader { // strength
         id: strengthLoader
-        anchors.verticalCenter: parent.verticalCenter
         visible: active
         active: root.options & AnnotationTool.StrengthOption
         sourceComponent: Row {
@@ -225,7 +235,8 @@ Row {
                         root.tool.strength = slider.value
                     }
                 }
-                height: QmlUtils.iconTextButtonHeight
+                height: root.verticalLayout ? 1 : QmlUtils.iconTextButtonHeight
+        width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
                 from: 0
                 to: 1
                 value: strength
@@ -238,14 +249,14 @@ Row {
     }
 
     QQC.ToolSeparator {
-        anchors.verticalCenter: parent.verticalCenter
+        orientation: root.verticalLayout ? Qt.Horizontal : Qt.Vertical
         visible: strengthLoader.visible && (root.options & ~AnnotationTool.StrengthOption) > AnnotationTool.StrengthOption
-        height: QmlUtils.iconTextButtonHeight
+        height: root.verticalLayout ? 1 : QmlUtils.iconTextButtonHeight
+        width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
     Loader { // font
         id: fontLoader
-        anchors.verticalCenter: parent.verticalCenter
         visible: active
         active: root.options & AnnotationTool.FontOption
         sourceComponent: Row {
@@ -304,14 +315,14 @@ Row {
     }
 
     QQC.ToolSeparator {
-        anchors.verticalCenter: parent.verticalCenter
+        orientation: root.verticalLayout ? Qt.Horizontal : Qt.Vertical
         visible: fontLoader.visible && (root.options & ~AnnotationTool.FontOption) > AnnotationTool.FontOption
-        height: QmlUtils.iconTextButtonHeight
+        height: root.verticalLayout ? 1 : QmlUtils.iconTextButtonHeight
+        width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
     Loader { // stroke
         id: numberLoader
-        anchors.verticalCenter: parent.verticalCenter
         visible: active
         active: root.options & AnnotationTool.NumberOption
         sourceComponent: Row {
@@ -360,14 +371,14 @@ Row {
     }
 
     QQC.ToolSeparator {
-        anchors.verticalCenter: parent.verticalCenter
+        orientation: root.verticalLayout ? Qt.Horizontal : Qt.Vertical
         visible: numberLoader.visible && (root.options & ~AnnotationTool.NumberOption) > AnnotationTool.NumberOption
-        height: QmlUtils.iconTextButtonHeight
+        height: root.verticalLayout ? 1 : QmlUtils.iconTextButtonHeight
+        width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
     QQC.CheckBox {
         id: shadowCheckBox
-        anchors.verticalCenter: parent.verticalCenter
         visible: root.options & AnnotationTool.ShadowOption
         text: i18n("Shadow")
         checked: {

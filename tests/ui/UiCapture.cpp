@@ -67,6 +67,8 @@ void installUiCaptureHook(QApplication &application)
         const auto testTool = qEnvironmentVariable("NKSHOT_TEST_TOOL");
         if (testTool == QStringLiteral("text")) {
             SpectacleCore::instance()->annotationDocument()->tool()->setType(AnnotationTool::TextTool);
+        } else if (testTool == QStringLiteral("rectangle")) {
+            SpectacleCore::instance()->annotationDocument()->tool()->setType(AnnotationTool::RectangleTool);
         } else if (testTool == QStringLiteral("blur")) {
             SpectacleCore::instance()->annotationDocument()->tool()->setType(AnnotationTool::BlurTool);
         }
@@ -79,8 +81,9 @@ void installUiCaptureHook(QApplication &application)
             }
         }
         if (qEnvironmentVariableIsSet("NKSHOT_TEST_MORE") || qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")
-            || qEnvironmentVariableIsSet("NKSHOT_TEST_ZOOM")) {
-            const auto menuName = qEnvironmentVariableIsSet("NKSHOT_TEST_ZOOM") ? QStringLiteral("nkshotZoomPopup")
+            || qEnvironmentVariableIsSet("NKSHOT_TEST_ZOOM") || qEnvironmentVariableIsSet("NKSHOT_TEST_PROPERTIES")) {
+            const auto menuName = qEnvironmentVariableIsSet("NKSHOT_TEST_PROPERTIES") ? QStringLiteral("nkshotPropertiesPopup")
+                : qEnvironmentVariableIsSet("NKSHOT_TEST_ZOOM") ? QStringLiteral("nkshotZoomPopup")
                 : qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")
                 ? QStringLiteral("nkshotExtraToolsMenu") : QStringLiteral("nkshotMoreMenu");
             auto menu = viewer->rootObject()->findChild<QObject *>(menuName);

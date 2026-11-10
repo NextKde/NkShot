@@ -208,3 +208,22 @@ injection checks 14/14 passed. Required-property injection was exercised by the
 actual viewer; capture overlay compiles but awaits a live compositor test.
 Remaining: full high-contrast/disabled-state audit, tool properties panel, live
 system theme changes, text/IME and native screenshot/recording workflows.
+
+## 011 — Persistent contextual property panel
+
+Move the contextual property groups off the permanent bottom strip into an
+anchored, scrollable panel. The same component supports the original horizontal
+capture toolbar and a vertical property layout; stroke/fill/strength/font/number/
+shadow controls are not removed. The instance remains alive while the popup is
+closed, and closing flushes the existing 250ms selected-item commit timer.
+
+Verified: builds 025–027 passed; CTest 2/2 and static checks 14/14 passed. Actual
+[text properties](screenshots/011-editor-properties.png) and
+[640px dark rectangle properties](screenshots/011-editor-properties-dark-final.png)
+were reviewed. The first dark popup had black labels, which was corrected by
+explicit semantic popup palettes and re-rendered before this checkpoint.
+
+Not yet accepted: rapid property-change/close undo transactions, all font-dialog
+flows and keyboard/IME. A pre-existing context-menu signal warning remains in
+the property spinbox and needs a separate Qt 6.11 compatibility fix. The model
+flush path is implemented but not claimed as a full QML interaction regression.
