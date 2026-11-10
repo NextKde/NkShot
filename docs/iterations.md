@@ -417,3 +417,21 @@ development windows. CTest 4/4 and static checks 15/15 passed. Reviewed
 [dark](screenshots/019-unannotated-dark.png). The known dark notification contrast
 issue remains for the next UI iteration. All screenshots use synthetic input
 and software rendering, not a KWin desktop capture.
+
+## 020 — NextKde notification material and dark contrast
+
+Use the existing unmodified Kos.Ui KosSurface for rounded notification panels.
+Preserve severity icons, message content and action routes; tint actual action
+buttons explicitly and style existing rich-text anchors for readable dark links.
+Remove the copy action's IconOnly display hint because it bypassed the custom
+colored button; the custom button itself remains icon-only.
+
+Incremental builds and real-window tests caught an incorrect KosSurface property
+name before acceptance; corrected to fillColor/strokeColor and rebuilt. Reviewed
+final [light](screenshots/020-notification-light.png) and
+[dark](screenshots/020-notification-dark.png): file links, folder, copy and dismiss
+icons are now readable and the panels match the editor's rounded surface family.
+Copy/Save pixel equality and unchanged workbench geometry pass in both states;
+CTest 4/4 and static tests 15/15 pass. These remain actual development-window grabs
+with synthetic pixels/software rendering, not GPU/KWin acceptance. Repeated
+notification overflow and dismissal need additional interaction coverage.

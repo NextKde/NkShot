@@ -4,6 +4,7 @@
 
 import QtQuick
 import QtQuick.Controls as QQC
+import Kos.Ui as Kos
 import org.kde.kirigami as Kirigami
 import org.kde.spectacle.private
 
@@ -89,7 +90,19 @@ ListView {
             }
             return Kirigami.MessageType.Information
         }
-        text: model.text
+        palette.windowText: Kos.AppTheme.paletteText
+        palette.text: Kos.AppTheme.paletteText
+        palette.buttonText: Kos.AppTheme.paletteText
+        palette.button: Kos.AppTheme.controlBackground
+        // TextEdit rich-text links default to dark blue even with a dark palette.
+        // Keep the existing escaped message/link destination; style anchors only.
+        text: model.text.replace(/<a /g, '<a style="color: '
+            + (Kos.AppTheme.dark ? "#8cc8ff" : "#0066cc") + ';" ')
+        background: Kos.KosSurface {
+            radius: 12
+            fillColor: Kos.AppTheme.contentBackground
+            strokeColor: Kos.AppTheme.border
+        }
         visible: true
         position: Kirigami.InlineMessage.Position.Inline
         width: root.width
@@ -128,20 +141,31 @@ ListView {
     Component {
         id: openFolderActionComponent
         Kirigami.Action {
+            id: folderAction
             required property url url
             icon.name: "document-open-folder"
             text: i18nc("@action:button", "Open Containing Folder")
             onTriggered: InlineMessageModel.openContainingFolder(url)
+            displayComponent: QQC.ToolButton {
+                action: folderAction
+                icon.color: Kos.AppTheme.paletteText
+                palette.buttonText: Kos.AppTheme.paletteText
+            }
         }
     }
     Component {
         id: copyActionComponent
         Kirigami.Action {
+            id: copyAction
             required property var data
-            displayHint: Kirigami.DisplayHint.IconOnly
             icon.name: "edit-copy"
             text: i18nc("@action:button", "Copy to Clipboard")
             onTriggered: InlineMessageModel.copyToClipboard(data)
+            displayComponent: QQC.ToolButton {
+                action: copyAction
+                display: QQC.AbstractButton.IconOnly
+                icon.color: Kos.AppTheme.paletteText
+            }
         }
     }
     Component {
@@ -155,6 +179,7 @@ ListView {
             displayComponent: QQC.ToolButton {
                 display: QQC.AbstractButton.IconOnly
                 action: kirigamiAction
+                icon.color: Kos.AppTheme.paletteText
             }
         }
     }
