@@ -42,6 +42,8 @@ QQC.Pane {
                 onClicked: pinnedWindow.stayOnTop = checked
             }
             QQC.Label {
+                // Keep all actions reachable at the 260 px minimum width.
+                visible: root.width >= 340
                 text: pinnedWindow.snapshotSize.width + " × " + pinnedWindow.snapshotSize.height
                 color: Kos.AppTheme.paletteText
             }
@@ -52,7 +54,7 @@ QQC.Pane {
                 property bool copied: false
                 text: copied ? i18nc("@info", "Copied") : i18nc("@action", "Copy")
                 icon.name: copied ? "dialog-ok" : "edit-copy"
-                display: root.width < 340 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
+                display: root.width < 420 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
                 Connections {
                     target: pinnedWindow
                     function onImageCopied() { copyButton.copied = true; copyFeedback.restart() }
@@ -65,11 +67,30 @@ QQC.Pane {
                 onClicked: pinnedWindow.copyImage()
             }
             PinButton {
+                objectName: "nkshotPinSave"
+                text: i18nc("@action", "Save As…")
+                display: QQC.AbstractButton.IconOnly
+                icon.name: "document-save-as"
+                onClicked: pinnedWindow.saveAs()
+            }
+            PinButton {
                 objectName: "nkshotPinClose"
                 text: i18nc("@action", "Close")
                 display: QQC.AbstractButton.IconOnly
                 icon.name: "window-close"
                 onClicked: pinnedWindow.close()
+            }
+        }
+        QQC.Label {
+            id: saveStatus
+            objectName: "nkshotPinSaveStatus"
+            Layout.fillWidth: true
+            visible: text.length > 0
+            wrapMode: Text.Wrap
+            color: Kos.AppTheme.paletteText
+            Connections {
+                target: pinnedWindow
+                function onSaveFinished(message, success) { saveStatus.text = message }
             }
         }
         Image {

@@ -651,3 +651,18 @@ rebuilt. New QtTest has 10 passed, 0 skipped. Three frames reconstruct exact lon
 image pixels; rejection/ownership/alpha/DPR cases pass. Aggregate CTest now 5/5;
 static tests 16/16 pass. See [contract](local-image-tools.md). No UI changed, so
 no new UI capture is claimed; automatic scrolling remains unimplemented.
+
+## 034 — Save an independent pinned image
+
+Add Save As and its keyboard shortcut to each pin. Save the immutable pin pixels
+as PNG through an asynchronous native file dialog and QSaveFile atomic commit;
+report success/failure without changing the editor document or export settings.
+Repeated Save As reuses the existing dialog. At the 260 px minimum, hide the
+secondary dimensions label to retain all four actions.
+
+Rebuilt after restoring the isolated toolchain. Actual widget-dialog tests cover
+cancel/reopen, duplicate action, filename input, PNG pixel equality and document
+isolation, in normal/light, minimum-size and dark windows. CTest 5/5 and identity
+checks 16/16 pass. Test files are temporary and cleaned up. Native desktop file
+portals, overwrite prompts and compositor stacking remain unverified. Captures
+use synthetic input and software rendering, not real desktop screenshots.

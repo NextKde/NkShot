@@ -105,3 +105,13 @@ do not establish compositor stacking behavior.
 The pin test accepts `NKSHOT_TEST_PIN_SIZE=260x180` for minimum-size review and
 `NKSHOT_TEST_PIN_FEEDBACK=1` to verify Copied feedback returns to Copy after its
 actual timer. Clipboard pixels are checked independently of the feedback label.
+
+## Pinned snapshot saving
+
+Set `NKSHOT_TEST_PIN=1 NKSHOT_TEST_PIN_SAVE=1` with the normal synthetic viewer
+input and `NKSHOT_TEST_UI_CAPTURE`. The harness selects widget dialogs, tests
+cancel/reopen and repeated actions, types a temporary PNG path, verifies saved
+pixels equal the immutable pin and confirms the editable source is unchanged.
+Production still permits native dialogs. Repeat with
+`NKSHOT_TEST_PIN_SIZE=260x180` and `NKSHOT_TEST_DARK=1`. This does not validate
+native file portals or the overwrite-confirmation interaction.

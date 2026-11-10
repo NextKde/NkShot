@@ -20,6 +20,9 @@
 #include <QInputMethodEvent>
 #include <QClipboard>
 #include <QFileInfo>
+#include <QFileDialog>
+#include <QTemporaryDir>
+#include <QLineEdit>
 #include <QIcon>
 #include <QDir>
 #include <QStandardPaths>
@@ -55,6 +58,11 @@ void installUiCaptureHook(QApplication &application)
     const QString destination = qEnvironmentVariable("NKSHOT_TEST_UI_CAPTURE");
     if (destination.isEmpty()) {
         return;
+    }
+
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE")) {
+        // The harness drives widget filenames; production retains native dialogs.
+        application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
 
     if (qEnvironmentVariableIsSet("NKSHOT_TEST_DARK")) {
@@ -228,6 +236,46 @@ void installUiCaptureHook(QApplication &application)
                 if (!copyButton || !copyButton->property("copied").toBool()) { application.exit(51); return; }
                 if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_FEEDBACK")) {
                     if (!QTest::qWaitFor([copyButton] { return !copyButton->property("copied").toBool(); }, 2500)) { application.exit(52); return; }
+                }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE")) {
+                    QTemporaryDir saveDirectory;
+                    if (!saveDirectory.isValid()) { application.exit(53); return; }
+                    const QString output = saveDirectory.filePath(QStringLiteral("NkShot.png"));
+                    if (QFileInfo::exists(output) || !click(first, QStringLiteral("nkshotPinSave"))) { application.exit(53); return; }
+                    QTest::qWait(200);
+                    QPointer<QFileDialog> dialog;
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotPinSaveDialog")) dialog = qobject_cast<QFileDialog *>(widget);
+                    if (!dialog) { application.exit(54); return; }
+                    first->saveAs(); // Repeated action must reuse the one dialog.
+                    int count = 0;
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotPinSaveDialog")) ++count;
+                    if (count != 1) { application.exit(55); return; }
+                    dialog->reject();
+                    if (!QTest::qWaitFor([&dialog] { return dialog.isNull(); }, 1000) || QFileInfo::exists(output)) { application.exit(56); return; }
+                    click(first, QStringLiteral("nkshotPinSave"));
+                    QTest::qWait(200);
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotPinSaveDialog")) dialog = qobject_cast<QFileDialog *>(widget);
+                    if (!dialog) { application.exit(57); return; }
+                    // The widget dialog loads directory contents asynchronously. Drive its
+                    // filename editor as a user would instead of assuming selectFile()
+                    // has replaced the already-visible default selection immediately.
+                    auto filename = dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit"));
+                    if (!filename) { application.exit(58); return; }
+                    filename->setFocus();
+                    filename->selectAll();
+                    QTest::keyClicks(filename, output);
+                    if (!QTest::qWaitFor([&] { return dialog && dialog->selectedFiles() == QStringList{output}; }, 1000)) {
+                        application.exit(58); return;
+                    }
+                    if (!QMetaObject::invokeMethod(dialog, "accept")) { application.exit(58); return; }
+                    QTest::qWaitFor([&] { return QFileInfo::exists(output); }, 2000);
+                    if (!samePixels(QImage(output), original) || !samePixels(document->renderToImage(), edited)) { qWarning() << "pin save mismatch" << output << QFileInfo::exists(output) << QImage(output).size() << samePixels(document->renderToImage(), edited) << (dialog ? dialog->selectedFiles() : QStringList()); application.exit(59); return; }
+                    auto status = visualItem(first->contentItem(), QStringLiteral("nkshotPinSaveStatus"));
+                    if (!status || status->property("text").toString().isEmpty()) { application.exit(60); return; }
+                    qInfo() << "NkShot pin Save As cancel/reopen/repeated-dialog/PNG/source-isolation passed" << output;
                 }
                 if (!first->stayOnTop() || !click(first, QStringLiteral("nkshotPinTop")) || first->stayOnTop()) {
                     application.exit(44); return;

@@ -20,13 +20,16 @@ public:
     bool stayOnTop() const { return flags().testFlag(Qt::WindowStaysOnTopHint); }
     void setStayOnTop(bool value);
     Q_INVOKABLE void copyImage();
+    Q_INVOKABLE void saveAs();
 Q_SIGNALS:
     void stayOnTopChanged();
     void imageCopied();
+    void saveFinished(const QString &message, bool success);
 protected:
     bool event(QEvent *event) override;
 private:
     const QImage m_image;
     const QString m_providerId;
     QPointer<QQmlEngine> m_sharedEngine;
+    QPointer<QObject> m_saveDialog;
 };
