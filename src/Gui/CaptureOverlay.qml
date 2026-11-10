@@ -86,6 +86,27 @@ MouseArea {
 
     component ToolButton : TtToolButton {
         focusPolicy: Qt.NoFocus
+        implicitHeight: 36
+        leftPadding: 10
+        rightPadding: 10
+    }
+    component CaptureMenuItem: QQC.MenuItem {
+        icon.color: palette.buttonText
+        opacity: enabled ? 1 : 0.38
+    }
+    component CaptureMenu: QQC.Menu {
+        width: 240
+        padding: 6
+        palette.windowText: Kos.AppTheme.paletteText
+        palette.text: Kos.AppTheme.paletteText
+        palette.buttonText: Kos.AppTheme.paletteText
+        palette.base: Kos.AppTheme.contentBackground
+        palette.button: Kos.AppTheme.controlBackground
+        background: Kos.KosSurface {
+            fillColor: Kos.AppTheme.contentBackground
+            radius: 14
+            elevation: 0.5
+        }
     }
 
     component ToolBarSizeLabel: SizeLabel {
@@ -515,6 +536,7 @@ MouseArea {
                 restoreMode: Binding.RestoreNone
             }
             visible: opacity > 0 && !SpectacleCore.videoPlatform.isRecording
+                && (SelectionEditor.selection.empty || SpectacleCore.videoMode)
             opacity: screensRectItem.allowToolbars
                 && (mainToolBar.rememberPosition
                     || SelectionEditor.selection.empty
@@ -625,34 +647,48 @@ MouseArea {
             ButtonGrid {
                 spacing: parent.parent.spacing
                 ToolBarSizeLabel {}
+                ToolButton { visible: action.enabled; action: AcceptAction {} }
+                ToolButton { visible: action.enabled; action: CancelAction {} }
+                ToolButton { visible: action.enabled; action: CopyImageAction {} }
+                ToolButton { visible: action.enabled; action: SaveAction {} }
                 ToolButton {
-                    visible: action.enabled
-                    action: AcceptAction {}
-                }
-                ToolButton {
-                    visible: action.enabled
-                    action: CancelAction {}
-                }
-                ToolButton {
-                    visible: action.enabled
-                    action: SaveAction {}
-                }
-                ToolButton {
-                    visible: action.enabled
-                    action: SaveAsAction {}
-                }
-                ToolButton {
-                    visible: action.enabled
-                    action: CopyImageAction {}
-                }
-                 
-                ToolButton {
-                    visible: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable
-                    action: OcrAction {}
-                }
-                 
-                ExportMenuButton {
-                    focusPolicy: Qt.NoFocus
+                    id: captureMoreButton
+                    display: QQC.AbstractButton.IconOnly
+                    text: i18nc("@action", "More")
+                    icon.name: "view-more-symbolic"
+                    onClicked: captureMoreMenu.popup()
+                    CaptureMenu {
+                        id: captureMoreMenu
+                        objectName: "nkshotCaptureMoreMenu"
+                        CaptureMenuItem { action: SaveAsAction {} }
+                        CaptureMenuItem {
+                            visible: SpectacleCore.ocrAvailable
+                            height: visible ? implicitHeight : 0
+                            action: OcrAction {}
+                        }
+                        CaptureMenuItem {
+                            text: i18nc("@action", "Export")
+                            icon.name: "document-share"
+                            onTriggered: Qt.callLater(function() { ExportMenu.popup(captureMoreButton) })
+                        }
+                        QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
+                        CaptureMenuItem {
+                            text: i18nc("@action", "New Screenshot")
+                            icon.name: "camera-photo"
+                            onTriggered: Qt.callLater(function() { ScreenshotModeMenu.popup(captureMoreButton) })
+                        }
+                        CaptureMenuItem {
+                            text: i18nc("@action", "New Recording")
+                            icon.name: "camera-video"
+                            enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
+                            onTriggered: Qt.callLater(function() { RecordingModeMenu.popup(captureMoreButton) })
+                        }
+                        CaptureMenuItem {
+                            text: i18nc("@action", "Options")
+                            icon.name: "configure"
+                            onTriggered: Qt.callLater(function() { OptionsMenu.popup(captureMoreButton) })
+                        }
+                    }
                 }
             }
         }
@@ -712,6 +748,8 @@ MouseArea {
                 focusPolicy: Qt.NoFocus
                 contentItem: AnnotationsToolBarContents {
                     id: annotationsContents
+                    paletteMode: true
+                    essentialsOnly: true
                     spacing: parent.spacing
                     displayMode: QQC.AbstractButton.IconOnly
                     buttonFocusPolicy: Qt.NoFocus

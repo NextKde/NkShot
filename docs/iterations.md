@@ -355,3 +355,26 @@ software-rendered selection UI tests using synthetic pixels, not desktop capture
 
 Product follow-up: the selection controls are still too dense and retain three
 separate tool strips. Consolidate secondary actions without removing functionality.
+
+## 017 — Focused selection controls
+
+Consolidate the selected-image capture interface into two rounded strips. Keep
+accept, cancel, copy and save visible; group Save As, OCR, export, new capture,
+recording and options in a semantic-color More menu. The initial capture-mode
+strip remains when no region is selected and in video mode. Annotation controls
+use the same essential-tools palette as the editor, with secondary tools in More.
+No capture or recording backend was replaced.
+
+Incremental development build passed. Actual CaptureWindow/QTest drag tests passed
+in light, dark and open-menu states; CTest 4/4 and static tests 15/15 passed.
+Reviewed [light](screenshots/017-capture-controls.png),
+[dark](screenshots/017-capture-dark.png), and
+[secondary actions](screenshots/017-capture-more.png). Visual review caught a
+misplaced visibility condition leaving the third strip visible; corrected and
+rebuilt before these final screenshots. Labels and icons remain legible, selected
+region unobscured, and the menu fits the 800×800 synthetic screen.
+
+These are real application-window grabs with synthetic input and software
+rendering, not real desktop captures or production GPU-material acceptance.
+Backend-gated recording is unavailable here; menu action routes are retained but
+not all native dialogs or video actions have been interactively exercised.

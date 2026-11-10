@@ -101,6 +101,14 @@ void installUiCaptureHook(QApplication &application)
                     QTest::qWait(400);
                     qInfo() << "NkShot actual selection-window mouse-drag regression passed" << rect;
                 }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_CAPTURE_MORE")) {
+                    auto menu = capture->rootObject()->findChild<QObject *>(QStringLiteral("nkshotCaptureMoreMenu"));
+                    if (!menu || !QMetaObject::invokeMethod(menu, "open")) {
+                        application.exit(18);
+                        return;
+                    }
+                    QTest::qWait(300);
+                }
                 const auto pixels = capture->grabWindow();
                 const bool saved = !pixels.isNull() && pixels.save(destination);
                 qInfo() << "NkShot actual CaptureOverlay with synthetic input:" << destination << pixels.size();
