@@ -1,0 +1,67 @@
+# NkShot
+
+A macOS-inspired QML interface fork of KDE Spectacle for the KDE Plasma desktop.
+This is an early source prototype, not a tested release or an Apple product.
+
+## Current scope
+
+- Canonical NextKde Kos.Ui floating liquid panels with same-window image sampling,
+  blur/refraction and opaque fallbacks (source integration, not visually verified).
+- Neutral selection outline and contrasting resize handles.
+- Rounded tool-button hover/pressed/selected states and visible keyboard focus.
+- Bottom capture controls separated from the screen edge.
+- Existing Spectacle capture, recording, annotations, exports and shortcuts retained.
+
+This first pass changes presentation only; it does not add compositor blur, replace
+KWin's capture implementation or claim pixel-identical macOS 27 behavior.
+
+## Base and compatibility
+
+Based on upstream Spectacle **v6.8.3**, commit
+`5f5af4b83f5329396117af03234c012464404257`.
+The upstream build requires Qt 6.11+, KDE Frameworks 6.30+, and Plasma 6.8
+components; see `CMakeLists.txt` for the full dependency list.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+Use a matching Plasma development environment. Build and runtime checks are still
+pending. Do not install this prototype over your working Spectacle package.
+The executable is `nkshot`, the desktop/D-Bus ID is `org.nextkde.nkshot`, and
+settings are stored in `nkshotrc`. Notification, icon, translations and metadata
+install names are separate from Spectacle. Upstream migration scripts and manuals
+are not installed. Default global shortcuts are deliberately unassigned so the
+fork does not steal Spectacle's Print key; assign them in KDE System Settings.
+These source-level isolation changes still need an actual staged-install and
+side-by-side launch test before declaring coexistence verified.
+
+Source-level checks (no Qt dependencies):
+
+```sh
+python3 tests/nkshot/test_identity.py -v
+```
+
+## Security and licensing
+
+KWin restricts screenshot access. Packaging must preserve the appropriate capture
+permission declarations and work with the target KWin version. Do not disable
+KWin permission checks as a workaround for distributing this application.
+
+Upstream copyright notices and per-file SPDX licenses are retained. See
+`LICENSES/` and [upstream documentation](README.upstream.md). Changes remain under
+the licenses of their respective files. The bundled Kos.Ui library is GPL-3.0;
+the combined distribution is GPL-3.0, with original GPL/LGPL notices preserved. No proprietary Apple assets are included.
+
+See [validation checklist](docs/nkshot-validation.md) for outstanding verification.
+
+## Delivery scope
+
+The first release targets screenshot capture and post-capture image editing.
+Recording is retained for later runtime validation; OCR is inherited but untested;
+translation is not implemented. See [delivery plan](docs/roadmap.md).
+
+See [liquid-material integration](docs/liquid-ui.md) for provenance, limits and
+required visual checks.
