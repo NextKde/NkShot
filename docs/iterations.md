@@ -543,3 +543,16 @@ fixture made pixelation correctly leave pixels unchanged; add the explicit
 Incremental application/test builds, CTest 4/4 and static checks 16/16 pass.
 These tests verify operation/coordinates, not that blur/pixelation makes private
 information unrecoverable. Synthetic input/software rendering only.
+
+## 027 — Recording dependency verification, with explicit skips
+
+No UI or recording backend implementation changed. Rebuild checks report up to
+date. Execute the pinned KPipeWire video/audio tests: CTest 2/2 passes; detailed
+video results are 11 passed and 6 skipped (three VAAPI profiles unavailable, three
+OpenH264 profiles missing), audio results 5 passed and no skips. Software video
+initialization/resize state and the actual synthetic Opus sample pipeline pass.
+
+Document reproducible commands and missing full-recording acceptance in
+[recording verification](recording-verification.md). This is meaningful backend
+evidence, not a live KWin recording or a claim that all codecs work. No new UI
+image is produced for this verification-only iteration.
