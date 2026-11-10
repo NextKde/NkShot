@@ -130,3 +130,21 @@ and the bottom properties/zoom area needs a coordinated compact treatment.
 Reference: NextKde NkNotes 014 light/013 dark layouts favor calm content planes,
 wide margins and a few capsules rather than glass on every control. GPU liquid
 materials remain unverified in this software-only runtime.
+
+## 007 — Centered tool dock and secondary annotations
+
+Remove the sidebar allocation entirely. Center the image workspace and place a
+compact floating annotation dock underneath, outside the document coordinate
+space. Highlighter, line, ellipse, blur and number remain available in More tools;
+core pan/crop/select/freehand/arrow/rectangle/pixelate/text tools stay visible.
+The original full tool collection remains used by the capture overlay.
+
+Verified: incremental builds passed; CTest 2/2 and static checks 14/14 passed.
+Reviewed actual [960px workspace](screenshots/007-editor-dock.png) and
+[640px with More tools](screenshots/007-editor-more-tools.png). Image and dock are
+not clipped. The menu opens and retains complete secondary tool labels. Selecting
+every tool and native clipboard/save flows are still pending interaction tests.
+
+Remaining visual work: tool grouping/current-tool indication, coherent property
+popover, modern zoom controls, dark/high-contrast review. No finished Apple-style
+claim or GPU-glass acceptance is made.

@@ -26,7 +26,7 @@ EmptyPage {
     // Used in ViewerWindow::setMode()
     readonly property real minimumWidth: Math.max(
         header.implicitWidth,
-        annotationsToolBar.implicitWidth + separator.implicitWidth + footerLoader.implicitWidth,
+        annotationsToolBar.implicitWidth + 48,
         480 // leave some room for content if necessary
     )
     readonly property real minimumHeight: header.implicitHeight
@@ -155,17 +155,18 @@ EmptyPage {
     InlineMessageList {
         id: inlineMessageList
         // parent is contentItem
-        anchors.left: annotationsToolBar.right
+        anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
     }
 
     QQC.Pane { // parent is contentItem
         id: annotationsToolBar
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: parent.left
-        anchors.leftMargin: 16
-        visible: false
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: footerLoader.top
+        anchors.bottomMargin: 16
+        visible: contextWindow.annotating && !SpectacleCore.videoMode
+        z: 2
         leftPadding: 10
         rightPadding: 10
         topPadding: 12
@@ -174,10 +175,11 @@ EmptyPage {
             id: annotationsToolBarContents
             displayMode: QQC.AbstractButton.IconOnly
             flow: Grid.LeftToRight
-            columns: 2
-            rows: -1
+            columns: -1
+            rows: 1
             spacing: 6
             paletteMode: true
+            essentialsOnly: true
             showUndoRedo: false
             showNoneButton: true
         }
@@ -203,11 +205,12 @@ EmptyPage {
     Loader { // parent is contentItem
         id: contentLoader
         anchors {
-            left: footerLoader.left
+            left: parent.left
             right: parent.right
             top: inlineMessageList.bottom
-            bottom: footerLoader.top
+            bottom: annotationsToolBar.visible ? annotationsToolBar.top : parent.bottom
             topMargin: 24
+            leftMargin: 24
             rightMargin: 24
             bottomMargin: 24
         }
@@ -224,10 +227,10 @@ EmptyPage {
 
     Loader {
         id: footerLoader
-        anchors.left: separator.right
+        anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: parent.bottom
-        visible: false
+        anchors.bottom: parent.bottom
+        visible: contextWindow.annotating && !SpectacleCore.videoMode
         active: visible
         sourceComponent: QQC.ToolBar { // parent is contentItem
             position: QQC.ToolBar.Footer
@@ -313,69 +316,4 @@ EmptyPage {
         onActivated: contextWindow.showPreferencesDialog()
     }
 
-    state: "normal"
-    states: [
-        State {
-            name: "annotating"
-            when: contextWindow.annotating
-                && !SpectacleCore.videoMode
-                && contentLoader.item !== null
-            AnchorChanges {
-                target: annotationsToolBar
-                anchors.left: parent.left
-                anchors.right: undefined
-            }
-            AnchorChanges {
-                target: footerLoader
-                anchors.bottom: parent.bottom
-                anchors.top: undefined
-            }
-        },
-        State {
-            name: "normal"
-            when: !contextWindow.annotating
-                || SpectacleCore.videoMode
-                || contentLoader.item === null
-            AnchorChanges {
-                target: annotationsToolBar
-                anchors.left: undefined
-                anchors.right: parent.left
-            }
-            AnchorChanges {
-                target: footerLoader
-                anchors.bottom: undefined
-                anchors.top: parent.bottom
-            }
-        }
-    ]
-    transitions: [
-        Transition {
-            to: "annotating"
-            SequentialAnimation {
-                PropertyAction {
-                    targets: [annotationsToolBar, separator, footerLoader]
-                    property: "visible"
-                    value: true
-                }
-                AnchorAnimation {
-                    duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
-                    easing.type: Easing.OutCubic
-                }
-            }
-        },
-        Transition {
-            to: "normal"
-            SequentialAnimation {
-                AnchorAnimation {
-                    duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
-                    easing.type: Easing.OutCubic
-                }
-                PropertyAction {
-                    targets: [annotationsToolBar, separator, footerLoader]
-                    property: "visible"
-                    value: false
-                }
-            }
-        }
-    ]
 }

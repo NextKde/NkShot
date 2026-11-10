@@ -51,8 +51,10 @@ void installUiCaptureHook(QApplication &application)
                 viewer->resize(width, height);
             }
         }
-        if (qEnvironmentVariableIsSet("NKSHOT_TEST_MORE")) {
-            auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_MORE") || qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")) {
+            const auto menuName = qEnvironmentVariableIsSet("NKSHOT_TEST_MORE_TOOLS")
+                ? QStringLiteral("nkshotExtraToolsMenu") : QStringLiteral("nkshotMoreMenu");
+            auto menu = viewer->rootObject()->findChild<QObject *>(menuName);
             if (!menu || !QMetaObject::invokeMethod(menu, "open")) {
                 qCritical() << "NkShot UI capture: More menu unavailable";
                 application.exit(5);

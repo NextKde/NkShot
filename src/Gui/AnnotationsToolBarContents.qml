@@ -12,6 +12,7 @@ import org.kde.kquickimageeditor
 ButtonGrid {
     id: root
     property bool paletteMode: false
+    property bool essentialsOnly: false
     property bool showUndoRedo: true
     property bool showNoneButton: false
     property alias checkedButton: toolGroup.checkedButton
@@ -78,6 +79,8 @@ ButtonGrid {
     component ToolButton: QQC.ToolButton {
         id: button
         property string extraHelp: ""
+        property bool secondary: false
+        visible: !root.essentialsOnly || !secondary
         implicitHeight: root.paletteMode ? 36 : QmlUtils.iconTextButtonHeight
         implicitWidth: root.paletteMode ? 36 : implicitContentWidth + leftPadding + rightPadding
         background: Kos.KosSurface {
@@ -157,6 +160,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar highlighter line tool", "Highlighter")
         extraHelp: freehandButton.extraHelp
+        secondary: true
         icon.name: "draw-highlight"
         checked: root.toolType === AnnotationTool.HighlighterTool
         onClicked: root.tool.type = AnnotationTool.HighlighterTool
@@ -166,6 +170,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar straight line tool", "Line")
         extraHelp: i18nc("@info:tooltip", "Shift: Snap to 45 degree increments")
+        secondary: true
         icon.name: "draw-line"
         checked: root.toolType === AnnotationTool.LineTool
         onClicked: root.tool.type = AnnotationTool.LineTool
@@ -192,6 +197,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar ellipse tool", "Ellipse")
         extraHelp: rectangleButton.extraHelp
+        secondary: true
         icon.name: "draw-ellipse"
         checked: root.toolType === AnnotationTool.EllipseTool
         onClicked: root.tool.type = AnnotationTool.EllipseTool
@@ -208,6 +214,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar blur tool", "Blur")
         extraHelp: rectangleButton.extraHelp
+        secondary: true
         icon.name: "blur"
         checked: root.toolType === AnnotationTool.BlurTool
         onClicked: root.tool.type = AnnotationTool.BlurTool
@@ -222,8 +229,49 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar number stamp tool", "Number")
+        secondary: true
         icon.name: "draw-number"
         checked: root.toolType === AnnotationTool.NumberTool
         onClicked: root.tool.type = AnnotationTool.NumberTool
     }
+    TtToolButton {
+        id: extraToolsButton
+        visible: root.essentialsOnly
+        implicitHeight: 36
+        display: QQC.AbstractButton.IconOnly
+        text: i18nc("@action", "More tools")
+        icon.name: "view-more-symbolic"
+        onClicked: extraToolsMenu.popup()
+        QQC.Menu {
+            id: extraToolsMenu
+            objectName: "nkshotExtraToolsMenu"
+            y: -height - 8
+            QQC.MenuItem {
+                text: i18nc("@action", "Highlighter")
+                icon.name: "draw-highlight"
+                onTriggered: root.tool.type = AnnotationTool.HighlighterTool
+            }
+            QQC.MenuItem {
+                text: i18nc("@action", "Line")
+                icon.name: "draw-line"
+                onTriggered: root.tool.type = AnnotationTool.LineTool
+            }
+            QQC.MenuItem {
+                text: i18nc("@action", "Ellipse")
+                icon.name: "draw-ellipse"
+                onTriggered: root.tool.type = AnnotationTool.EllipseTool
+            }
+            QQC.MenuItem {
+                text: i18nc("@action", "Blur")
+                icon.name: "blur"
+                onTriggered: root.tool.type = AnnotationTool.BlurTool
+            }
+            QQC.MenuItem {
+                text: i18nc("@action", "Number")
+                icon.name: "draw-number"
+                onTriggered: root.tool.type = AnnotationTool.NumberTool
+            }
+        }
+    }
+
 }
