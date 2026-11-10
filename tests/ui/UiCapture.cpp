@@ -285,7 +285,7 @@ void installUiCaptureHook(QApplication &application)
                         application.exit(58); return;
                     }
                     if (!QMetaObject::invokeMethod(dialog, "accept")) { application.exit(58); return; }
-                    QTest::qWaitFor([&] { return QFileInfo::exists(output); }, 2000);
+                    if (!QTest::qWaitFor([&] { return QFileInfo::exists(output); }, 2000)) { application.exit(59); return; }
                     if (!samePixels(QImage(output), original) || !samePixels(document->renderToImage(), edited)) { qWarning() << "pin save mismatch" << output << QFileInfo::exists(output) << QImage(output).size() << samePixels(document->renderToImage(), edited) << (dialog ? dialog->selectedFiles() : QStringList()); application.exit(59); return; }
                     auto status = visualItem(first->contentItem(), QStringLiteral("nkshotPinSaveStatus"));
                     if (!status || status->property("text").toString().isEmpty()) { application.exit(60); return; }
@@ -493,8 +493,12 @@ void installUiCaptureHook(QApplication &application)
                     application.exit(8);
                     return;
                 }
-                // Close immediately, including before Qt.callLater starts the commit timer.
-                QMetaObject::invokeMethod(popup, "close");
+                // Close through the visible control before the delayed commit settles.
+                auto closeProperties = visualItem(viewer->contentItem(), QStringLiteral("nkshotCloseProperties"));
+                if (!closeProperties) { application.exit(65); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                    closeProperties->mapToScene(QPointF(closeProperties->width()/2, closeProperties->height()/2)).toPoint());
+                if (popup->property("visible").toBool()) { application.exit(66); return; }
                 QTest::qWait(300);
                 if (!QTest::qWaitFor([document] { return document->undoStackDepth() == 2; }, 1000)) {
                     qCritical() << "NkShot property close test: missing undo transaction";

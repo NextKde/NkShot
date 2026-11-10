@@ -57,6 +57,10 @@ Grid {
         display: root.displayMode
     }
 
+    component PropertyCheckBox: Kos.KosCheckBox {
+        implicitWidth: root.verticalLayout ? Math.max(96, implicitContentWidth + leftPadding + rightPadding) : implicitContentWidth + leftPadding + rightPadding
+    }
+
     component PropertySpinBox: QQC.SpinBox {
         implicitHeight: 32
         background: Kos.KosSurface {
@@ -76,7 +80,7 @@ Grid {
         sourceComponent: Row {
             spacing: root.spacing
 
-            Kos.KosCheckBox {
+            PropertyCheckBox {
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Stroke:")
                 checked: colorRect.color.a > 0
@@ -183,7 +187,7 @@ Grid {
         sourceComponent: Row {
             spacing: root.spacing
 
-            Kos.KosCheckBox {
+            PropertyCheckBox {
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Fill:")
                 checked: colorRect.color.a > 0
@@ -393,7 +397,7 @@ Grid {
         width: root.verticalLayout ? Math.max(strokeLoader.width, fillLoader.width, strengthLoader.width, fontLoader.width, numberLoader.width) : implicitWidth
     }
 
-    Kos.KosCheckBox {
+    PropertyCheckBox {
         id: shadowCheckBox
         visible: root.options & AnnotationTool.ShadowOption
         text: i18n("Shadow")

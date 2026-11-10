@@ -285,7 +285,7 @@ EmptyPage {
                     palette.mid: Kos.AppTheme.border
                     objectName: "nkshotPropertiesPopup"
                     width: Math.min(root.width - 32, Math.max(300, propertyContents.implicitWidth + 32))
-                    height: Math.min(root.height - 120, propertyContents.implicitHeight + 32)
+                    height: Math.min(root.height - 120, propertyContents.implicitHeight + 72)
                     x: Math.max(16 - propertiesButton.mapToItem(root, 0, 0).x, propertiesButton.width - width)
                     y: -height - 12
                     padding: 16
@@ -295,12 +295,37 @@ EmptyPage {
                         radius: 18
                         elevation: 0.5
                     }
-                    contentItem: QQC.ScrollView {
-                        clip: true
-                        AnnotationOptionsToolBarContents {
-                            editorDocument: SpectacleCore.annotationDocument
-                            id: propertyContents
-                            verticalLayout: true
+                    contentItem: ColumnLayout {
+                        spacing: 10
+                        RowLayout {
+                            Layout.fillWidth: true
+                            QQC.Label {
+                                Layout.fillWidth: true
+                                text: i18nc("@title", "Appearance")
+                                font.weight: Font.DemiBold
+                                color: Kos.AppTheme.paletteText
+                            }
+                            ViewerButton {
+                                objectName: "nkshotCloseProperties"
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                leftPadding: 4
+                                rightPadding: 4
+                                display: QQC.AbstractButton.IconOnly
+                                icon.name: "dialog-close"
+                                text: i18nc("@action", "Close tool properties")
+                                onClicked: propertiesPopup.close()
+                            }
+                        }
+                        QQC.ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            AnnotationOptionsToolBarContents {
+                                editorDocument: SpectacleCore.annotationDocument
+                                id: propertyContents
+                                verticalLayout: true
+                            }
                         }
                     }
                 }

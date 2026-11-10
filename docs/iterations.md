@@ -720,3 +720,19 @@ preserving all eleven warnings pass. Copy/Save export pixels pass in light/dark/
 and [overflow](screenshots/037-notifications-overflow.png). Folder action is
 visible and wired, but native file-manager launch is not exercised without a
 real desktop. All images remain software-rendered synthetic-input captures.
+
+## 038 — Structured properties and a visible close control
+
+Give the properties popover an Appearance heading and explicit accessible close
+button. Align common checkbox labels and retain the shared numeric fields,
+colors, shadow options, keyboard behavior and independent document binding.
+The scroll area remains bounded for smaller windows and larger property sets.
+
+Build and CTest 5/5 pass; static identity tests 16/16 pass. Actual light, dark and
+640 px tests change a selected annotation property, click the new close control,
+verify the pending edit becomes one undo transaction, undo/redo exact pixels and
+reopen the popover. Pin Save As regression also passes after tightening its file
+wait assertion. Reviewed [light](screenshots/038-properties-light.png),
+[dark](screenshots/038-properties-dark.png) and [narrow](screenshots/038-properties-narrow.png)
+actual software windows. Native font/color dialogs, desktop capture and GPU
+optics remain outside this verification.
