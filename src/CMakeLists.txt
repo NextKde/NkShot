@@ -18,6 +18,8 @@ ecm_qt_declare_logging_category(SPECTACLE_SRCS
 
 add_executable(spectacle)
 if(NKSHOT_ENABLE_UI_CAPTURE)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    target_link_libraries(spectacle PRIVATE Qt::Test)
     target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp)
     target_include_directories(spectacle PRIVATE ${PROJECT_SOURCE_DIR}/tests/ui)
     target_compile_definitions(spectacle PRIVATE NKSHOT_ENABLE_UI_CAPTURE=1)

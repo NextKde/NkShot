@@ -264,3 +264,31 @@ Verified: incremental compile/link passed, CTest 3/3 and static checks 15/15 pas
 including a new check of the actual startup registration path. No UI layout change;
 012 remains its visual baseline. Real KGlobalAccel first-launch/custom-key/restart
 coexistence validation requires a live desktop session and has not been run.
+
+## 014 — OCR readiness and real menu/input regressions
+
+Fix OCR availability notification independently of processing status: initial
+Ready→Ready previously emitted no signal, so the menu could stay hidden after
+the engine initialized. Add an asynchronous OCR regression with a generated
+English fixture; it recognizes HELLO NKSHOT 12345, verifies Processing→Ready,
+returned eng language, clipboard text and invalid-image rejection.
+
+Fix Qt6.11 text-input context handling with ContextMenu.requested. A first attempt
+with TapHandler was canceled by Qt's built-in context menu and failed the actual
+mouse test; use the supported attached request and disable the duplicate built-in
+menu. The development-only QTest click now opens the actual native text menu,
+then closes it before capturing the editor.
+
+Actual menu review also found KosSurface's small implicit width had clipped menu
+labels. Set explicit usable widths, semantic icon tints and disabled opacity.
+Reviewed [light OCR menu](screenshots/014-editor-ocr-menu-final.png),
+[640px dark OCR menu](screenshots/014-editor-ocr-menu-dark-final.png), and the
+[editor following the right-click test](screenshots/014-editor-context-tested.png).
+
+Verified: main incremental builds through 036, CTest 4/4, source checks 15/15,
+actual native context-menu mouse regression and visible OCR entry. Dev UI capture
+builds link QtTest; normal release builds remain capture-hook-free.
+
+Not claimed: Chinese OCR accuracy, arbitrary document recognition accuracy,
+translation, real desktop clipboard ownership after exit, text IME or GPU/Wayland
+acceptance. OCR data/fonts used in the test are official installed dependencies.

@@ -78,6 +78,7 @@ ButtonGrid {
 
     component ToolButton: QQC.ToolButton {
         id: button
+        opacity: enabled ? 1 : 0.38
         icon.color: palette.buttonText
         property string extraHelp: ""
         property bool secondary: false
@@ -252,6 +253,7 @@ ButtonGrid {
         onClicked: extraToolsMenu.popup()
         QQC.Menu {
             id: extraToolsMenu
+            width: 220
                     palette.windowText: Kos.AppTheme.paletteText
                     palette.text: Kos.AppTheme.paletteText
                     palette.buttonText: Kos.AppTheme.paletteText
@@ -268,6 +270,9 @@ ButtonGrid {
             }
             y: -height - 8
             QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                 text: i18nc("@action", "Highlighter")
                 icon.name: "draw-highlight"
                 checkable: true
@@ -275,6 +280,9 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.HighlighterTool
             }
             QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                 text: i18nc("@action", "Line")
                 icon.name: "draw-line"
                 checkable: true
@@ -282,6 +290,9 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.LineTool
             }
             QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                 text: i18nc("@action", "Ellipse")
                 icon.name: "draw-ellipse"
                 checkable: true
@@ -289,6 +300,9 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.EllipseTool
             }
             QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                 text: i18nc("@action", "Blur")
                 icon.name: "blur"
                 checkable: true
@@ -296,6 +310,9 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.BlurTool
             }
             QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                 text: i18nc("@action", "Number")
                 icon.name: "draw-number"
                 checkable: true

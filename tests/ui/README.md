@@ -30,3 +30,9 @@ Set `NKSHOT_TEST_MORE=1` to open the actual More menu before capture.
 Additional capture states: `NKSHOT_TEST_MORE_TOOLS=1`, `NKSHOT_TEST_ZOOM=1`,
 `NKSHOT_TEST_TOOL=blur` or `text`, and `NKSHOT_TEST_DARK=1`. Dark mode supplies a
 dark QPalette to the actual offscreen application; it does not post-process pixels.
+
+`NKSHOT_TEST_PROPERTIES=1` opens the persistent properties panel. With
+`NKSHOT_TEST_TOOL=rectangle`, add `NKSHOT_TEST_CONTEXT_MENU=1` to send an actual
+QTest right-button click to an editable stroke input and require the native menu
+to become visible within one second. The menu is closed before the window capture.
+UI-capture builds link QtTest; default release builds do not.

@@ -130,6 +130,9 @@ Q_SIGNALS:
      */
     void statusChanged(OcrStatus status);
 
+    // Availability changes independently of the processing status.
+    void availabilityChanged();
+
 private Q_SLOTS:
     void handleRecognitionComplete(const QString &text, bool success);
 

@@ -118,6 +118,7 @@ EmptyPage {
                 onClicked: moreMenu.popup()
                 QQC.Menu {
                     id: moreMenu
+                    width: Math.min(240, root.width - 32)
                     palette.windowText: Kos.AppTheme.paletteText
                     palette.text: Kos.AppTheme.paletteText
                     palette.buttonText: Kos.AppTheme.paletteText
@@ -133,32 +134,50 @@ EmptyPage {
                         elevation: 0.5
                     }
                     y: moreButton.height + 6
-                    QQC.MenuItem { action: SaveAsAction {} }
                     QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+ action: SaveAsAction {} }
+                    QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                         visible: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable
                         height: visible ? implicitHeight : 0
                         action: OcrAction {}
                     }
                     QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                         visible: SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
                         action: CopyLocationAction {}
                     }
                     QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
                         text: i18nc("@action", "Export")
                         icon.name: "document-share"
                         onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
                     }
-                    QQC.MenuSeparator {}
+                    QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                         enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
                         text: i18nc("@action", "New Recording")
                         icon.name: "media-record"
                         onTriggered: Qt.callLater(function() { RecordingModeMenu.popup(moreButton) })
                     }
                     QQC.MenuItem {
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
+
                         text: i18nc("@action", "Options")
                         icon.name: "configure"
                         onTriggered: Qt.callLater(function() { OptionsMenu.popup(moreButton) })

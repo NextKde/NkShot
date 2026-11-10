@@ -42,7 +42,7 @@ class SpectacleCore : public QObject
     Q_PROPERTY(bool videoMode READ videoMode WRITE setVideoMode NOTIFY videoModeChanged)
     Q_PROPERTY(QUrl currentVideo READ currentVideo NOTIFY currentVideoChanged)
     Q_PROPERTY(AnnotationDocument *annotationDocument READ annotationDocument CONSTANT FINAL)
-    Q_PROPERTY(bool ocrAvailable READ ocrAvailable NOTIFY ocrStatusChanged FINAL)
+    Q_PROPERTY(bool ocrAvailable READ ocrAvailable NOTIFY ocrAvailableChanged FINAL)
     Q_PROPERTY(OcrManager::OcrStatus ocrStatus READ ocrStatus NOTIFY ocrStatusChanged FINAL)
 
 public:
@@ -134,6 +134,7 @@ Q_SIGNALS:
     void currentVideoChanged(const QUrl &currentVideo);
     void recordedTimeChanged();
     void ocrStatusChanged();
+    void ocrAvailableChanged();
 
 private:
     explicit SpectacleCore(QObject *parent = nullptr);

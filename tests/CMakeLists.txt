@@ -43,3 +43,18 @@ ecm_add_test(ShadowRepaintTest.cpp TEST_NAME "shadow_repaint_test"
     LINK_LIBRARIES Qt::Test Qt::Gui KQuickImageEditor)
 set_tests_properties(shadow_repaint_test PROPERTIES TIMEOUT 20
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+
+# Real asynchronous OCR; requires installed Tesseract English data and a sans font.
+ecm_add_test(
+    OcrManagerTest.cpp
+    ../src/OcrManager.cpp
+    ../src/OcrManager.h
+    ${CMAKE_CURRENT_BINARY_DIR}/settings.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/spectacle_debug.cpp
+    TEST_NAME "ocr_manager_test"
+    LINK_LIBRARIES Qt::Test Qt::Widgets Qt::Qml KF6::I18n KF6::ConfigGui PkgConfig::TESSERACT
+)
+target_compile_options(ocr_manager_test PRIVATE -fexceptions)
+target_include_directories(ocr_manager_test PRIVATE ${PROJECT_BINARY_DIR}/src)
+set_tests_properties(ocr_manager_test PROPERTIES TIMEOUT 30
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

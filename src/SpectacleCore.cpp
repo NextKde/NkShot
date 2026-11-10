@@ -690,6 +690,7 @@ SpectacleCore::SpectacleCore(QObject *parent)
 
     // Connect to OCR manager
     connect(OcrManager::instance(), &OcrManager::textRecognized, this, onOcrTextRecognized);
+    connect(OcrManager::instance(), &OcrManager::availabilityChanged, this, &SpectacleCore::ocrAvailableChanged);
     connect(OcrManager::instance(), &OcrManager::statusChanged, this, [this](OcrManager::OcrStatus) {
         Q_EMIT ocrStatusChanged();
     });

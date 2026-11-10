@@ -9,6 +9,7 @@ import org.kde.spectacle.private
 
 QQC.ToolButton {
     id: root
+    opacity: enabled ? 1 : 0.38
     icon.color: palette.buttonText
     implicitHeight: QmlUtils.iconTextButtonHeight
     width: display === QQC.ToolButton.IconOnly ? height : implicitWidth

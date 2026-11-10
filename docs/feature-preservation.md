@@ -13,7 +13,7 @@ A retained route is not an end-to-end feature acceptance.
 | Stroke/fill/strength/font/shadow/number properties | Existing contextual properties | Original semantics retained; visual redesign pending; no silent removal |
 | Undo/redo/crop | Main bar, shortcuts and original document model | Pixel/model and actual viewport regression tests pass for documented cases |
 | Zoom/pan | Minus/plus, popup Fit/Actual/custom value, wheel/pinch/shortcuts | Controls render; original coordinate model retained; extended DPR tests ongoing |
-| OCR | More, only when original OCR capability is available | Source and capability gate retained; no OCR accuracy claim |
+| OCR | More, only when original OCR capability is available | Initialization notification and synthetic English asynchronous recognition/clipboard tested; no general or Chinese accuracy claim |
 | Translation, pinned images, scrolling capture | Future staged features | Not implemented; no fake completion claim |
 
 ## Reuse boundary

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
+#include "Gui/TextContextMenu.h"
+#include <QtTest/QTest>
 #include "SpectacleCore.h"
 #include <KQuickImageEditor/AnnotationDocument>
 #include <KQuickImageEditor/AnnotationTool>
@@ -97,6 +99,26 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_CONTEXT_MENU")) {
+                auto spin = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotStrokeWidth"));
+                auto editor = spin ? spin->property("contentItem").value<QQuickItem *>() : nullptr;
+                if (!editor) {
+                    qCritical() << "NkShot context menu test: missing text input";
+                    application.exit(6);
+                    return;
+                }
+                spin->setProperty("editable", true);
+                auto eventWindow = editor->window();
+                const QPointF local = editor->mapToScene(QPointF(editor->width() / 2, editor->height() / 2));
+                QTest::mouseClick(eventWindow, Qt::RightButton, Qt::NoModifier, local.toPoint());
+                if (!QTest::qWaitFor([] { return TextContextMenu::instance()->isVisible(); }, 1000)) {
+                    qCritical() << "NkShot context menu test: right click did not open native menu";
+                    application.exit(7);
+                    return;
+                }
+                TextContextMenu::instance()->close();
+                qInfo() << "NkShot actual right-button context-menu regression passed";
             }
             const QImage pixels = viewer->grabWindow();
             const bool saved = !pixels.isNull() && pixels.save(destination);

@@ -64,3 +64,7 @@ Building, installing and passing CTest do not prove screenshot permissions,
 recording output, editing interactions or visual quality. Those require a real
 KWin session and the checklist in `nkshot-validation.md`. The cloud build was
 isolated from the host; local display sockets are currently unavailable there.
+
+OCR regression testing requires Tesseract English data (`tesseract-ocr-eng`) and
+DejaVu Sans fonts. The test creates a synthetic English image and uses a temporary
+configuration directory; it does not submit images to a network service.

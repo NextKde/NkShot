@@ -74,6 +74,7 @@ Grid {
 
             QQC.SpinBox {
                 id: spinBox
+                objectName: "nkshotStrokeWidth"
                 function setStrokeWidth() {
                     if (root.useSelectionOptions && root.selectedItem.strokeWidth !== spinBox.value) {
                         root.selectedItem.strokeWidth = spinBox.value

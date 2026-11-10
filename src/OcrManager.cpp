@@ -325,10 +325,15 @@ void OcrManager::beginRecognition(const QImage &image)
 void OcrManager::initializeTesseract()
 {
     auto cleanupTesseract = [this]() {
+        const bool wasAvailable = isAvailable();
+        m_initialized = false;
         if (m_tesseract) {
             m_tesseract->End();
             delete m_tesseract;
             m_tesseract = nullptr;
+        }
+        if (wasAvailable) {
+            Q_EMIT availabilityChanged();
         }
     };
 
@@ -406,6 +411,7 @@ void OcrManager::initializeTesseract()
         qCDebug(SPECTACLE_LOG) << "Tesseract OCR engine initialized successfully with languages:" << combinedInitLanguages;
 
         loadSavedLanguageSetting();
+        Q_EMIT availabilityChanged();
     } catch (const std::exception &e) {
         qCWarning(SPECTACLE_LOG) << "Exception during Tesseract initialization:" << e.what();
         setStatus(OcrStatus::Error);
