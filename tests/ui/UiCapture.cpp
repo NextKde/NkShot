@@ -19,6 +19,7 @@
 #include <QImage>
 #include <QInputMethodEvent>
 #include <QClipboard>
+#include <QMimeData>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QTemporaryDir>
@@ -561,6 +562,17 @@ void installUiCaptureHook(QApplication &application)
                 auto list = viewer->rootObject()->findChild<QQuickItem *>(QStringLiteral("nkshotNotifications"));
                 auto workbench = viewer->rootObject()->findChild<QQuickItem *>(QStringLiteral("nkshotWorkbench"));
                 const QRectF before(workbench->position(), workbench->size());
+                const QUrl savedFile(QStringLiteral("file:///tmp/nkshot-ui-test-notification.png"));
+                model->push(InlineMessageModel::Saved, QStringLiteral("Saved synthetic test image"), savedFile);
+                QTest::qWait(400);
+                auto copyLink = visualItem(viewer->contentItem(), QStringLiteral("nkshotNotificationCopy0"));
+                auto folderLink = visualItem(viewer->contentItem(), QStringLiteral("nkshotNotificationFolder0"));
+                if (!copyLink || !folderLink || !folderLink->isVisible()) { application.exit(63); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                    copyLink->mapToScene(QPointF(copyLink->width()/2, copyLink->height()/2)).toPoint());
+                if (QApplication::clipboard()->mimeData()->urls() != QList<QUrl>{savedFile}) { application.exit(64); return; }
+                model->clear();
+                QTest::qWait(400);
                 for (int i = 0; i < 12; ++i) {
                     model->push(InlineMessageModel::Warning, QStringLiteral("Test warning %1: this message must remain available until dismissed.").arg(i));
                 }

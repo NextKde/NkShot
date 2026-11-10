@@ -701,3 +701,22 @@ both false. Reviewed [export/light](screenshots/036-editor-export.png),
 software fallback windows. Full-app Vulkan was attempted explicitly with RHI;
 the offscreen platform cannot createPlatformVulkanInstance. Therefore real GPU
 sampling/mapping/optics are NOT verified, and these PNGs are not glass proofs.
+
+## 037 — Compact notifications without losing actions
+
+Replace the large InlineMessage layout with a restrained shared surface: small
+status icon, wrapping message/link text, and compact folder/copy/dismiss controls.
+Actions retain accessible labels and tooltips. Preserve original URL/data types,
+persistent warnings, transient expiration and deduplication. Notification
+animations now honor reduced motion. No message is silently discarded to improve
+appearance, and notifications still do not resize the image workbench.
+
+Build, CTest 5/5 and static tests 16/16 pass. Real clicks verify file-URL clipboard
+contents and dismissing an offscreen warning after scrolling; repeated messages,
+12-row overflow, bounded height, stable canvas geometry and transient timeout
+preserving all eleven warnings pass. Copy/Save export pixels pass in light/dark/
+640 px states. Reviewed [light](screenshots/037-notifications-light.png),
+[dark](screenshots/037-notifications-dark.png), [narrow](screenshots/037-notifications-narrow.png)
+and [overflow](screenshots/037-notifications-overflow.png). Folder action is
+visible and wired, but native file-manager launch is not exercised without a
+real desktop. All images remain software-rendered synthetic-input captures.

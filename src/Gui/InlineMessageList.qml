@@ -3,6 +3,7 @@
  */
 
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 import org.kde.kirigami as Kirigami
@@ -23,7 +24,7 @@ ListView {
     contentWidth: width
     Behavior on height {
         NumberAnimation {
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
     }
@@ -32,12 +33,12 @@ ListView {
             property: "opacity"
             from: 0
             to: 1
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
         NumberAnimation {
             property: "y"
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
     }
@@ -46,12 +47,12 @@ ListView {
             property: "opacity"
             from: 0
             to: 1
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
         NumberAnimation {
             property: "y"
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
     }
@@ -60,119 +61,102 @@ ListView {
             property: "opacity"
             from: 1
             to: 0
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
         NumberAnimation {
             property: "y"
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
     }
     displaced: Transition {
         NumberAnimation {
             property: "y"
-            duration: Kirigami.Units.longDuration
+            duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
             easing.type: Easing.OutCubic
         }
     }
-    delegate: Kirigami.InlineMessage {
+    delegate: QQC.Pane {
         id: delegate
         required property int index
         required property var model
-        implicitHeight: implicitContentHeight + topPadding + bottomPadding
-        z: -index // stack newer items under older items so there's no ugly visual overlap
-        type: {
-            const type = model.type
-            if (type === InlineMessageModel.Error) {
-                return Kirigami.MessageType.Error
-            } else if (type === InlineMessageModel.Warning) {
-                return Kirigami.MessageType.Warning
-            }
-            return Kirigami.MessageType.Information
+        readonly property string dataString: model.data !== null && model.data !== undefined
+            ? model.data.toString() : ""
+        readonly property bool localFile: {
+            try { return new URL(dataString).protocol === "file:" } catch (error) { return false }
         }
-        palette.windowText: Kos.AppTheme.paletteText
-        palette.text: Kos.AppTheme.paletteText
-        palette.buttonText: Kos.AppTheme.paletteText
-        palette.button: Kos.AppTheme.controlBackground
-        // TextEdit rich-text links default to dark blue even with a dark palette.
-        // Keep the existing escaped message/link destination; style anchors only.
-        text: model.text.replace(/<a /g, '<a style="color: '
-            + (Kos.AppTheme.dark ? "#8cc8ff" : "#0066cc") + ';" ')
+        z: -index
+        width: root.width
+        padding: 10
+        leftPadding: 12
+        rightPadding: 6
         background: Kos.KosSurface {
             radius: 12
             fillColor: Kos.AppTheme.contentBackground
             strokeColor: Kos.AppTheme.border
+            elevation: 0.3
         }
-        visible: true
-        position: Kirigami.InlineMessage.Position.Inline
-        width: root.width
-        actions: {
-            const data = model.data
-            const dataString = data !== null && data !== undefined && data.toString !== undefined ? data.toString() : ""
-            let actions = []
-            if (dataString !== "") {
-                try {
-                    let url = new URL(data)
-                    if (url.protocol === "file:") {
-                        actions.push(openFolderActionComponent.createObject(this, {"url": url}))
-                    }
-                } catch (error) { }
-                actions.push(copyActionComponent.createObject(this, {"data": data}))
+        contentItem: RowLayout {
+            spacing: 8
+            Kirigami.Icon {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: 5
+                source: delegate.model.type === InlineMessageModel.Error ? "dialog-error"
+                    : delegate.model.type === InlineMessageModel.Warning ? "dialog-warning" : "dialog-information"
             }
-            // Not using showCloseButton because it toggles visible on this item.
-            // This makes it not work as well with animations from the list view.
-            actions.push(closeActionComponent.createObject(this, {"index": index}))
-            return actions
-        }
-        onLinkActivated: (link) => Qt.openUrlExternally(link)
-
-    }
-
-    Component {
-        id: openFolderActionComponent
-        Kirigami.Action {
-            id: folderAction
-            required property url url
-            icon.name: "document-open-folder"
-            text: i18nc("@action:button", "Open Containing Folder")
-            onTriggered: InlineMessageModel.openContainingFolder(url)
-            displayComponent: QQC.ToolButton {
-                action: folderAction
-                icon.color: Kos.AppTheme.paletteText
-                palette.buttonText: Kos.AppTheme.paletteText
+            QQC.Label {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 40
+                color: Kos.AppTheme.paletteText
+                textFormat: Text.RichText
+                wrapMode: Text.Wrap
+                text: delegate.model.text.replace(/<a /g, '<a style="color: '
+                    + (Kos.AppTheme.dark ? "#8cc8ff" : "#0066cc") + ';" ')
+                onLinkActivated: (link) => Qt.openUrlExternally(link)
             }
-        }
-    }
-    Component {
-        id: copyActionComponent
-        Kirigami.Action {
-            id: copyAction
-            required property var data
-            icon.name: "edit-copy"
-            text: i18nc("@action:button", "Copy to Clipboard")
-            onTriggered: InlineMessageModel.copyToClipboard(data)
-            displayComponent: QQC.ToolButton {
-                action: copyAction
-                display: QQC.AbstractButton.IconOnly
-                icon.color: Kos.AppTheme.paletteText
+            RowLayout {
+                spacing: 0
+                Layout.alignment: Qt.AlignTop
+                NotificationButton {
+                    objectName: "nkshotNotificationFolder" + delegate.index
+                    visible: delegate.localFile
+                    text: i18nc("@action:button", "Open Containing Folder")
+                    icon.name: "document-open-folder"
+                    onClicked: InlineMessageModel.openContainingFolder(delegate.dataString)
+                }
+                NotificationButton {
+                    objectName: "nkshotNotificationCopy" + delegate.index
+                    visible: delegate.dataString.length > 0
+                    text: i18nc("@action:button", "Copy to Clipboard")
+                    icon.name: "edit-copy"
+                    onClicked: InlineMessageModel.copyToClipboard(delegate.model.data)
+                }
+                NotificationButton {
+                    objectName: "nkshotCloseNotification" + delegate.index
+                    text: i18nc("@action:button close inline notification", "Close")
+                    icon.name: "dialog-close"
+                    onClicked: InlineMessageModel.pop(delegate.index)
+                }
             }
         }
     }
-    Component {
-        id: closeActionComponent
-        Kirigami.Action {
-            id: kirigamiAction
-            required property int index
-            icon.name: "dialog-close"
-            text: i18nc("@action:button close inline notification", "Close")
-            onTriggered: InlineMessageModel.pop(index)
-            displayComponent: QQC.ToolButton {
-                display: QQC.AbstractButton.IconOnly
-                action: kirigamiAction
-                objectName: "nkshotCloseNotification" + kirigamiAction.index
-                icon.color: Kos.AppTheme.paletteText
-            }
+    component NotificationButton: QQC.ToolButton {
+        implicitWidth: 28
+        implicitHeight: 28
+        icon.width: 16
+        icon.height: 16
+        icon.color: Kos.AppTheme.paletteText
+        display: QQC.AbstractButton.IconOnly
+        QQC.ToolTip.text: text
+        QQC.ToolTip.visible: hovered || (activeFocus && !down)
+        background: Rectangle {
+            radius: 7
+            color: parent.hovered || parent.down ? Kos.AppTheme.controlBackground : "transparent"
+            border.width: parent.visualFocus ? 2 : 0
+            border.color: Kos.AppTheme.accent
         }
     }
 }
