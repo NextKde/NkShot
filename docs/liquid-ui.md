@@ -40,3 +40,14 @@ moving toolbars, 100–200%/mixed DPI, light/dark themes, reduced transparency,
 reduced motion, joined panels and software fallback. Verify saved/copied image
 pixels exclude all overlay controls and glass effects, and compare the rendered
 result with the reference apps before calling the appearance complete.
+
+## Editor integration (036)
+
+The editor now has a dedicated full-workbench sampling plane containing only
+its ordinary background and image loader. A sibling LiquidBackdrop supplies the
+50 px floating dock's LiquidPanelSurface. The palette buttons stay ordinary
+controls. No screenshots of the desktop or extra screen-capture permissions are
+required. Software, disabled material and reduced transparency use KosSurface.
+Properties and menus remain opaque at this stage. Export pixel regression passes.
+Full-window GPU sampling remains unverified: explicit RHI Vulkan cannot initialize
+through this cloud's offscreen platform. Do not label fallback images as glass.

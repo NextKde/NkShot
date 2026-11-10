@@ -105,6 +105,19 @@ void installUiCaptureHook(QApplication &application)
             application.exit(2);
             return;
         }
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_EDITOR_MATERIAL")) {
+            auto backdrop = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotEditorBackdrop"));
+            auto material = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotEditorMaterial"));
+            QVariant excludesCapture;
+            if (!backdrop || !material || !QMetaObject::invokeMethod(backdrop, "sourceExcludesCapture", Q_RETURN_ARG(QVariant, excludesCapture))
+                || !excludesCapture.toBool()) { application.exit(61); return; }
+            qInfo() << "NkShot editor backdrop excludes consumers; active/sampling"
+                    << backdrop->property("active") << material->property("sampling");
+            if (qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software")
+                && (backdrop->property("active").toBool() || material->property("sampling").toBool())) {
+                application.exit(62); return;
+            }
+        }
         if (qEnvironmentVariableIsSet("NKSHOT_TEST_CAPTURE_OVERLAY")) {
             // Construct the real selection window with the already loaded,
             // synthetic document. This does not read/capture the desktop.

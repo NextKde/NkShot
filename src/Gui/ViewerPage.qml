@@ -306,12 +306,27 @@ EmptyPage {
                 }
             }
         }
-        background: Kos.KosSurface {
-            fillColor: Kos.AppTheme.contentBackground
-            radius: 20
-            elevation: 0.5
-            strokeColor: Kos.AppTheme.border
-            showInnerHighlight: false
+        background: Item {
+            readonly property bool useGlass: editorBackdrop.active && !Kos.AppTheme.reduceTransparency
+            Kos.LiquidPanelSurface {
+                objectName: "nkshotEditorMaterial"
+                anchors.fill: parent
+                visible: parent.useGlass
+                backdrop: editorBackdrop
+                cornerRadius: 18
+                tintColor: Kos.AppTheme.contentBackground
+                darkAppearance: Kos.AppTheme.dark
+                materialOpacity: 0.95
+            }
+            Kos.KosSurface {
+                anchors.fill: parent
+                visible: !parent.useGlass
+                fillColor: Kos.AppTheme.contentBackground
+                radius: 18
+                elevation: 0.5
+                strokeColor: Kos.AppTheme.border
+                showInnerHighlight: false
+            }
         }
     }
 
@@ -325,6 +340,13 @@ EmptyPage {
         anchors.bottom: parent.bottom
     }
 
+    // Only the ordinary workbench and image are sampled. Floating controls are
+    // siblings, so neither the dock nor its glass can feed back into the texture.
+    Item {
+        id: workbenchScene
+        objectName: "nkshotWorkbenchScene"
+        anchors.fill: parent
+        Rectangle { anchors.fill: parent; color: Kos.AppTheme.contentSecondaryBackground }
     Loader { // parent is contentItem
         id: contentLoader
         objectName: "nkshotWorkbench"
@@ -332,11 +354,12 @@ EmptyPage {
             left: parent.left
             right: parent.right
             top: parent.top
-            bottom: annotationsToolBar.visible ? annotationsToolBar.top : parent.bottom
+            bottom: parent.bottom
             topMargin: 24
             leftMargin: 24
             rightMargin: 24
-            bottomMargin: 24
+            bottomMargin: annotationsToolBar.visible
+                ? annotationsToolBar.height + footerLoader.height + 40 : 24
         }
         sourceComponent: SpectacleCore.videoMode ? recordingViewComponent : screenshotViewComponent
         Component {
@@ -347,6 +370,17 @@ EmptyPage {
             id: screenshotViewComponent
             ScreenshotView {}
         }
+    }
+    }
+    Kos.LiquidBackdrop {
+        id: editorBackdrop
+        objectName: "nkshotEditorBackdrop"
+        sourceItem: workbenchScene
+        registerAsDefault: false
+        active: Settings.useLiquidMaterial && !SpectacleCore.videoMode
+            && contextWindow.annotating && GraphicsInfo.api !== GraphicsInfo.Software
+        blur: 0.35
+        maximumTextureSize: 2048
     }
 
     Loader {

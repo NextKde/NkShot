@@ -683,3 +683,21 @@ Incremental build, CTest 5/5, static checks 16/16 pass. Actual property transact
 windows. These are software-rendered synthetic-input captures. This stage improves
 hierarchy and controls, not GPU liquid-material verification or a finished Apple
 reproduction; the editor palette is still an opaque shared surface.
+
+## 036 — Separate editor sampling plane and real material route
+
+Group only the ordinary workbench background and image loader in a full-sized
+sampling plane. The annotation dock, properties, notifications and footer remain
+outside it. The dock now uses the existing Kos.Ui LiquidPanelSurface on a capable
+renderer, with an explicit KosSurface fallback for software rendering, disabled
+liquid effects or reduced transparency. No consumer samples itself; capture and
+export still use the unchanged document model.
+
+Incremental builds and CTest 5/5/static 16/16 pass. Actual property transaction,
+Copy/Save pixel equality and unchanged notification geometry pass. Runtime probe
+confirms the source excludes capture consumers and software active/sampling are
+both false. Reviewed [export/light](screenshots/036-editor-export.png),
+[dark](screenshots/036-editor-dark.png) and [narrow](screenshots/036-editor-narrow.png)
+software fallback windows. Full-app Vulkan was attempted explicitly with RHI;
+the offscreen platform cannot createPlatformVulkanInstance. Therefore real GPU
+sampling/mapping/optics are NOT verified, and these PNGs are not glass proofs.

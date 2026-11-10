@@ -115,3 +115,9 @@ pixels equal the immutable pin and confirms the editable source is unchanged.
 Production still permits native dialogs. Repeat with
 `NKSHOT_TEST_PIN_SIZE=260x180` and `NKSHOT_TEST_DARK=1`. This does not validate
 native file portals or the overwrite-confirmation interaction.
+
+`NKSHOT_TEST_EDITOR_MATERIAL=1` asserts the editor's sampling source excludes its
+consumers and reports active/sampling state. With QT_QUICK_BACKEND=software both
+must be false. Merely setting QSG_RHI_BACKEND=vulkan is not evidence that the
+application used Vulkan; the offscreen platform can choose software. Explicit
+QT_QUICK_BACKEND=rhi currently fails to create a Vulkan instance in the cloud.
