@@ -489,3 +489,21 @@ image. Binary SHA256: 43388374a0ee84d54be855cab223197d63937e938802e3ce553ffcdccb
 No UI was changed in this build-only iteration; no new visual screenshot is
 claimed. This remains a cloud startup smoke check, not real KWin/recording or
 production GPU visual acceptance.
+
+## 024 — Explicit document boundary for editor controls
+
+Extend the existing injected annotation canvas boundary to the tool palette,
+property controls and undo/redo group. Each now requires an AnnotationDocument
+parameter instead of reaching into SpectacleCore. The screenshot and capture
+page owners provide the document explicitly; the palette forwards it to its
+undo/redo controls. This prepares reuse without changing capture or export
+ownership. It is not yet a standalone photo-editor library: application theme,
+localization, window helpers and surrounding command integration remain.
+
+Incremental compilation passed; actual property commit/close/undo/redo, Copy/Save
+pixel checks, notification geometry, and CaptureWindow region drag/menu tests
+passed. CTest 4/4 passed and static checks now 16/16 include explicit control
+document dependency checks. Reviewed [editor](screenshots/024-editor-document.png)
+and [capture](screenshots/024-capture-document.png) for unintended layout changes.
+Both are real development windows using synthetic input/software rendering.
+Standalone alternate-document control hosting has not yet been runtime-tested.

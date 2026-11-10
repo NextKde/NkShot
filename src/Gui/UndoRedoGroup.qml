@@ -10,6 +10,7 @@ import org.kde.kquickimageeditor
 
 Grid {
     id: root
+    required property AnnotationDocument editorDocument
     property int buttonFocusPolicy: Qt.StrongFocus
     property real buttonHeight: undoButton.implicitHeight
     property bool animationsEnabled: true
@@ -24,25 +25,25 @@ Grid {
 
     TtToolButton {
         id: undoButton
-        enabled: SpectacleCore.annotationDocument.undoStackDepth > 0
+        enabled: root.editorDocument.undoStackDepth > 0
         height: root.buttonHeight
         focusPolicy: root.buttonFocusPolicy
         display: QQC.ToolButton.IconOnly
         text: i18n("Undo")
         icon.name: "edit-undo"
         autoRepeat: true
-        onClicked: SpectacleCore.annotationDocument.undo()
+        onClicked: root.editorDocument.undo()
     }
 
     TtToolButton {
-        enabled: SpectacleCore.annotationDocument.redoStackDepth > 0
+        enabled: root.editorDocument.redoStackDepth > 0
         height: root.buttonHeight
         focusPolicy: root.buttonFocusPolicy
         display: QQC.ToolButton.IconOnly
         text: i18n("Redo")
         icon.name: "edit-redo"
         autoRepeat: true
-        onClicked: SpectacleCore.annotationDocument.redo()
+        onClicked: root.editorDocument.redo()
     }
 
     QQC.ToolSeparator {

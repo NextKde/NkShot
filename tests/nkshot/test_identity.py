@@ -111,6 +111,13 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('onActivated: root.document.undo()', editor)
         self.assertIn('onActivated: root.document.redo()', editor)
 
+    def test_editor_controls_receive_document_explicitly(self):
+        for name in ['AnnotationsToolBarContents.qml', 'AnnotationOptionsToolBarContents.qml', 'UndoRedoGroup.qml']:
+            content = read('src/Gui/' + name)
+            self.assertIn('required property AnnotationDocument editorDocument', content)
+            self.assertNotIn('SpectacleCore.annotationDocument', content)
+        self.assertIn('editorDocument: root.editorDocument', read('src/Gui/AnnotationsToolBarContents.qml'))
+
     def test_save_and_copy_routes_retained(self):
         self.assertIn('onTriggered: contextWindow.save()', read('src/Gui/SaveAction.qml'))
         self.assertIn('onTriggered: contextWindow.copyImage()', read('src/Gui/CopyImageAction.qml'))

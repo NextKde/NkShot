@@ -11,12 +11,13 @@ import org.kde.kquickimageeditor
 
 Grid {
     id: root
+    required property AnnotationDocument editorDocument
     property bool verticalLayout: false
     columns: verticalLayout ? 1 : -1
     rows: verticalLayout ? -1 : 1
     verticalItemAlignment: Grid.AlignVCenter
 
-    readonly property AnnotationDocument document: SpectacleCore.annotationDocument
+    readonly property AnnotationDocument document: root.editorDocument
     readonly property AnnotationTool tool: document.tool
     readonly property SelectedItemWrapper selectedItem: document.selectedItem
 

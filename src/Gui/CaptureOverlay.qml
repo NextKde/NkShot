@@ -747,6 +747,7 @@ MouseArea {
                 // that makes the options toolbar invisible
                 focusPolicy: Qt.NoFocus
                 contentItem: AnnotationsToolBarContents {
+                    editorDocument: SpectacleCore.annotationDocument
                     id: annotationsContents
                     paletteMode: true
                     essentialsOnly: true
@@ -911,6 +912,7 @@ MouseArea {
                     sourceComponent: FloatingToolBar {
                         focusPolicy: Qt.NoFocus
                         contentItem: AnnotationOptionsToolBarContents {
+                            editorDocument: SpectacleCore.annotationDocument
                             spacing: parent.spacing
                             displayMode: QQC.AbstractButton.IconOnly
                             buttonFocusPolicy: Qt.NoFocus

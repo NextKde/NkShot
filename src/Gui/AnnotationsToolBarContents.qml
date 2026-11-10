@@ -11,6 +11,7 @@ import org.kde.kquickimageeditor
 
 ButtonGrid {
     id: root
+    required property AnnotationDocument editorDocument
     property bool paletteMode: false
     property bool essentialsOnly: false
     property bool showUndoRedo: true
@@ -18,13 +19,14 @@ ButtonGrid {
     property alias checkedButton: toolGroup.checkedButton
     property bool isFullscreenCapture: false
 
-    readonly property AnnotationTool tool: SpectacleCore.annotationDocument.tool
+    readonly property AnnotationTool tool: root.editorDocument.tool
     readonly property int toolType: tool?.type ?? AnnotationTool.NoTool
 
     Loader {
         visible: active
         active: root.showUndoRedo
         sourceComponent: UndoRedoGroup {
+            editorDocument: root.editorDocument
             animationsEnabled: root.animationsEnabled
             buttonHeight: QmlUtils.iconTextButtonHeight
             height: flow === Grid.LeftToRight ? buttonHeight : implicitHeight
@@ -145,7 +147,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar select annotation tool", "Select")
         icon.name: "edit-select"
-        enabled: SpectacleCore.annotationDocument.undoStackDepth > 0
+        enabled: root.editorDocument.undoStackDepth > 0
         checked: root.toolType === AnnotationTool.SelectTool
         onClicked: root.tool.type = AnnotationTool.SelectTool
     }

@@ -97,6 +97,7 @@ EmptyPage {
             }
             Item { Layout.fillWidth: true; Layout.minimumWidth: 12 }
             UndoRedoGroup {
+                editorDocument: SpectacleCore.annotationDocument
                 visible: contextWindow.annotating
                 buttonHeight: 36
                 animationsEnabled: !Settings.reduceUiMotion
@@ -217,6 +218,7 @@ EmptyPage {
         contentItem: RowLayout {
             spacing: 6
             AnnotationsToolBarContents {
+                editorDocument: SpectacleCore.annotationDocument
                 id: annotationsToolBarContents
                 displayMode: QQC.AbstractButton.IconOnly
                 flow: Grid.LeftToRight
@@ -263,6 +265,7 @@ EmptyPage {
                     contentItem: QQC.ScrollView {
                         clip: true
                         AnnotationOptionsToolBarContents {
+                            editorDocument: SpectacleCore.annotationDocument
                             id: propertyContents
                             verticalLayout: true
                         }
