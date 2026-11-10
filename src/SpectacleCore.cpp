@@ -704,29 +704,13 @@ SpectacleCore::SpectacleCore(QObject *parent)
         ExportManager::instance()->setImage(image);
     }, Qt::QueuedConnection); // QueuedConnection to help prevent making the visible render lag.
 
-    // set up shortcuts
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->openAction(),
-                                            QList<QKeySequence>{
-                                                Qt::Key_Print,
-                                                // Default screenshot shortcut on Windows.
-                                                // Also for keyboards without a print screen key.
-                                                Qt::META | Qt::SHIFT | Qt::Key_S,
-                                            });
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->fullScreenAction(), Qt::SHIFT | Qt::Key_Print);
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->activeWindowAction(), Qt::META | Qt::Key_Print);
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->windowUnderCursorAction(), Qt::META | Qt::CTRL | Qt::Key_Print);
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->regionAction(), Qt::META | Qt::SHIFT | Qt::Key_Print);
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->currentScreenAction(), QList<QKeySequence>());
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->openWithoutScreenshotAction(), QList<QKeySequence>());
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->recordScreenAction(), Qt::META | Qt::ALT | Qt::Key_R);
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->recordWindowAction(), Qt::META | Qt::CTRL | Qt::Key_R);
-    KGlobalAccel::self()->setGlobalShortcut(ShortcutActions::self()->recordRegionAction(),
-                                            QList<QKeySequence>{
-                                                // Similar to region screenshot
-                                                Qt::META | Qt::SHIFT | Qt::Key_R,
-                                                // Also use Meta+R for now
-                                                Qt::META | Qt::Key_R,
-                                            });
+    // NkShot coexists with Spectacle. New installations claim no global keys;
+    // Autoloading preserves keys explicitly saved for this independent component.
+    auto *accel = KGlobalAccel::self();
+    for (auto *action : ShortcutActions::self()->shortcutActions()->actions()) {
+        accel->setDefaultShortcut(action, {});
+        accel->setShortcut(action, {}, KGlobalAccel::Autoloading);
+    }
 
     connect(qApp, &QApplication::screenRemoved, this, [this](QScreen *screen) {
         // It's dangerous to erase from within a for loop, so we use std::find_if

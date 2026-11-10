@@ -247,3 +247,20 @@ Scope: this fixes reproduced rectangle shadow incremental-vs-full rendering,
 including a fractional-origin DPR1 case. It does not prove every transform,
 object-deletion or multi-tool shadow scenario. It is a local patch, not claimed
 to be accepted upstream.
+
+## 013 — Correct opt-in global shortcut registration
+
+Correction to earlier coexistence wording: independent component naming did not
+by itself remove Spectacle's default Print/Meta combinations. Startup still called
+setGlobalShortcut with those defaults, potentially claiming currently unused keys
+(existing conflicts are rejected by KGlobalAccel, not forcibly stolen).
+
+Register every original action with an empty default and Autoloading so existing
+user-customized NkShot shortcuts are preserved. Do not use NoAutoloading or alter
+Spectacle configuration. No automatic removal of previously saved NkShot keys is
+attempted because they cannot be reliably distinguished from user choices.
+
+Verified: incremental compile/link passed, CTest 3/3 and static checks 15/15 pass,
+including a new check of the actual startup registration path. No UI layout change;
+012 remains its visual baseline. Real KGlobalAccel first-launch/custom-key/restart
+coexistence validation requires a live desktop session and has not been run.

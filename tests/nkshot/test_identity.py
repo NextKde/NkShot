@@ -16,6 +16,13 @@ def read(path):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_global_shortcuts_are_opt_in_and_preserve_custom_keys(self):
+        core = read('src/SpectacleCore.cpp')
+        self.assertNotIn('setGlobalShortcut(', core)
+        self.assertIn('setDefaultShortcut(action, {})', core)
+        self.assertIn('setShortcut(action, {}, KGlobalAccel::Autoloading)', core)
+        self.assertNotIn('KGlobalAccel::NoAutoloading', core)
+
     def test_desktop_identity_and_actions(self):
         config = configparser.ConfigParser(interpolation=None, strict=False)
         config.read_string(read(f'desktop/{APP_ID}.desktop.cmake'))
