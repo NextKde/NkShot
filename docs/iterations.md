@@ -556,3 +556,19 @@ Document reproducible commands and missing full-recording acceptance in
 [recording verification](recording-verification.md). This is meaningful backend
 evidence, not a live KWin recording or a claim that all codecs work. No new UI
 image is produced for this verification-only iteration.
+
+## 028 — Real local Chinese OCR and one-shot language restoration
+
+Add a generated Chinese+digits fixture rendered using Noto Sans CJK. Run it
+through the actual asynchronous Tesseract chi_sim engine and assert the recognized
+text equals 中文截图编辑12345 after whitespace normalization, clipboard output
+matches, and a one-shot Chinese request restores the configured English language
+without changing saved settings. This is offline OCR, not translation.
+
+Test build passed. OCR QtTest reports 4 passed, 0 failed, 0 skipped including
+existing English coverage; aggregate CTest 4/4 and static checks 16/16 pass.
+The existing system Noto Sans CJK font was copied into the isolated dependency
+root for the fixture, without modifying the host or distributing the font.
+On machines without chi_sim data or CJK font this optional Chinese case reports
+a named skip. One clean synthetic phrase does not establish general OCR accuracy.
+No application UI changed, so no new UI screenshot is claimed.

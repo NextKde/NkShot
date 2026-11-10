@@ -76,3 +76,8 @@ Qt Test is needed only for tests or the explicit developer capture hook. A fresh
 production build has also been verified with
 `-DCMAKE_DISABLE_FIND_PACKAGE_Qt6Test=TRUE`; do not enable the capture hook in
 distributed builds.
+
+Chinese OCR regression coverage additionally uses Tesseract `chi_sim` trained
+data and a CJK-capable font, preferably Noto Sans CJK SC (`fonts-noto-cjk`).
+The Chinese case explicitly skips if either dependency is missing; inspect
+individual QtTest results rather than treating an aggregate pass as proof it ran.

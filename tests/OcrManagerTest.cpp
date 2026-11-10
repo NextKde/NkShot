@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QPainter>
+#include <QFontMetrics>
 #include <QSignalSpy>
 #include <KLocalizedString>
 #include <QTemporaryDir>
@@ -13,6 +14,37 @@ class OcrManagerTest : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
+    void chineseRecognitionRestoresConfiguredLanguage()
+    {
+        Settings::setOcrLanguages({QStringLiteral("eng")});
+        OcrManager manager;
+        QTRY_VERIFY_WITH_TIMEOUT(manager.isAvailable(), 10000);
+        if (!manager.availableLanguagesWithNames().contains(QStringLiteral("chi_sim")))
+            QSKIP("Chinese OCR requires official chi_sim trained data");
+        QFont font(QStringLiteral("Noto Sans CJK SC"));
+        font.setPixelSize(72);
+        if (!QFontMetrics(font).inFontUcs4(0x4e2d))
+            QSKIP("Chinese fixture requires a CJK-capable font");
+        QImage fixture(1000, 220, QImage::Format_RGB32);
+        fixture.fill(Qt::white);
+        QPainter painter(&fixture);
+        painter.setFont(font); painter.setPen(Qt::black);
+        painter.drawText(fixture.rect(), Qt::AlignCenter, QStringLiteral("中文截图编辑 12345"));
+        painter.end();
+        QSignalSpy recognized(&manager, &OcrManager::textRecognized);
+        manager.recognizeTextWithLanguage(fixture, QStringLiteral("chi_sim"));
+        QTRY_COMPARE_WITH_TIMEOUT(recognized.count(), 1, 15000);
+        const auto result = recognized.takeFirst();
+        QVERIFY(result.at(2).toBool());
+        QCOMPARE(result.at(1).toStringList(), QStringList{QStringLiteral("chi_sim")});
+        auto text = result.at(0).toString().simplified();
+        text.remove(u' ');
+        QCOMPARE(text, QStringLiteral("中文截图编辑12345"));
+        QCOMPARE(QApplication::clipboard()->text(), result.at(0).toString());
+        QCOMPARE(manager.currentLanguageCode(), QStringLiteral("eng"));
+        QCOMPARE(Settings::ocrLanguages(), QStringList{QStringLiteral("eng")});
+        QCOMPARE(manager.status(), OcrManager::OcrStatus::Ready);
+    }
     void initializationAndAsyncEnglishRecognition()
     {
         Settings::setOcrLanguages({QStringLiteral("eng")});
