@@ -5,6 +5,9 @@
 #include "Platforms/ImagePlatform.h"
 #include "CaptureModeModel.h"
 #include "Gui/ViewerWindow.h"
+#include "Gui/PinnedImageWindow.h"
+#include <QVideoSink>
+#include <QVideoFrame>
 #include "Gui/InlineMessageModel.h"
 #include <QEventLoop>
 #include <QTimer>
@@ -407,6 +410,55 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     const auto position=player->property("position").toLongLong();
     if(!QTest::qWaitFor([&]{return player->property("position").toLongLong()>position+100;},3000))
         return fail(QStringLiteral("Imported MP4 playback position did not advance"));
+    // Extract the decoded image, not the scaled/letterboxed player window.
+    if(!click(QStringLiteral("nkshotPlaybackSettings"))||!capture(QStringLiteral(".frame-menu.png"))
+        ||!click(QStringLiteral("nkshotExtractVideoFrame")))
+        return fail(QStringLiteral("Frame extraction entry unavailable"));
+    PinnedImageWindow *framePin=nullptr;
+    if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows()) {
+        if(w->objectName()==QStringLiteral("nkshotVideoFramePin"))framePin=qobject_cast<PinnedImageWindow *>(w);
+    }return framePin&&framePin->isVisible();},2000))return fail(QStringLiteral("Decoded frame pin not shown"));
+    auto software=recording->findChild<QObject *>(QStringLiteral("nkshotSoftwareVideoPreview"));
+    auto sink=software?software->property("sink").value<QVideoSink *>():nullptr;
+    if(!sink||player->property("playing").toBool()||framePin->snapshot()!=sink->videoFrame().toImage())
+        return fail(QStringLiteral("Extracted frame differs from paused decoded pixels"));
+    const auto extracted=framePin->snapshot();
+    framePin->copyImage();
+    if(application.clipboard()->image()!=extracted||core->currentVideo()!=QUrl::fromLocalFile(movie)
+        ||bytes(movie)!=movieBytes||!sourcesIntact())return fail(QStringLiteral("Frame copy changed source or pixels"));
+    QSignalSpy frameSaved(framePin,&PinnedImageWindow::saveFinished);
+    framePin->saveAs();
+    if(!QTest::qWaitFor([&]{return fileDialog()&&fileDialog()->acceptMode()==QFileDialog::AcceptSave;},1500))
+        return fail(QStringLiteral("Frame PNG Save As did not open"));
+    const auto frameFile=fixtures.filePath(QStringLiteral("extracted-frame.png"));
+    QTest::qWait(200);
+    if(!choose(fileDialog(QStringLiteral("nkshotPinSaveDialog")),frameFile))
+        return fail(QStringLiteral("Frame PNG dialog interaction failed"));
+    if(!QTest::qWaitFor([&]{return !frameSaved.isEmpty();},2000)||!frameSaved.first().at(1).toBool()) {
+        if(auto d=fileDialog()) {qWarning()<<"Pin save still open"<<d->selectedFiles();d->grab().save(screenshot+QStringLiteral(".save-dialog.png"));}
+        return fail(QStringLiteral("Frame PNG writer failed: ")+(frameSaved.isEmpty()?QStringLiteral("no signal"):frameSaved.first().at(0).toString()));
+    }
+    const QImage savedFrame(frameFile);
+    if(!samePixels(savedFrame,extracted)) {
+        qWarning()<<"Frame PNG mismatch"<<frameFile<<savedFrame.size()<<extracted.size()<<savedFrame.format()<<extracted.format()
+            <<savedFrame.pixelColor(0,0)<<extracted.pixelColor(0,0);
+        QFile::copy(frameFile,screenshot+QStringLiteral(".exported-frame.png"));
+        extracted.save(screenshot+QStringLiteral(".expected-frame.png"));
+        return fail(QStringLiteral("Frame PNG export pixels changed"));
+    }
+    QSignalSpy pinFrame(framePin,&QQuickWindow::frameSwapped);framePin->update();
+    if(!QTest::qWaitFor([&]{return !pinFrame.isEmpty();},1000)
+        ||!framePin->grabWindow().save(screenshot+QStringLiteral(".frame.png")))
+        return fail(QStringLiteral("Frame preview evidence failed"));
+    if(viewer()->pinVideoFrame(nullptr,QUrl::fromLocalFile(movie))
+        ||viewer()->pinVideoFrame(sink,QUrl::fromLocalFile(movie+QStringLiteral(".old"))))
+        return fail(QStringLiteral("Frame extraction accepted missing sink or retired source"));
+    player->setProperty("position",3000);
+    QTest::qWait(400);
+    if(framePin->snapshot()!=extracted||bytes(movie)!=movieBytes)
+        return fail(QStringLiteral("Seeking changed immutable frame or original recording"));
+    framePin->close();
+    QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
     if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip")))return fail(QStringLiteral("Imported MP4 clip entry unavailable"));
     auto job=viewer()->property("clipJob").value<QObject *>();
     if(!job||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("ready").toBool();},15000))

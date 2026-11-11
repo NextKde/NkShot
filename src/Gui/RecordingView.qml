@@ -546,6 +546,30 @@ FocusScope {
                 color: Kos.AppTheme.mutedText
             }
             QQC.Button {
+                id: extractFrameButton
+                objectName: "nkshotExtractVideoFrame"
+                Layout.fillWidth: true
+                text: i18nc("@action", "Extract current frame…")
+                enabled: mediaPlayer.hasVideo && !root.captureActive && contextWindow.canOpenMedia
+                font: Qt.application.font
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                contentItem: QQC.Label {
+                    text: extractFrameButton.text; font: extractFrameButton.font
+                    color: Kos.AppTheme.paletteText
+                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                background: Kos.KosSurface {
+                    fillColor: Kos.AppTheme.controlBackground
+                    radius: 9; elevation: 0; strokeWidth: 0
+                    hovered: extractFrameButton.hovered; pressed: extractFrameButton.down; focused: extractFrameButton.visualFocus
+                }
+                onClicked: {
+                    mediaPlayer.pause()
+                    playbackSettings.close()
+                    contextWindow.pinVideoFrame(videoOutput.videoSink, root.sourceUrl)
+                }
+            }
+            QQC.Button {
                 id: openClipButton
                 objectName: "nkshotOpenClip"
                 Layout.fillWidth: true

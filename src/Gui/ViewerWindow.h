@@ -14,6 +14,7 @@
 
 class ViewerWindowPrivate;
 class VideoClipJob;
+class QVideoSink;
 namespace NkShot { class LocalMediaLoader; }
 
 /**
@@ -51,6 +52,7 @@ public:
     Q_INVOKABLE QQuickWindow *openScrollPreview();
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
+    Q_INVOKABLE QQuickWindow *pinVideoFrame(QVideoSink *sink, const QUrl &source);
     Q_INVOKABLE QQuickWindow *openQuickNote();
     Q_INVOKABLE QQuickWindow *openColorPicker();
     Q_INVOKABLE void scanImageCode();

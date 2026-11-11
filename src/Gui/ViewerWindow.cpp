@@ -10,6 +10,8 @@
 #include "RecordingPreparation.h"
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QVideoSink>
+#include <QVideoFrame>
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
 #include "QuickNoteWindow.h"
@@ -153,6 +155,32 @@ QQuickWindow *ViewerWindow::pinImage()
     if (image.isNull()) return nullptr;
     auto window = new PinnedImageWindow(image, engine());
     if (window->status() != QQuickView::Ready) { delete window; return nullptr; }
+    window->setScreen(screen());
+    window->setPosition(position() + QPoint(40, 40));
+    window->show();
+    return window;
+}
+
+QQuickWindow *ViewerWindow::pinVideoFrame(QVideoSink *sink, const QUrl &source)
+{
+    const auto core = SpectacleCore::instance();
+    if (!canOpenMedia() || !core->videoMode() || source.isEmpty()
+        || source != core->currentVideo() || !sink) return nullptr;
+    const auto frame = sink->videoFrame();
+    if (!frame.isValid() || frame.width() <= 0 || frame.height() <= 0
+        || qint64(frame.width()) * frame.height() > 40'000'000) return nullptr;
+    // Convert on explicit request, including on GPU playback; never screenshot
+    // the letterboxed player or reuse a frame from a previously opened source.
+    const auto image = frame.toImage();
+    if (image.isNull()) {
+        InlineMessageModel::instance()->push(InlineMessageModel::Error,
+            i18nc("@info", "This frame could not be extracted. Pause playback and try again."));
+        return nullptr;
+    }
+    auto window = new PinnedImageWindow(image.copy(), engine());
+    if (window->status() != QQuickView::Ready) { delete window; return nullptr; }
+    window->setTitle(i18nc("@title:window", "Video frame — NkShot"));
+    window->setObjectName(QStringLiteral("nkshotVideoFramePin"));
     window->setScreen(screen());
     window->setPosition(position() + QPoint(40, 40));
     window->show();
