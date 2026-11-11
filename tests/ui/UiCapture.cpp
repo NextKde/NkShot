@@ -3,6 +3,7 @@
 #include "RecordingAdapterChecks.h"
 #include "RecordingPreparationUiChecks.h"
 #include "RecordingControlsUiChecks.h"
+#include "TranslationUiChecks.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include "Gui/ViewerWindow.h"
@@ -1057,7 +1058,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_VIDEO_CLIP") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS") || qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_TRANSLATION") || qEnvironmentVariableIsSet("NKSHOT_TEST_VIDEO_CLIP") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS") || qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -1223,6 +1224,11 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_TRANSLATION")) {
+                QString failure; const bool ok=TranslationUiChecks::run(application,destination,&failure);
+                qInfo()<<"Translation UI"<<ok<<failure;
+                application.exit(ok ? 0 : 228);return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_CONTROLS")) {
                 QString failure; const bool ok=RecordingControlsUiChecks::run(application,destination,&failure);

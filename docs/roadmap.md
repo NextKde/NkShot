@@ -42,8 +42,8 @@ availability does not close native tray visibility or first-frame acceptance.
    processing must preserve original documents/history and verify exported pixels.
 3. **Local text workflows:** whole-image OCR from immutable pins is implemented
    in 060, with explicit rectangle-only OCR in 069; bounded inline OCR word-range selection is implemented in 070. Character-level
-   selection and full system Live Text parity remain gaps. Drag-edge scrolling is implemented in 071. Translation
-   is requested separately and is not yet implemented. Prefer local processing;
+   selection and full system Live Text parity remain gaps. Drag-edge scrolling is implemented in 071. Offline English ↔ Chinese translation is implemented in 080 with explicit model installation,
+   immutable original and separate translation copy. Broader languages/quality remain open;
    any external provider requires explicit opt-in identifying data/destination.
 4. **Recording beyond capture:** local MP4 clip export (072) and bounded silent GIF Maker (073) are implemented; actual KWin/PipeWire recording/A/V acceptance,
    then recording annotation, click effects and camera overlays where feasible.

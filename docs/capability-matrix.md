@@ -37,7 +37,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | Spotlight/presentation magnifier | Not implemented | Capture-selection magnifier source exists, not an independent presentation mode | Not accepted |
 | QR / barcode reading | Explicit local scan of an immutable edited-image snapshot; plain-text result, copy/save, bounded size and no-result/binary guidance (067). Original automatic route retained | Real Prison QR/Code128 fixtures, Chinese/literal markup, binary/invalid bounds; actual menu and result interactions | Software-window workflow verified; real-world damaged-code accuracy and native dialogs pending |
 | AI erase/background removal | Not implemented | No model/provider integration | Not accepted |
-| Translation (user request) | Not implemented | Not part of the confirmed 1Capture comparison above | No default external transmission |
+| Local English ↔ Chinese translation (080) | Immutable OCR original alongside local machine translation; explicit copy, original-only text save, cancellation and documented offline installation | Actual-model UI and process-protocol validation recorded in iterations | Quality is not guaranteed; no cloud fallback or automatic model install |
 
 ## Blocking environment boundary
 
@@ -49,7 +49,7 @@ injection must not be assumed available or permissions bypassed.
 
 ## Privacy and reuse
 
-OCR and implemented image transforms are local. Future translation/AI providers
+OCR, offline translation and implemented image transforms are local. Future external/AI providers
 must be explicit about local vs external processing; no screenshots or recognized
 text may silently leave the device. Original edit history is preserved, so sharing
 copies must be reviewed before distribution. ImageTransforms/VerticalStitcher are

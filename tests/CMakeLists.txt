@@ -84,6 +84,11 @@ ecm_add_test(ScrollCaptureControllerTest.cpp ../src/Imaging/ScrollCaptureControl
     TEST_NAME scroll_capture_controller_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(scroll_capture_controller_test PROPERTIES TIMEOUT 20)
 
+# Bounded local subprocess protocol only; fake workers are not translation quality evidence.
+ecm_add_test(TranslationManagerTest.cpp ../src/Translation/TranslationManager.cpp ../src/Translation/TranslationManager.h
+    TEST_NAME translation_manager_test LINK_LIBRARIES Qt::Test Qt::Core KF6::I18n)
+set_tests_properties(translation_manager_test PROPERTIES TIMEOUT 45 ENVIRONMENT "LANG=C.UTF-8")
+
 # Independent OCR job: no singleton/clipboard/configuration side effects.
 ecm_add_test(LocalTextExtractionTest.cpp ../src/Imaging/LocalTextExtraction.cpp
     TEST_NAME local_text_extraction_test LINK_LIBRARIES Qt::Test Qt::Gui PkgConfig::TESSERACT)

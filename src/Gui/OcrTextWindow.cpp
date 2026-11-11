@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "OcrTextWindow.h"
+#include "Translation/TranslationManager.h"
 #include <QApplication>
+#include <QEvent>
 #include <QClipboard>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -12,7 +14,7 @@
 #include <QStandardPaths>
 
 OcrTextWindow::OcrTextWindow(const QString &text, QQmlEngine *engine, bool codeResult)
-    : QQuickView(engine, nullptr), m_text(text), m_codeResult(codeResult)
+    : QQuickView(engine, nullptr), m_translation(new TranslationManager(this)), m_text(text), m_codeResult(codeResult)
 {
     setObjectName(codeResult ? QStringLiteral("nkshotCodeTextWindow") : QStringLiteral("nkshotOcrTextWindow"));
     setTitle(codeResult ? i18nc("@title:window", "Code Content — NkShot") : i18nc("@title:window", "Extracted Text — NkShot"));
@@ -24,6 +26,14 @@ OcrTextWindow::OcrTextWindow(const QString &text, QQmlEngine *engine, bool codeR
     auto component = new QQmlComponent(engine, source, this);
     setContent(source, component, component->create(context));
     resize(560, 420);
+    const auto adjustTranslationHeight = [this] {
+        const bool showingTranslation = m_translation->busy() || !m_translation->translatedText().isEmpty();
+        const int minimum = showingTranslation ? (width() >= 760 ? 360 : 480) : (!m_translation->status().isEmpty() ? 360 : 260);
+        setMinimumHeight(minimum);
+        if (height() < minimum) resize(width(), minimum);
+    };
+    connect(m_translation, &TranslationManager::changed, this, adjustTranslationHeight);
+    connect(this, &QWindow::widthChanged, this, adjustTranslationHeight);
     new QShortcut(QKeySequence::SaveAs, this, this, &OcrTextWindow::saveAs);
     new QShortcut(QKeySequence::Save, this, this, &OcrTextWindow::saveAs);
     new QShortcut(QKeySequence::Close, this, this, &OcrTextWindow::close);
@@ -39,6 +49,10 @@ bool OcrTextWindow::event(QEvent *event)
 {
     const auto type = event->type();
     const bool result = QQuickView::event(event);
+    if ((type == QEvent::Close && event->isAccepted()) || type == QEvent::Hide
+        || (type == QEvent::WindowStateChange && visibility() == QWindow::Minimized)) {
+        if (m_translation->busy()) m_translation->cancel();
+    }
     if (type == QEvent::Close && event->isAccepted()) deleteLater();
     return result;
 }
@@ -88,4 +102,11 @@ QString OcrTextWindow::description() const
 {
     return m_codeResult ? i18nc("@info", "Decoded on this device. Links and commands are shown as text, never opened automatically.")
                         : i18nc("@info", "Recognized on this device. Review the text before using it.");
+}
+
+QObject *OcrTextWindow::translation() const { return m_translation; }
+void OcrTextWindow::copyTranslation()
+{
+    if (!m_codeResult && !m_translation->translatedText().isEmpty())
+        QApplication::clipboard()->setText(m_translation->translatedText());
 }

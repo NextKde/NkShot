@@ -2141,3 +2141,45 @@ KDE/API5 permissions, window exclusion, real multi-frame Finish and focus remain
 unaccepted. The pin smoke test exits successfully with the existing offscreen
 engine-shutdown diagnostic about two items still being created; no QML binding,
 reference or type errors were observed.
+
+## 080 — usable offline English ↔ Chinese text translation
+
+The existing OCR result window now offers two explicit translation directions,
+retains the immutable original beside the result, and copies translation only on
+request. Save text continues to save the original UTF-8 text. Wide windows use
+aligned, equal-width columns; narrow windows stack readable panels. Cancel,
+direction changes and window close invalidate pending results. Code-result
+windows do not offer translation. Missing packs show a short explanation and an
+explicit fixed installation-guide link; no automatic installation or cloud fallback.
+
+The separate [documented installer](local-translation.md) installs pinned local
+CTranslate2/SentencePiece and attributed model sources. Default XDG discovery
+needs no runtime overrides after installation. Model binaries and environments are
+not in this repository. Both directions produced real model output in four actual
+software-window variants: wide, dark, 360-pixel narrow and default XDG discovery.
+These checks verify explicit copy, original-only Save As, cancellation, close,
+source/history/clipboard isolation and code-result separation. Input texts are
+synthetic immutable OCR-result strings. Independent real region-OCR and QR decode
+regressions passed, but image → OCR → translation was not tested as one chained
+end-to-end action in this stage. Do not conflate the separate passes.
+
+The new process test passed five groups (seven QtTest results): default discovery,
+configuration/input limits, bounded protocol failures, cancel/replacement/destruction
+and deadline. Existing OCR manager, local extraction and code scanner CTests also
+passed; static checks passed 18/18 and whitespace passed. Only affected UI and
+manager tests were rerun after the short setup warning and equal-column refinement.
+The earlier code smoke invocation used a non-QR fixture; the corrected code067
+fixture passed without weakening assertions.
+
+Runtime evidence separately includes 16 real worker checks across host/toolchain
+Python, four installer safety checks and a complete host default-XDG installation.
+The app's toolchain default-discovery check used the standard XDG layout linked to
+the existing verified toolchain runtime/models, not a second full installation.
+Translations shown are unedited actual outputs. Quality remains fallible, especially
+for OCR errors and terminology; no manual replacement hides those limitations.
+
+Reviewed captures: [English → Chinese](screenshots/080-en-zh.png),
+[Chinese → English, dark](screenshots/080-zh-en-dark.png),
+[360-pixel window](screenshots/080-narrow.png), and
+[missing-pack setup](screenshots/080-setup.png). All text is synthetic and no private
+media is included. Native KDE/GPU acceptance is not claimed by these software tests.

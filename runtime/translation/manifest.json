@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "packages": {
+    "ctranslate2": "4.9.0",
+    "sentencepiece": "0.2.3",
+    "numpy": "2.5.4",
+    "PyYAML": "6.0.3"
+  },
+  "files": [
+    {
+      "name": "en_zh.argosmodel",
+      "url": "https://data.argosopentech.com/argospm/v1/translate-en_zh-1_9.argosmodel",
+      "sha256": "433e7c4f034d87fbe2353161e05f18646d7999452f801a4e1f0378522b9850ab",
+      "bytes": 70743021
+    },
+    {
+      "name": "tiny-final.model.npz.best-perplexity.npz",
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt_tiny_zho-eng/resolve/main/final.model.npz.best-perplexity.npz",
+      "sha256": "39cfb384e0ba34bbe3d6daaa13fb364390fa8c06b787830ad436758d39376729",
+      "bytes": 68715149
+    },
+    {
+      "name": "tiny-vocab.spm",
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt_tiny_zho-eng/resolve/main/vocab.spm",
+      "sha256": "e5528a5c3685d08f8868902d31febeb763eea8519f9997f43b05964b02554640",
+      "bytes": 755175
+    },
+    {
+      "name": "tiny-README.md",
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt_tiny_zho-eng/resolve/main/README.md",
+      "sha256": "682e703b97f590777420c4ce2c0f11bd42e15139fbeb933ce077506681f36950",
+      "bytes": 2019
+    },
+    {
+      "name": "tiny-config.json",
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt_tiny_zho-eng/resolve/main/config.json",
+      "sha256": "480c811721f0a0dca0aa632ceb566570f06c46d15ad9bbdfcbec58af4734aef0",
+      "bytes": 957
+    },
+    {
+      "name": "tiny-final.model.npz.best-perplexity.npz.decoder.yml",
+      "url": "https://huggingface.co/Helsinki-NLP/opus-mt_tiny_zho-eng/resolve/main/final.model.npz.best-perplexity.npz.decoder.yml",
+      "sha256": "96bcf3685d420dbe300496d0f20b90dc12d06f9b56bf1fd712fb4f0a07fb1dc7",
+      "bytes": 93
+    }
+  ]
+}

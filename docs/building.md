@@ -225,3 +225,15 @@ production capability override is introduced. The watcher test passed 11 QtTest 
 watcher, including real D-Bus GetAll/Activate calls. Use a fresh XDG configuration
 and `NKSHOT_TEST_UI_CAPTURE` destination; `NKSHOT_TEST_DARK=1` selects dark appearance.
 The full suite passed 22/22 CTest targets. These checks do not certify native tray display.
+
+## Offline translation (080)
+
+The application links no model engine: QtCore launches the explicitly installed
+local one-shot worker. Follow [installation and model licensing](local-translation.md).
+Model weights, venvs and downloaded archives must not enter the repository.
+`translation_manager_test` needs only local Python 3 stdlib and tests fake-worker
+protocol/lifetime behavior, not model quality. For actual-model software UI checks,
+set `NKSHOT_TEST_TRANSLATION=1` and an ordinary synthetic input image.
+`NKSHOT_TEST_TRANSLATION_DEFAULT=1` removes all explicit overrides and exercises
+the standard XDG layout; `NKSHOT_TEST_TRANSLATION_NARROW=1` checks 360-pixel width.
+The setup-link test inspects its fixed documentation URL without opening a browser.

@@ -1,0 +1,18 @@
+Offline models and runtime notices
+
+English to Chinese: Argos translate-en_zh-1_9, derived from OPUS-MT.
+Original model README declares CC-BY 4.0. Authors: Jörg Tiedemann and Santhosh Thottingal.
+OPUS-MT — Building open translation services for the World, EAMT 2020, Lisbon.
+Source: https://data.argosopentech.com/argospm/v1/translate-en_zh-1_9.argosmodel
+License: https://creativecommons.org/licenses/by/4.0/
+Original package README is retained under models/en_zh/UPSTREAM-README.md.
+No model weights modified by this installer.
+
+Chinese to English: Helsinki-NLP/opus-mt_tiny_zho-eng, Apache-2.0 per model card.
+Source: https://huggingface.co/Helsinki-NLP/opus-mt_tiny_zho-eng
+Changes: converted original Marian NPZ to CTranslate2 int8, preserving SentencePiece token IDs.
+Original model card is retained under models/zh_en/UPSTREAM-README.md.
+
+CTranslate2: MIT; SentencePiece: Apache-2.0; NumPy: BSD-3-Clause and bundled library notices; PyYAML: MIT.
+Dependency licenses are installed with their official Python distributions in the venv.
+The script implements Argos-compatible SentencePiece piece joining; Argos code is MIT/CC0.

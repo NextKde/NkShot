@@ -20,7 +20,7 @@ add_executable(spectacle)
 if(NKSHOT_ENABLE_UI_CAPTURE)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     target_link_libraries(spectacle PRIVATE Qt::Test)
-    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp ../tests/ui/RecordingAdapterChecks.cpp ../tests/ui/RecordingPreparationUiChecks.cpp ../tests/ui/RecordingControlsUiChecks.cpp)
+    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp ../tests/ui/RecordingAdapterChecks.cpp ../tests/ui/RecordingPreparationUiChecks.cpp ../tests/ui/RecordingControlsUiChecks.cpp ../tests/ui/TranslationUiChecks.cpp)
     target_include_directories(spectacle PRIVATE ${PROJECT_SOURCE_DIR}/tests/ui)
     target_compile_definitions(spectacle PRIVATE NKSHOT_ENABLE_UI_CAPTURE=1)
 endif()
@@ -58,6 +58,8 @@ target_sources(spectacle PRIVATE
     Imaging/ColorSample.cpp
     Imaging/CodeScanner.cpp
     Imaging/NoteCard.cpp
+    Translation/TranslationManager.cpp
+    Translation/TranslationManager.h
     Gui/OcrTextWindow.cpp
     Gui/OcrTextWindow.h
     Gui/ScrollCaptureWindow.cpp
