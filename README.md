@@ -23,6 +23,8 @@ and separate implementation, automated-test and real-KDE acceptance status.
 - Separate-image pinning, conservative overlap composition and explicit vertical stacking.
 - Non-destructive sharing copies: proportional resizing, backgrounds and text watermark.
 - Local video/animation playback with software-frame fallback and failure/retry UI.
+- Explicit [local MP4 clip export](docs/video-clips.md): visible range preview and a new
+  H.264/AAC file, preserving the original and never overwriting an existing target.
 
 These changes do not add compositor blur, replace
 KWin's capture implementation or claim pixel-identical macOS 27 behavior.

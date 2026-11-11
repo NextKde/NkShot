@@ -27,7 +27,7 @@ See [iterations](iterations.md), [building](building.md) and
    selection and full system Live Text parity remain gaps. Drag-edge scrolling is implemented in 071. Translation
    is requested separately and is not yet implemented. Prefer local processing;
    any external provider requires explicit opt-in identifying data/destination.
-4. **Recording beyond capture:** actual KWin/PipeWire recording/A/V acceptance,
+4. **Recording beyond capture:** local MP4 clip export is implemented in 072; actual KWin/PipeWire recording/A/V acceptance,
    then recording annotation, click effects and camera overlays where feasible.
 5. **Other verified reference gaps:** dedicated color picking,
    spotlight/magnifier and AI erase/background removal. Do not label ordinary

@@ -45,6 +45,8 @@ target_sources(spectacle PRIVATE
     Imaging/VerticalStitcher.cpp
     Gui/SoftwareVideoPreview.cpp
     Gui/SoftwareVideoPreview.h
+    Media/VideoClipJob.cpp
+    Media/VideoClipJob.h
     Gui/QuickNoteWindow.cpp
     Gui/QuickNoteWindow.h
     Gui/ColorPickerWindow.cpp
@@ -217,6 +219,7 @@ qt_target_qml_sources(spectacle
     Gui/BeautifyImagePopup.qml
     Gui/ResizeImagePopup.qml
     Gui/RecordingView.qml
+    Gui/VideoClipPopup.qml
     Gui/RecordOptions.qml
     Gui/SaveAction.qml
     Gui/SaveAsAction.qml

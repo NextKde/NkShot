@@ -15,6 +15,7 @@
 #include "Imaging/CodeScanner.h"
 #include "OcrManager.h"
 #include "Imaging/VerticalStitcher.h"
+#include "Media/VideoClipJob.h"
 #include <QFileDialog>
 #include <QImageReader>
 #include <QFutureWatcher>
@@ -50,6 +51,12 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
 {
     s_viewerWindowInstance = this;
     s_isAnnotating = false;
+    m_clipJob = new VideoClipJob(this);
+    connect(SpectacleCore::instance(), &SpectacleCore::currentVideoChanged, this, &ViewerWindow::cancelClipExport);
+    connect(SpectacleCore::instance(), &SpectacleCore::videoModeChanged, this, &ViewerWindow::cancelClipExport);
+    connect(SpectacleCore::instance()->videoPlatform(), &VideoPlatform::recordingStateChanged, this, [this] {
+        if (SpectacleCore::instance()->videoPlatform()->isRecording()) cancelClipExport();
+    });
 
     // Set up shortcuts. We won't need to access these again and the memory will be managed by Qt.
     new QShortcut(QKeySequence::Save, this, this, &ViewerWindow::save);
@@ -275,6 +282,7 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
 
 ViewerWindow::~ViewerWindow()
 {
+    cancelClipExport();
     delete m_combineDialog;
     InlineMessageModel::instance()->clear();
     if (s_viewerWindowInstance == this) {
@@ -412,7 +420,10 @@ void ViewerWindow::startDrag()
 bool ViewerWindow::event(QEvent *event)
 {
     if (event->type() == QEvent::Hide || event->type() == QEvent::Close
-        || (event->type() == QEvent::WindowStateChange && windowStates().testFlag(Qt::WindowMinimized))) ++m_codeScanEpoch;
+        || (event->type() == QEvent::WindowStateChange && windowStates().testFlag(Qt::WindowMinimized))) {
+        ++m_codeScanEpoch;
+        cancelClipExport();
+    }
     if (event->type() == QEvent::ApplicationPaletteChange) {
         updateColor();
     }
@@ -512,4 +523,62 @@ QQuickWindow *ViewerWindow::openColorPicker()
     m_colorPicker->setWindowStates(m_colorPicker->windowStates().setFlag(Qt::WindowMinimized, false));
     m_colorPicker->requestActivate();
     return m_colorPicker;
+}
+
+QObject *ViewerWindow::clipJobObject() const { return m_clipJob; }
+
+void ViewerWindow::prepareClipExport(const QUrl &source)
+{
+    if (!m_clipJob || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
+    m_clipJob->inspect(source);
+}
+
+void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
+{
+    if (!m_clipJob || m_clipJob->busy() || !m_clipJob->ready() || m_clipSaveDialog
+        || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
+    const QUrl source = m_clipJob->sourceUrl();
+    const QFileInfo sourceFile(source.toLocalFile());
+    auto dialog = new QFileDialog;
+    m_clipSaveDialog = dialog;
+    Q_EMIT choosingClipOutputChanged();
+    dialog->setObjectName(QStringLiteral("nkshotClipSaveDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setAcceptMode(QFileDialog::AcceptSave);
+    dialog->setFileMode(QFileDialog::AnyFile);
+    dialog->setDefaultSuffix(QStringLiteral("mp4"));
+    dialog->setOption(QFileDialog::DontConfirmOverwrite, true);
+    dialog->setNameFilter(i18nc("@item:inlistbox", "MP4 video (*.mp4)"));
+    dialog->setWindowTitle(i18nc("@title:window", "Export clip as a new MP4"));
+    const QString stem = sourceFile.completeBaseName() + QStringLiteral("-clip");
+    QString suggested = sourceFile.dir().filePath(stem + QStringLiteral(".mp4"));
+    for (int i = 2; QFileInfo::exists(suggested) && i < 1000; ++i)
+        suggested = sourceFile.dir().filePath(stem + QStringLiteral("-%1.mp4").arg(i));
+    dialog->selectFile(suggested);
+    dialog->winId();
+    dialog->windowHandle()->setTransientParent(this);
+    connect(dialog, &QObject::destroyed, this, [this] {
+        m_clipSaveDialog = nullptr;
+        Q_EMIT choosingClipOutputChanged();
+    });
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->busy()
+            || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
+        const auto files = dialog->selectedFiles();
+        if (files.size() != 1) return;
+        // Clip export is new-file-only. Atomic no-clobber publication also rejects
+        // destinations that appear after this dialog closes.
+        m_clipJob->exportClip(QUrl::fromLocalFile(files.first()), startMs, endMs);
+    });
+    dialog->open();
+}
+
+void ViewerWindow::cancelClipExport()
+{
+    if (m_clipSaveDialog) {
+        auto dialog = qobject_cast<QFileDialog *>(m_clipSaveDialog.data());
+        if (dialog) dialog->reject();
+    }
+    if (m_clipJob) m_clipJob->cancel();
+    Q_EMIT clipUiCancelled();
 }

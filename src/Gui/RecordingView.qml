@@ -38,6 +38,7 @@ FocusScope {
     readonly property bool playing: hasAnimatedImage ? animatedImage.playing : mediaPlayer.playing
 
     function togglePlay() {
+        if (clipPopup.opened) return
         if (root.playing) {
             if (root.hasAnimatedImage) {
                 animatedImage.playing = false
@@ -58,7 +59,7 @@ FocusScope {
         cursorShape: enabled ?
             (pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
             : undefined
-        enabled: root.hasContent
+        enabled: root.hasContent && !clipPopup.opened
         onPositionChanged: {
             contextWindow.startDrag()
         }
@@ -80,12 +81,14 @@ FocusScope {
         id: videoOutput
         visible: mediaPlayer.hasVideo && GraphicsInfo.api !== GraphicsInfo.Software
         anchors.fill: parent
+        anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 24 : 0
         fillMode: VideoOutput.PreserveAspectFit
     }
 
     SoftwareVideoPreview {
         objectName: "nkshotSoftwareVideoPreview"
         anchors.fill: parent
+        anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 24 : 0
         sink: videoOutput.videoSink
         active: GraphicsInfo.api === GraphicsInfo.Software && mediaPlayer.hasVideo
         visible: active
@@ -182,7 +185,7 @@ FocusScope {
         width: root.hasAnimatedImage ? implicitWidth : parent.width - anchors.margins * 2
         visible: false
         opacity: 0
-        enabled: root.hasContent
+        enabled: root.hasContent && !clipPopup.opened
         contentItem: RowLayout {
             spacing: parent.spacing
             TtToolButton {
@@ -265,7 +268,7 @@ FocusScope {
                 visible: !root.usesAnimatedImage
                 enabled: mediaPlayer.hasVideo
                 icon.name: "configure"
-                text: i18nc("@action", "Playback settings")
+                text: i18nc("@action", "Playback and clips")
                 display: QQC.ToolButton.IconOnly
                 onClicked: playbackSettings.opened ? playbackSettings.close() : playbackSettings.open()
             }
@@ -289,7 +292,7 @@ FocusScope {
         states: [
             State {
                 name: "hovered"
-                when: (tbHoverHandler.hovered || !root.playing) && root.hasContent
+                when: (tbHoverHandler.hovered || !root.playing) && root.hasContent && !clipPopup.opened
                 PropertyChanges {
                     target: toolBar
                     opacity: 1
@@ -297,7 +300,7 @@ FocusScope {
             },
             State {
                 name: "normal"
-                when: (root.playing && !tbHoverHandler.hovered) || !root.hasContent
+                when: (root.playing && !tbHoverHandler.hovered) || !root.hasContent || clipPopup.opened
                 PropertyChanges {
                     target: toolBar
                     opacity: 0
@@ -435,8 +438,21 @@ FocusScope {
                 text: mediaPlayer.hasAudio ? i18nc("@info", "Playback only. The saved recording stays unchanged.") : i18nc("@info", "This recording has no audio track.")
                 color: Kos.AppTheme.mutedText
             }
+            QQC.Button {
+                objectName: "nkshotOpenClip"
+                Layout.fillWidth: true
+                text: i18nc("@action", "Export a clip…")
+                enabled: mediaPlayer.hasVideo && !SpectacleCore.videoPlatform.isRecording
+                onClicked: {playbackSettings.close(); clipPopup.open()}
+            }
         }
     }
-    onSourceUrlChanged: playbackSettings.close()
+    VideoClipPopup {
+        id: clipPopup
+        parent: root
+        player: mediaPlayer
+        sourceUrl: root.sourceUrl
+    }
+    onSourceUrlChanged: {playbackSettings.close(); clipPopup.close(); contextWindow.cancelClipExport()}
 
 }

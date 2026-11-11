@@ -27,6 +27,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QImage>
+#include <QFontInfo>
 #include <QLineF>
 #include <QInputMethodEvent>
 #include <QClipboard>
@@ -424,6 +425,202 @@ static void runInlineTextChecks(QApplication &application, ViewerWindow *viewer,
     application.exit(0);
 }
 
+
+// Real local media/UI export probe. Input is an explicitly supplied synthetic
+// fixture; this test never records a desktop or publishes personal media.
+static void runVideoClipChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
+{
+    const auto fail = [&](const char *step) { qCritical() << "Video clip UI failure:" << step; application.exit(253); };
+    const auto source = QUrl::fromLocalFile(qEnvironmentVariable("NKSHOT_TEST_PLAYBACK"));
+    QFile originalFile(source.toLocalFile());
+    if (!originalFile.open(QIODevice::ReadOnly)) { fail("source file"); return; }
+    const auto originalBytes = originalFile.readAll(); originalFile.close();
+    QApplication::clipboard()->setText(QStringLiteral("clip export does not copy"));
+    const auto originalCurrentVideo = SpectacleCore::instance()->currentVideo();
+    auto document = SpectacleCore::instance()->annotationDocument();
+    const auto originalImage = document->renderToImage(); const auto originalDepth = document->undoStackDepth();
+    SpectacleCore::instance()->setVideoMode(true);
+    QQuickItem *recording = nullptr;
+    if (!QTest::qWaitFor([&] { recording = visualItem(viewer->contentItem(), QStringLiteral("nkshotRecordingView")); return recording != nullptr; }, 3000)) { fail("recording view"); return; }
+    recording->setProperty("sourceUrl", source);
+    if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool(); }, 15000)) { fail("source decode"); return; }
+    auto player = recording->findChild<QObject *>(QStringLiteral("nkshotMediaPlayer"));
+    auto job = viewer->property("clipJob").value<QObject *>();
+    auto popup = recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+    if (!player || !job || !popup) { fail("clip objects"); return; }
+    const bool sourceAudio = player->property("hasAudio").toBool();
+    const auto sourceDuration = player->property("duration").toLongLong();
+    const auto click = [&](const char *name) {
+        auto item = visualItem(viewer->contentItem(), QString::fromLatin1(name));
+        if (!item || !item->isVisible() || !item->isEnabled()) { qWarning() << "Unavailable clip item" << name << item; return false; }
+        QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+            item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint());
+        return true;
+    };
+    const auto open = [&] {
+        if (!click("nkshotPlaybackSettings")) return false;
+        QTest::qWait(100);
+        if (!click("nkshotOpenClip")) return false;
+        return QTest::qWaitFor([&] { return popup->property("opened").toBool() && !job->property("busy").toBool(); }, 15000);
+    };
+    const auto edit = [&](const char *name, const QString &text, int expected) {
+        auto spin = visualItem(viewer->contentItem(), QString::fromLatin1(name));
+        auto editor = spin ? qobject_cast<QQuickItem *>(spin->property("contentItem").value<QObject *>()) : nullptr;
+        if (!editor || !editor->isEnabled()) return false;
+        QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+            editor->mapToScene(QPointF(editor->width()/2, editor->height()/2)).toPoint());
+        editor->forceActiveFocus(); QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
+        for (const auto key : text.toLatin1()) QTest::keyClick(viewer, key);
+        QTest::keyClick(viewer, Qt::Key_Tab); QTest::qWait(50);
+        return spin->property("value").toInt() == expected;
+    };
+    const bool independent = qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_INDEPENDENT");
+    const int startCs = independent ? 125 : 135, endCs = independent ? 475 : 315;
+    const auto range = [&] { return edit("nkshotClipEnd", QString::number(endCs/100.0, 'f', 2), endCs)
+        && edit("nkshotClipStart", QString::number(startCs/100.0, 'f', 2), startCs); };
+    const auto previewVisible = [&] {
+        auto preview = visualItem(viewer->contentItem(), QStringLiteral("nkshotSoftwareVideoPreview"));
+        auto panel = qobject_cast<QQuickItem *>(popup->property("contentItem").value<QObject *>());
+        return preview && panel && preview->isVisible() && preview->height()>60
+            && preview->mapToScene(QPointF(0,preview->height())).y() <= panel->mapToScene(QPointF(0,0)).y();
+    };
+    const auto dialog = [&]() -> QFileDialog * {
+        for (auto widget : QApplication::topLevelWidgets())
+            if (widget->objectName() == QStringLiteral("nkshotClipSaveDialog")) return qobject_cast<QFileDialog *>(widget);
+        return nullptr;
+    };
+    const auto choose = [&](const QString &path) {
+        if (!click("nkshotClipExport") || !QTest::qWaitFor([&] { return dialog(); }, 1000)) return false;
+        auto save = dialog(); auto filename = save->findChild<QLineEdit *>(QStringLiteral("fileNameEdit"));
+        if (!filename) return false;
+        filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, path);
+        if (!QTest::qWaitFor([&] { return save->selectedFiles() == QStringList{path}; }, 1000)) return false;
+        return QMetaObject::invokeMethod(save, "accept");
+    };
+    const bool missingTools = qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_MISSING");
+    const bool unsupportedSource = qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_UNSUPPORTED");
+    if (missingTools || unsupportedSource) {
+        const auto oldPath = qgetenv("PATH"); const bool hadPath = qEnvironmentVariableIsSet("PATH");
+        const auto restorePath = qScopeGuard([&] { if (missingTools) { if (hadPath) qputenv("PATH", oldPath); else qunsetenv("PATH"); } });
+        if (missingTools) qputenv("PATH", "/nkshot-test-no-programs");
+        if (!open() || job->property("ready").toBool() || job->property("error").toString().isEmpty()) { fail("unavailable export explanation"); return; }
+        auto exportButton = visualItem(viewer->contentItem(), QStringLiteral("nkshotClipExport"));
+        if (!exportButton || exportButton->isEnabled() || !job->property("outputUrl").toUrl().isEmpty()
+            || !viewer->grabWindow().save(destination)) { fail("unavailable export disabled"); return; }
+        if (!originalFile.open(QIODevice::ReadOnly) || originalFile.readAll()!=originalBytes
+            || recording->property("sourceUrl").toUrl()!=source
+            || QApplication::clipboard()->text()!=QStringLiteral("clip export does not copy")
+            || SpectacleCore::instance()->currentVideo()!=originalCurrentVideo
+            || !samePixels(originalImage,document->renderToImage()) || originalDepth!=document->undoStackDepth()) { fail("unavailable export preserves source"); return; }
+        qInfo() << "Video clip unavailable export UI passed, missing tools:" << missingTools
+                << "unsupported playable source:" << unsupportedSource << job->property("error").toString();
+        click("nkshotClipCancel"); application.exit(0); return;
+    }
+    if (independent) {
+        const auto output = qEnvironmentVariable("NKSHOT_TEST_CLIP_OUTPUT", QStringLiteral("/logs/072-independent-export.mp4"));
+        if (QFileInfo::exists(output)) { fail("independent output must be a new path"); return; }
+        if (!open() || !job->property("ready").toBool() || !range() || !previewVisible()
+            || !viewer->grabWindow().save(destination) || !choose(output)
+            || !QTest::qWaitFor([&] { return !job->property("busy").toBool() && job->property("outputUrl").toUrl()==QUrl::fromLocalFile(output); }, 60000)) {
+            qWarning() << job->property("error"); fail("independent real UI export"); return;
+        }
+        if (!viewer->grabWindow().save(destination+QStringLiteral(".saved.png")) || !click("nkshotClipCancel")) { fail("independent result UI"); return; }
+        recording->setProperty("sourceUrl", QUrl::fromLocalFile(output));
+        if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool()
+            && player->property("source").toUrl()==QUrl::fromLocalFile(output)
+            && qAbs(player->property("duration").toLongLong()-3500)<=150; },15000)
+            || player->property("hasAudio").toBool()!=sourceAudio || !click("nkshotPlaybackToggle")
+            || !QTest::qWaitFor([&] { return player->property("position").toLongLong()>100; },3000)) { fail("independent output playback"); return; }
+        QMetaObject::invokeMethod(player,"pause");
+        recording->setProperty("sourceUrl",source);
+        if (!originalFile.open(QIODevice::ReadOnly) || originalFile.readAll()!=originalBytes
+            || QApplication::clipboard()->text()!=QStringLiteral("clip export does not copy")
+            || SpectacleCore::instance()->currentVideo()!=originalCurrentVideo
+            || !samePixels(originalImage,document->renderToImage()) || originalDepth!=document->undoStackDepth()) { fail("independent source unchanged"); return; }
+        qInfo() << "Independent real UI clip exported 1.25 to 4.75 seconds and Qt-decoded/played:" << output;
+        application.exit(0); return;
+    }
+    // Playback preferences are deliberately not export settings.
+    if (!click("nkshotPlaybackSettings")) { fail("playback settings"); return; }
+    QTest::qWait(100);
+    if (sourceAudio && !click("nkshotPlaybackMute")) { fail("mute preference"); return; }
+    if (!click("nkshotPlaybackSpeed")) { fail("speed preference"); return; }
+    QTest::keyClick(viewer, Qt::Key_End); QTest::keyClick(viewer, Qt::Key_Return); QTest::qWait(100);
+    if (qAbs(player->property("playbackRate").toReal()-2)>0.01 || !click("nkshotOpenClip")
+        || !QTest::qWaitFor([&] { return popup->property("opened").toBool() && !job->property("busy").toBool(); }, 15000)
+        || !job->property("ready").toBool() || job->property("durationMs").toLongLong()<4000 || !range()) { fail("open and typed range"); return; }
+    QObject *titleLabel = nullptr;
+    for (auto object : popup->findChildren<QObject *>()) {
+        if (object->property("text").toString()==QStringLiteral("Export a clip")) { titleLabel=object; break; }
+    }
+    if (!titleLabel) { fail("clip title label"); return; }
+    const QFontInfo titleFont(titleLabel->property("font").value<QFont>());
+    qInfo() << "Actual clip title resolved font:" << titleFont.family() << titleFont.styleName()
+            << "pixel size" << titleFont.pixelSize() << "weight" << titleFont.weight() << "exact match" << titleFont.exactMatch();
+    if (!previewVisible()) { fail("video preview remains visible above panel"); return; }
+    if (!click("nkshotClipPreview")
+        || !QTest::qWaitFor([&] { return recording->property("playing").toBool() && player->property("position").toLongLong()>1400; }, 2000)
+        || !QTest::qWaitFor([&] { return !recording->property("playing").toBool(); }, 5000)) { fail("bounded range preview"); return; }
+    const auto stopped = player->property("position").toLongLong(); QTest::qWait(180);
+    if (stopped<1250 || stopped>3300 || qAbs(player->property("position").toLongLong()-stopped)>30) { fail("preview end stability"); return; }
+    if (!viewer->grabWindow().save(destination)) { fail("range capture"); return; }
+    // Escape leaves the original media and reopens without stale export work.
+    QTest::keyClick(viewer, Qt::Key_Escape); QTest::qWait(100);
+    if (popup->property("opened").toBool() || job->property("busy").toBool() || recording->property("sourceUrl").toUrl()!=source
+        || !open() || !job->property("ready").toBool() || !range()) { fail("Escape/reopen"); return; }
+    if (!click("nkshotClipExport") || !QTest::qWaitFor([&] { return dialog(); }, 1000)) { fail("save dialog"); return; }
+    QPointer<QFileDialog> save = dialog(); save->reject();
+    if (!QTest::qWaitFor([&] { return !save; }, 1000) || job->property("busy").toBool()
+        || !popup->property("opened").toBool()) { fail("save cancel preserves range"); return; }
+    QTemporaryDir folder;
+    const auto output = folder.filePath(QStringLiteral("clip 'quoted' name.mp4"));
+    if (!folder.isValid() || !choose(output)
+        || !QTest::qWaitFor([&] { return !job->property("busy").toBool() && job->property("outputUrl").toUrl()==QUrl::fromLocalFile(output); }, 60000)) {
+        qWarning() << job->property("error"); fail("real clip export"); return;
+    }
+    if (!QFileInfo::exists(output) || QFileInfo(output).size()<100 || recording->property("sourceUrl").toUrl()!=source
+        || !viewer->grabWindow().save(destination+QStringLiteral(".saved.png"))) { fail("export result/source isolation"); return; }
+    // First-stage exports never replace existing files, even when selected in Save.
+    QFile outputFile(output); if (!outputFile.open(QIODevice::ReadOnly)) { fail("output read"); return; }
+    const auto outputBytes=outputFile.readAll(); outputFile.close();
+    QSignalSpy exported(job, SIGNAL(exported(QUrl)));
+    if (!exported.isValid() || !choose(output)
+        || !QTest::qWaitFor([&] { return !job->property("busy").toBool() && !job->property("error").toString().isEmpty(); }, 3000)
+        || !exported.isEmpty()) { fail("existing target rejected"); return; }
+    if (!outputFile.open(QIODevice::ReadOnly) || outputFile.readAll()!=outputBytes) { fail("existing target unchanged"); return; } outputFile.close();
+    if (!click("nkshotClipCancel") || !open() || !job->property("ready").toBool() || !range()) { fail("existing target recovery"); return; }
+    // Cancel while the encoder job is active; no partial target becomes visible.
+    const auto cancelled=folder.filePath(QStringLiteral("cancelled.mp4"));
+    if (!choose(cancelled) || !job->property("busy").toBool() || !click("nkshotClipCancel")
+        || !QTest::qWaitFor([&] { return !job->property("busy").toBool(); }, 10000) || QFileInfo::exists(cancelled)) { fail("cancel active export"); return; }
+    if (popup->property("opened").toBool()) { click("nkshotClipCancel"); QTest::qWait(100); }
+    if (!open() || !job->property("ready").toBool() || !range()) { fail("cancel/reopen recovery"); return; }
+    const auto switched=folder.filePath(QStringLiteral("switched.mp4"));
+    const auto second=folder.filePath(QStringLiteral("second source.mp4"));
+    if (!QFile::copy(source.toLocalFile(),second) || !choose(switched) || !job->property("busy").toBool()) { fail("source-switch job"); return; }
+    recording->setProperty("sourceUrl",QUrl::fromLocalFile(second));
+    if (!QTest::qWaitFor([&] { return !job->property("busy").toBool() && !popup->property("opened").toBool(); },10000)
+        || QFileInfo::exists(switched)) { fail("source switch cancels stale export"); return; }
+    // Decode and play the actual newly written clip, not the source or a mock frame.
+    recording->setProperty("sourceUrl",QUrl::fromLocalFile(output));
+    if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool()
+        && player->property("source").toUrl()==QUrl::fromLocalFile(output) && qAbs(player->property("duration").toLongLong()-1800)<=150; },15000)) { fail("output decode"); return; }
+    const auto duration=player->property("duration").toLongLong();
+    if (qAbs(duration-1800)>150 || player->property("hasAudio").toBool()!=sourceAudio || !click("nkshotPlaybackToggle")
+        || !QTest::qWaitFor([&] { return player->property("position").toLongLong()>100; },3000)) { fail("output duration/audio/play"); return; }
+    QMetaObject::invokeMethod(player,"pause");
+    recording->setProperty("sourceUrl",source);
+    if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool()
+        && player->property("source").toUrl()==source
+        && player->property("duration").toLongLong()==sourceDuration; },15000)) { fail("original player restored"); return; }
+    if (!originalFile.open(QIODevice::ReadOnly) || originalFile.readAll()!=originalBytes) { fail("original file bytes unchanged"); return; }
+    if (QApplication::clipboard()->text()!=QStringLiteral("clip export does not copy")) { fail("clipboard unchanged"); return; }
+    if (SpectacleCore::instance()->currentVideo()!=originalCurrentVideo) { fail("current video unchanged"); return; }
+    if (!samePixels(originalImage,document->renderToImage()) || originalDepth!=document->undoStackDepth()) { fail("annotation document unchanged"); return; }
+    qInfo() << "Video clip UI: typed non-keyframe range, bounded preview, explicit export, Save cancel/existing target rejection, active cancellation/reopen, source epoch, output decode/audio/duration and original state checks passed";
+    application.exit(0);
+}
+
 void installUiCaptureHook(QApplication &application)
 {
     const QString destination = qEnvironmentVariable("NKSHOT_TEST_UI_CAPTURE");
@@ -431,7 +628,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS") || qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_VIDEO_CLIP") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS") || qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -1196,6 +1393,7 @@ void installUiCaptureHook(QApplication &application)
                 qInfo() << "NkShot sharing-copy actual menu/cancel/options/preview/copy/PNG save and source-history isolation passed; styled:" << beautify;
                 application.exit(0); return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_VIDEO_CLIP")) { runVideoClipChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK")) {
                 const auto path = qEnvironmentVariable("NKSHOT_TEST_PLAYBACK");
                 QFile input(path);

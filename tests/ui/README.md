@@ -402,3 +402,43 @@ Use an isolated `XDG_CONFIG_HOME` per invocation. Existing 070 six-variant probe
 `ctest --output-on-failure`, and `python3 tests/nkshot/test_identity.py -v` remain
 the regression checks. These probes preserve OCR logical order, not a guarantee
 of human reading order for arbitrary multi-column layouts.
+
+### Local video clip export (072)
+
+`NKSHOT_TEST_VIDEO_CLIP=1` with `NKSHOT_TEST_PLAYBACK=/path/to/synthetic-six-second.mp4`
+drives the real playback-settings entry and clip popup. The source must be a local
+six-second MP4 fixture; do not use private media for public test screenshots.
+Repeat with `NKSHOT_TEST_DARK=1` and `NKSHOT_TEST_UI_SIZE=420x520` for dark/narrow
+layouts. `NKSHOT_TEST_CLIP_MISSING=1` temporarily removes command discovery in the
+probe process and checks the truthful missing-tool error with export disabled.
+`NKSHOT_TEST_CLIP_UNSUPPORTED=1` uses an otherwise Qt-playable WebM fixture and
+checks the unsupported-input explanation with export disabled without changing
+command discovery. Both failure probes verify source bytes and application state
+remain unchanged. The normal probe also logs the actual title label font resolved
+by `QFontInfo` for visual review, without overriding the application font.
+
+The probe types 1.35 and 3.15 seconds into the actual editable time controls,
+previews the bounded interval, exercises Escape/reopen and Save dialog cancellation,
+and explicitly saves a newly encoded MP4 with spaces/quotes in its filename.
+It selects an existing destination and checks new-file-only rejection preserves its bytes,
+cancels an active export, reopens, and switches source during another export to
+reject stale completion. The actual Qt media backend then opens and plays the new
+file, checking its approximately 1.8-second duration and expected audio presence.
+Playback is set to 2× and muted beforehand; these preview preferences must not
+alter the exported duration or remove its audio track. Source bytes, current video
+identity and image-editing pixels/history must remain unchanged.
+
+The main capture shows the real range popup; `.saved.png` shows successful export.
+They are software-window captures of generated media, not evidence of native KWin
+recording, audible output, live-device A/V sync or native portal acceptance. The
+backend `video_clip_test` separately verifies encoded frame/audio content and
+failure/commit behavior; the UI probe does not replace those checks.
+
+`NKSHOT_TEST_CLIP_INDEPENDENT=1` types 1.25–4.75 seconds into the same controls,
+exports through the real file dialog, then Qt-decodes/plays the result. Supply the
+independently generated 12-second long-GOP source via `NKSHOT_TEST_PLAYBACK`.
+The output remains at `/logs/072-independent-export.mp4` for external frame/audio
+verification, or the new path in `NKSHOT_TEST_CLIP_OUTPUT`. The probe refuses an
+already existing output. All clip variants require the software video preview to
+remain visible, taller than 60 logical pixels, and above the open clip panel,
+including the 420×520 narrow layout.

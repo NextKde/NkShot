@@ -1696,3 +1696,60 @@ not a fit-to-window overview. Grid OCR happens to read columns, so its repeated
 words in the preview retain the engine's logical order rather than claiming
 arbitrary multi-column reading-order accuracy. Reproduction commands and flags
 are in [UI test notes](../tests/ui/README.md#held-edge-word-selection-scrolling-071).
+
+## 072 — Export a real local MP4 interval
+
+Completed-video playback now offers a temporary **Export a clip** panel in its
+settings, not another permanent toolbar. Start/end fields and range handles select
+an interval; bounded Preview keeps the video visible above the panel, including
+420×520 windows. Export explicitly saves a new H.264/AAC MP4. Done closes the
+success panel; Export can save again under a different new name. Playback mute,
+volume and speed do not change exported media, the original or editor history.
+
+This is deliberately narrow local-file post-processing, not native recording
+acceptance or lossless editing. Supported sources, metadata loss, FFmpeg/ffprobe
+requirements and recoverable errors are documented in [video clips](video-clips.md).
+Commands use argument arrays, forced local MP4 input, bounded resources and
+asynchronous progress/cancellation. Encoder success is followed by metadata and
+full error-fatal decode verification, then atomic no-clobber publication. Existing
+targets, source aliases and names appearing during export are never replaced.
+
+Verified with sequential builds and actual files:
+- Backend Qt tests: 14 passed, no failures or skips. Cases include non-keyframe
+  video/audio content, silent/short output, 16/22.05 kHz input resampled to 48 kHz,
+  invalid/extreme ranges, source aliases/changes, existing targets/races, corrupt
+  data, unavailable tools/encoder, synchronous cancellation, a real 15-second
+  probe timeout/process termination, and destruction cleanup.
+- Six final real Qt UI scenarios passed: light, dark, 420×520, silent source,
+  missing dependencies and unsupported playable WebM. They exercise typed
+  selection, visible bounded preview, Save cancel, a quoted/spaced new filename,
+  existing-target rejection, active cancellation/reopen, source changes and Qt
+  playback of the exported file. Source bytes, clipboard, current video and image
+  history are checked separately. A harness-only hardcoded restoration-duration
+  assumption was corrected for the exactly four-second silent fixture.
+- A separately generated long-GOP source was cut through the actual UI from
+  1.25–4.75 seconds. Independent decoding confirmed 70 frames/3.5 seconds,
+  first/last matching source frames 25/94 (RMSE 2.39/3.47, substantially closer
+  than adjacent frames), and audio pulses at 0.75/1.75/2.75 seconds. Source hash
+  remained unchanged; Qt opened and played the output.
+- Full CTest passed 16/16, static identity checks 18/18 and whitespace checks passed.
+  Final UI logs contain no QML reference/type/binding warnings.
+- The 071 held-edge selection regression and 11 independent playback, animation,
+  error-retry, color, export and OCR baselines passed.
+
+Reviewed actual software-window screenshots:
+[light selection](screenshots/072-clip-light.png),
+[light saved](screenshots/072-clip-light.png.saved.png),
+[dark selection](screenshots/072-clip-dark.png),
+[dark saved](screenshots/072-clip-dark.png.saved.png),
+[420×520 selection](screenshots/072-clip-compact.png),
+[420×520 saved](screenshots/072-clip-compact.png.saved.png),
+[missing tools](screenshots/072-clip-missing.png), and
+[unsupported input](screenshots/072-clip-unsupported.png).
+All media shown are generated test patterns, not private desktop recordings.
+The actual title font resolves to the application's DejaVu Sans Bold; controls
+reuse Kos buttons and the existing accent/rail vocabulary.
+
+Real KDE/KWin capture, microphone/system capture, device A/V synchronization,
+capture pause/resume, native save portals, GPU and high-DPI acceptance remain
+unverified. Reproduction is in [UI test notes](../tests/ui/README.md#local-video-clip-export-072).

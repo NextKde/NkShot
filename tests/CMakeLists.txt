@@ -112,3 +112,8 @@ set_tests_properties(code_scanner_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA
 ecm_add_test(ColorSampleTest.cpp ../src/Imaging/ColorSample.cpp
     TEST_NAME color_sample_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(color_sample_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Real local FFmpeg trim/re-encode and atomic output; no desktop capture claim.
+ecm_add_test(VideoClipTest.cpp ../src/Media/VideoClipJob.cpp ../src/Media/VideoClipJob.h
+    TEST_NAME video_clip_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(video_clip_test PROPERTIES TIMEOUT 120)

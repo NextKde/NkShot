@@ -13,6 +13,7 @@
 #include <functional>
 
 class ViewerWindowPrivate;
+class VideoClipJob;
 
 /**
  * The window used for viewing media after it has been accepted or finished recording.
@@ -27,6 +28,8 @@ class ViewerWindow : public SpectacleWindow
     Q_PROPERTY(bool scrollPreviewEnabled READ scrollPreviewEnabled CONSTANT)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
+    Q_PROPERTY(QObject *clipJob READ clipJobObject CONSTANT)
+    Q_PROPERTY(bool choosingClipOutput READ choosingClipOutput NOTIFY choosingClipOutputChanged)
 public:
     enum Mode {
         Dialog,
@@ -53,7 +56,15 @@ public:
     bool resizingImage() const { return m_resizingImage; }
     Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);
     bool combiningImages() const { return m_combiningImages; }
+    QObject *clipJobObject() const;
+    VideoClipJob *clipJob() const { return m_clipJob; }
+    bool choosingClipOutput() const { return !m_clipSaveDialog.isNull(); }
+    Q_INVOKABLE void prepareClipExport(const QUrl &source);
+    Q_INVOKABLE void chooseClipOutput(qint64 startMs, qint64 endMs);
+    Q_INVOKABLE void cancelClipExport();
 Q_SIGNALS:
+    void choosingClipOutputChanged();
+    void clipUiCancelled();
     void scanningCodeChanged();
     void combiningImagesChanged();
     void resizingImageChanged();
@@ -77,6 +88,8 @@ private:
     QPointer<QQuickWindow> m_quickNote;
     QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
+    VideoClipJob *m_clipJob = nullptr;
+    QPointer<QObject> m_clipSaveDialog;
     bool m_combiningImages = false;
     bool m_scanningCode = false;
     quint64 m_codeScanEpoch = 0;

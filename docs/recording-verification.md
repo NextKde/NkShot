@@ -174,3 +174,12 @@ successful capture. Hardware codecs and native KDE recording remain unverified.
 The library patch must be applied when rebuilding the pinned dependency, as shown
 in [building.md](building.md). Installing unpatched distribution binaries does not
 include this fix. The patch has not been submitted or accepted upstream.
+
+## Local recording-file clip export (072)
+
+The playback view can export a selected interval as a new H.264/AAC MP4, with
+explicit local range preview, asynchronous progress/cancellation and new-file-only
+atomic publication. This is genuine file re-encoding, separate from playback speed
+or mute, and never modifies the recording source. See [supported media, validation
+and safety boundaries](video-clips.md). It does not complete any native capture,
+recording A/V or capture pause/resume acceptance item above.
