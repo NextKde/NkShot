@@ -262,3 +262,12 @@ clipboard writes, hidden-pin result deferral and close-during-work suppression.
 and missing-model UI without a result window or state mutation. The fixture
 language setting is restored after each run. These tests need installed eng and
 chi_sim models and do not establish native compositor focus or general OCR accuracy.
+
+### Long pinned-image reading (061)
+
+`NKSHOT_TEST_PIN_ZOOM=1` opens an 800×2600 generated text fixture and uses actual
+Fit/Width/100%/zoom button clicks, mouse dragging, Ctrl+wheel and keyboard shortcuts.
+It checks scale bounds, Fit after resizing, full-resolution clipboard pixels and
+unchanged source/history. `NKSHOT_TEST_PIN_ZOOM_COMPACT=1` uses a 260×300 window.
+The main screenshot shows the panned 100% view; `.fit.png` shows the initial Fit
+view; `.width.png` shows the top-aligned width-fit reading mode. No screenshot is a live captured desktop or a touch/trackpad acceptance test.

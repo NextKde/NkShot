@@ -27,6 +27,7 @@
 #include <QClipboard>
 #include <QScopeGuard>
 #include <QThreadPool>
+#include <QWheelEvent>
 #include "settings.h"
 #include <QMimeData>
 #include <QFileInfo>
@@ -262,6 +263,50 @@ void installUiCaptureHook(QApplication &application)
                 if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
                 qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
                 application.exit(0); return;
+            }
+            if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_ZOOM")) {
+                auto document=SpectacleCore::instance()->annotationDocument();
+                const auto original=document->renderToImage();const auto depth=document->undoStackDepth();
+                QImage fixture(800,2600,QImage::Format_RGB32);fixture.fill(Qt::white);
+                {QPainter p(&fixture);QFont f(QStringLiteral("DejaVu Sans"));f.setPixelSize(30);p.setFont(f);
+                    for(int i=0;i<10;++i) {
+                        p.fillRect(QRect(24,i*260+12,752,236),i%2?QColor("#eef1f7"):QColor("#f5f7fa"));p.setPen(QColor("#192433"));
+                        p.drawText(QRect(24,i*260+20,752,200),Qt::AlignCenter,QStringLiteral("SECTION %1\nRead the full screenshot\nLocal image, original pixels").arg(i+1));
+                    }
+                }
+                QPointer<PinnedImageWindow> pin=new PinnedImageWindow(fixture,viewer->engine());
+                pin->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_ZOOM_COMPACT")?QSize(260,300):QSize(480,640));pin->show();QTest::qWait(200);
+                auto viewport=visualItem(pin->contentItem(),QStringLiteral("nkshotPinViewport"));
+                auto click=[&](const char *name){auto item=visualItem(pin->contentItem(),QString::fromLatin1(name));if(!item || !item->isVisible()) return false;QTest::mouseClick(pin,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());QTest::qWait(50);return true;};
+                if(!viewport || !viewport->property("fitMode").toBool() || viewport->property("contentHeight").toReal()>viewport->height()+1) {application.exit(232);return;}
+                pin->grabWindow().save(destination+QStringLiteral(".fit.png"));
+                if(!click("nkshotPinFitWidth") || !viewport->property("widthMode").toBool() || viewport->property("contentWidth").toReal()>viewport->width()+1 || viewport->property("contentHeight").toReal()<=viewport->height()) {application.exit(243);return;}
+                pin->grabWindow().save(destination+QStringLiteral(".width.png"));
+                if(!click("nkshotPinActualSize") || qAbs(viewport->property("imageScale").toReal()-1)>0.001 || viewport->property("contentHeight").toReal()<2500) {application.exit(233);return;}
+                const auto before=viewport->property("contentY").toReal();
+                const auto center=viewport->mapToScene(QPointF(viewport->width()/2,viewport->height()/2)).toPoint();
+                QTest::mousePress(pin,Qt::LeftButton,Qt::NoModifier,center);
+                for(int offset=15;offset<=120;offset+=15) QTest::mouseMove(pin,center-QPoint(0,offset),30);
+                QTest::mouseRelease(pin,Qt::LeftButton,Qt::NoModifier,center-QPoint(0,120));QTest::qWait(400);
+                if(viewport->property("contentY").toReal()<=before+20) {application.exit(234);return;}
+                pin->grabWindow().save(destination);
+                if(!click("nkshotPinZoomIn") || qAbs(viewport->property("imageScale").toReal()-1.25)>0.001 || !click("nkshotPinZoomOut") || qAbs(viewport->property("imageScale").toReal()-1)>0.001) {application.exit(235);return;}
+                for(int i=0;i<12;++i) click("nkshotPinZoomIn");
+                if(qAbs(viewport->property("imageScale").toReal()-4)>0.001) {application.exit(236);return;}
+                if(!click("nkshotPinCopy") || !samePixels(QApplication::clipboard()->image(),fixture)) {application.exit(237);return;}
+                if(!click("nkshotPinFit") || !viewport->property("fitMode").toBool() || qAbs(viewport->property("contentY").toReal())>1) {application.exit(238);return;}
+                pin->requestActivate();QTest::qWait(100);
+                QTest::keyClick(pin,Qt::Key_1,Qt::ControlModifier);QTest::qWait(100);
+                if(qAbs(viewport->property("imageScale").toReal()-1)>0.001) {application.exit(240);return;}
+                QWheelEvent wheel(QPointF(center),pin->mapToGlobal(center),QPoint(),QPoint(0,120),Qt::NoButton,Qt::ControlModifier,Qt::NoScrollPhase,false);
+                QCoreApplication::sendEvent(pin,&wheel);QTest::qWait(100);
+                if(qAbs(viewport->property("imageScale").toReal()-1.2)>0.001) {application.exit(241);return;}
+                QTest::keyClick(pin,Qt::Key_0,Qt::ControlModifier);QTest::qWait(100);
+                if(!viewport->property("fitMode").toBool()) {application.exit(242);return;}
+                pin->resize(300,400);QTest::qWait(100);
+                if(viewport->property("contentHeight").toReal()>viewport->height()+1 || !samePixels(pin->snapshot(),fixture) || !samePixels(document->renderToImage(),original) || depth!=document->undoStackDepth()) {application.exit(239);return;}
+                pin->close();qInfo()<<"NkShot pin actual Fit/width/100%/drag/keyboard/wheel/zoom bounds/full-resolution copy/resize/source isolation passed";
+                application.exit(0);return;
             }
             if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT")) {
                 const auto configured=Settings::ocrLanguages();

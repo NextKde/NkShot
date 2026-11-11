@@ -129,3 +129,20 @@ instance per request; it does not use the editor OCR singleton or its clipboard
 behavior. Real English/Chinese fixture recognition and Qt offscreen interactions
 are tested. General recognition quality, native window focus and accessibility
 still require real desktop acceptance.
+
+## Read large pinned images (061)
+
+Pinned images start in Fit mode. The compact footer provides Fit, Width (fit width), zoom out,
+percentage/100% and zoom in; the image can be dragged or scrolled when it is larger
+than the viewport. Ctrl+wheel zooms around the pointer, while the buttons zoom
+around the current view's center. Ctrl+0 restores Fit, Ctrl+1 selects 100%, and
+standard zoom shortcuts are supported. At 100%, one source pixel occupies one Qt
+logical unit; this is not a claim of physical 1:1 rendering on every desktop scale.
+Width starts at the top and fits a long image horizontally for reading.
+Zoom is capped at 400%. Fit and Width track window resizing and never enlarges small images.
+
+This is view-only: OCR, Copy and Save As still use the entire immutable original
+snapshot, not the visible or scaled region. The footer is outside the image rather
+than an overlay hiding the bottom of a long screenshot. Mouse/keyboard/wheel and
+window resizing were checked in software Qt windows; native high-DPI, touch and
+trackpad behavior still require real desktop testing. Pinch zoom is not implemented.

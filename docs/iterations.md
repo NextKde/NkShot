@@ -1314,3 +1314,33 @@ without a live KDE session. Native focus/accessibility, general OCR accuracy,
 compositor capture/recording and GPU liquid-material acceptance remain unverified.
 The 15-second recognition deadline does not bound language-model initialization.
 No scrolling-preview gate was relaxed.
+
+## 061 — Read long pinned images without changing their pixels
+
+Previously, pins and image-composition results were always shrunk to the window,
+which made long screenshots difficult to read. Pins now support view-only zoom
+and panning. A compact footer outside the image groups Fit, Width, zoom out, percentage
+(reset to 100%) and zoom in. Mouse dragging and scrollbars reach offscreen content;
+Ctrl+wheel anchors zoom to the pointer. Ctrl+0/Ctrl+1 and standard zoom shortcuts
+are available. Fit follows window resizing, with a 400% maximum manual scale.
+Width starts at the top and fits horizontally, avoiding repeated sideways panning
+when reading a long image. Original image data, full-image copy/save, OCR and
+source edit history are preserved.
+
+Real Qt event tests cover Fit/100%, drag, scale limits, resize, full-resolution
+clipboard pixels, keyboard shortcuts and Ctrl+wheel. The wheel test caught a QML
+WheelEvent coordinate-property mistake before release; it was corrected to use
+`x`/`y`. Standard shortcut bindings were also changed to `sequences` so platform
+alternate bindings are not silently omitted. Existing pinned OCR lifecycle and
+PNG save/source-isolation regressions pass; build, CTest 9/9 and static 16/16 pass.
+
+Reviewed [Fit overview](screenshots/061-pin-read-light.png.fit.png),
+[fit-width reading](screenshots/061-pin-read-light.png.width.png),
+[readable 100% view](screenshots/061-pin-read-light.png),
+[dark view](screenshots/061-pin-read-dark.png) and
+[260-pixel compact view](screenshots/061-pin-read-compact.png).
+These are actual software-rendered Qt windows with an explicitly generated text
+fixture. At 100%, one image pixel occupies one logical Qt unit; physical high-DPI
+1:1 output, touch/trackpad behavior and native stacking are not certified.
+No pinch gesture or compositor/recording success is claimed. Environment lookup
+again returned only the cloud computer, not a real KDE desktop.

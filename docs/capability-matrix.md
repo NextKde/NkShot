@@ -11,7 +11,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | --- | --- | --- | --- |
 | Region/window/screen capture, delay/pointer options | Spectacle routes retained | Build; synthetic selection-window interaction | Pending KWin permission/capture checks |
 | Core annotation/crop/text/undo/redo | Existing document model and new shared UI | Actual gestures, English/Chinese IME, export pixel checks; not every gesture combination | Pending compositor/input/DPI matrix |
-| Copy/save and immutable pins | Implemented | Pixels, PNG Save As, cancellation/reopen, multiple pins and lifetime | Native portals/stacking pending |
+| Copy/save and immutable pins | Implemented; view-only zoom/pan for long images (061) | Pixels, PNG Save As, cancellation/reopen, multiple pins/lifetime, actual Fit/zoom/drag/wheel/keyboard and full-image copy | Native portals/stacking/high-DPI/touch pending |
 | Opaque cover | Rectangle preset, not destructive source erasure | Opaque interior, unchanged selected mark/outside pixels, undo/redo and exports | Pending real desktop use |
 | Local OCR | Implemented result view, installed-model choice, UTF-8 save | Real Tesseract eng/chi_sim, copy/save and error boundaries | General accuracy not certified |
 | Text extraction from pins / Live Text | Local whole-image text extraction implemented (060); inline word highlighting/selection not implemented | Real eng/chi_sim recognition, actual pin action and result copy/save, close/hidden lifecycle and error states | Native focus/accessibility and full Live Text parity not accepted |
