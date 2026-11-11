@@ -1,38 +1,34 @@
-# Functional preservation and verification map
+# Spectacle feature preservation audit (090)
 
-Status is deliberately split between retained source routes and tested behavior.
-A retained route is not an end-to-end feature acceptance.
+This is a source/automated check, not certification that every feature has passed
+on a real KDE desktop. The native release gates in `nkshot-validation.md` remain.
+The capability matrix distinguishes implementation, automated evidence and native
+acceptance rather than treating a count of iterations as completion.
 
-The [unified capability matrix](capability-matrix.md) is the current feature and
-acceptance map, including the verified 1Capture reference scope. This avoids an
-older table falsely calling shipped local OCR or composition “untested/no menu.”
+- Capture-mode models and original region/window/screen routes remain present.
+  Native KWin permission, multi-monitor/DPI, hide/capture ordering and cancellation
+  still need desktop acceptance.
+- Accept, Cancel, Save, Save As, Copy, OCR and Record capture actions remain wired.
+  Editing after capture still uses the existing AnnotationDocument.
+- Selection, crop, freehand, arrow, rectangle, ellipse, pixelate, blur, text,
+  highlighter, line and numbered annotations remain represented in the shared
+  toolbar. Static coverage now explicitly includes all twelve names; their
+  presence is not proof of every gesture combination.
+- Undo/redo and edit controls receive a document explicitly. Image sharing
+  transforms use independent snapshots and never replace document history.
+- Save/copy continue through the existing window actions. Import and sharing
+  workflows additionally check source preservation and actual exported pixels.
+- Recording targets, audio choices and platform capability gates remain.
+  New processing features operate on completed files rather than claiming native
+  capture has been validated. OCR remains gated on local availability.
+- Separate application/settings/shortcut identities and normal KWin permissions
+  remain required. No original Spectacle installation or capture security is
+  replaced by this work.
 
-Preservation responsibilities remain:
+## Important reference gaps
 
-- Keep original area/window/screen, delay, pointer and recording/audio routes.
-- Keep all annotation tools, contextual options, history and exports reachable.
-- Test source immutability and exact export pixels when adding sharing transforms.
-- Distinguish whole-image editor/pin OCR from inline Live Text, manual file composition from rolling
-  capture, and static image annotations from annotations during recording.
-- QR decoding remains inherited source without a focused acceptance test.
-- Native dialogs, global shortcuts, real KWin capture and hardware presentation
-  require their own acceptance; local offscreen tests cannot stand in for them.
-
-## Reuse boundary
-
-AnnotationDocument remains the authoritative image/annotation/edit-history model.
-PortableAnnotationViewport reuses that model and upstream input behavior, with a
-software-only rendering adapter. Screenshot capture remains outside this layer.
-Canvas, tool palette, property controls and undo/redo now take an explicit document;
-actual second-document tool/history/property isolation is tested. Window helpers,
-theme, localization and export integration still need a packaging boundary before
-claiming a standalone photo-editor library.
-
-## Product review gates
-
-- Prefer simple, discoverable actions; avoid asking the user to operate setup steps.
-- Keep high-frequency actions visible and secondary actions explicitly reachable.
-- Match the calm shared NextKde surfaces, not decorative glass on every control.
-- Compile each incremental change; save actual unmodified runtime captures.
-- Review narrow, dark, text-input, interrupted-popup and keyboard flows before acceptance.
-- Do not trade away KDE features for a cleaner screenshot.
+Real capture/A/V acceptance, fully automatic/horizontal scrolling, live camera
+and click overlays, presentation spotlight/magnifier and AI erase/background
+removal are not completed. Controlled frames, local post-processing and ordinary
+annotation tools must not be labeled as these missing workflows. Offline
+translation is currently outside active iteration.

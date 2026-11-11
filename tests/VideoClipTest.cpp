@@ -115,6 +115,34 @@ private Q_SLOTS:
         QVERIFY(gifFrames.size()>=320*180*18);QVERIFY(uchar(gifFrames.at(1000))<10);QVERIFY(uchar(gifFrames.at(17*320*180+1000))>190);
         QCOMPARE(hash(webm),original);
     }
+    void removeAudio_data() {QTest::addColumn<bool>("webm");QTest::newRow("mp4")<<false;QTest::newRow("webm")<<true;}
+    void removeAudio() {
+        QFETCH(bool,webm);
+        QString input=source;
+        if(webm) {
+            input=folder.filePath(QStringLiteral("mute-source.webm"));
+            execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-i"),source,
+                QStringLiteral("-c:v"),QStringLiteral("libvpx-vp9"),QStringLiteral("-deadline"),QStringLiteral("realtime"),
+                QStringLiteral("-cpu-used"),QStringLiteral("8"),QStringLiteral("-threads"),QStringLiteral("2"),
+                QStringLiteral("-c:a"),QStringLiteral("libopus"),input});
+        }
+        const auto before=hash(input);QVERIFY(!before.isEmpty());VideoClipJob job;
+        QVERIFY(ready(job,input));QVERIFY(job.hasAudio());QVERIFY(job.includeAudio());
+        job.setIncludeAudio(false);QVERIFY(job.ready());QVERIFY(!job.includeAudio());
+        const auto target=folder.filePath(webm?QStringLiteral("silent-webm.mp4"):QStringLiteral("silent-mp4.mp4"));
+        job.exportClip(QUrl::fromLocalFile(target),1350,3150);
+        QVERIFY(job.busy());job.setIncludeAudio(true);QVERIFY(!job.includeAudio());
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
+        const auto tracks=execute(ffprobe,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-show_streams"),QStringLiteral("-of"),QStringLiteral("json"),target});
+        const auto streams=QJsonDocument::fromJson(tracks).object()[QStringLiteral("streams")].toArray();
+        QCOMPARE(streams.size(),1);QCOMPARE(streams.first().toObject()[QStringLiteral("codec_type")].toString(),QStringLiteral("video"));
+        job.setIncludeAudio(true);QVERIFY(job.ready());QVERIFY(job.outputUrl().isEmpty());
+        const auto withAudio=target+QStringLiteral("-audio.mp4");job.exportClip(QUrl::fromLocalFile(withAudio),1350,3150);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        const auto audio=execute(ffprobe,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-select_streams"),QStringLiteral("a"),QStringLiteral("-show_entries"),QStringLiteral("stream=codec_type"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),withAudio});
+        QCOMPARE(audio.trimmed(),QByteArray("audio"));QCOMPARE(hash(input),before);
+    }
     void silentShortClip() {
         VideoClipJob job;QVERIFY2(ready(job,silent),qPrintable(job.error()));QVERIFY(!job.hasAudio());
         const auto target=folder.filePath(QStringLiteral("short.mp4"));job.exportClip(QUrl::fromLocalFile(target),1000,1200);

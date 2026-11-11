@@ -40,6 +40,7 @@ QQC.Popup {
         rangeInitialized = false
         startTime.value = 0
         endTime.value = 0
+        job.includeAudio = true
         job.outputFormat = "mp4"
         contextWindow.prepareClipExport(sourceUrl)
     }
@@ -257,7 +258,7 @@ QQC.Popup {
                 Layout.fillWidth: true
                 font: root.font
                 color: Kos.AppTheme.mutedText
-                text: root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? i18nc("@info", "Audio included") : i18nc("@info", "No audio track"))
+                text: root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
                     : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds.")
                 wrapMode: Text.Wrap
             }
@@ -270,11 +271,32 @@ QQC.Popup {
                 onClicked: root.detailsVisible = !root.detailsVisible
             }
         }
+        QQC.CheckBox {
+            id: includeAudio
+            objectName: "nkshotClipIncludeAudio"
+            Layout.fillWidth: true
+            visible: root.detailsVisible && !root.gif && root.job.hasAudio
+            enabled: !root.locked
+            checked: root.job.includeAudio
+            text: i18nc("@option:check", "Include audio in exported copy")
+            font: root.font
+            palette.windowText: Kos.AppTheme.paletteText
+            onToggled: root.job.includeAudio = checked
+            indicator: Rectangle {
+                x: includeAudio.leftPadding
+                y: (includeAudio.height - height) / 2
+                width: 18; height: 18; radius: 5
+                color: includeAudio.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
+                border.color: includeAudio.checked ? Kos.AppTheme.accent : Kos.AppTheme.border
+                opacity: includeAudio.enabled ? 1 : 0.5
+                QQC.Label {anchors.centerIn: parent; text: "✓"; visible: includeAudio.checked; color: Kos.AppTheme.accentText}
+            }
+        }
         QQC.Label {
             Layout.fillWidth: true
             visible: root.detailsVisible
             text: root.gif ? i18nc("@info", "New GIF: silent, looping, 10 fps, up to 640 px and 20 MiB. The original stays unchanged.")
-                : i18nc("@info", "New MP4: H.264 video and AAC audio when present. WebM sources are re-encoded at 30 fps; this is not lossless. The original, preview speed and volume stay unchanged.")
+                : i18nc("@info", "New MP4: H.264 video, with AAC audio only when included. WebM sources are re-encoded at 30 fps; this is not lossless. The original, preview speed and volume stay unchanged.")
             wrapMode: Text.Wrap
             font: root.font
             color: Kos.AppTheme.mutedText

@@ -6,6 +6,8 @@ Reference scope was checked against [1Capture](https://1capture.com/), its
 [changelog](https://1capture.com/docs/changelog) and
 [Mac App Store listing](https://apps.apple.com/us/app/screenshot-recorder-1capture/id6742318274?mt=12).
 This is a workflow comparison, not a claim of source reuse or full parity.
+See the [Spectacle preservation audit](feature-preservation.md) for retained routes
+and the distinction between source checks and native desktop acceptance.
 
 | Capability | Implementation | Automated evidence | Real KDE acceptance |
 | --- | --- | --- | --- |
@@ -30,6 +32,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | Open local media (085–086) | More → Open / Ctrl+O; staged PNG/JPEG/static WebP or short H.264/AAC MP4 or VP9/Opus WebM validation, explicit replacement and copy-first Save As | Generated files through actual dialogs, document, playback and clip paths; [scope and limits](open-local-media.md) | Not all media formats/long recordings; native portals and GPU remain unverified |
 | Local MP4/WebM clip export | New-file-only local H.264/AAC re-encoding of an explicit time range (072); temporary contextual preview panel | Real generated-media trim/decode/audio tests and actual save/cancel/preview UI; see [scope](video-clips.md) | Recording-file processing, not native recording or device A/V acceptance; narrow single-video SDR MP4/WebM scope |
 | Extract current video frame (088) | Pause and create an immutable full-resolution image pin; reuse PNG save, copy, zoom and local OCR | Actual decoded MP4/WebM pixels, clipboard/PNG round-trip, stale-source rejection, seek isolation and UI checks; [scope](video-frames.md) | GPU, HDR/rotation and native focus remain unverified; not frame-accurate stepping |
+| Silent MP4 export (090) | Explicit export-only audio removal, full source preserved; not playback mute | Actual MP4/WebM stream checks, re-enable/busy/source guards and real Qt save workflow; [scope](silent-video-export.md) | Local post-processing only; native recording not accepted |
 | GIF Maker from local MP4/WebM | Same contextual clip panel; bounded silent looping 10 fps GIF preset (073) | Real multi-frame file validation and Qt animation interaction; see [scope](video-clips.md) | File post-processing only; native GIF capture/KDE/GPU not accepted |
 | Capture pause/resume (084) | Acknowledged A/V pause, compressed media timeline, frozen timer, Resume/Stop and existing status-item controls; patched dependency required | Production x264/AAC/muxer synthetic media and real queued control acknowledgement; focused adapter and software UI checks. [Contract](recording-pause.md) | Native KDE/device A/V/GPU and static-target refresh after resume remain unaccepted |
 | Recording annotation/click effects/camera overlay | Not implemented | Pointer capture option is not a click-effect feature | Not accepted |

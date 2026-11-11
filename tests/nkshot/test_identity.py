@@ -105,7 +105,8 @@ class IdentityTests(unittest.TestCase):
     def test_annotation_tools_and_undo_redo_retained(self):
         toolbar = read('src/Gui/AnnotationsToolBarContents.qml')
         for tool in ['CropTool', 'FreehandTool', 'ArrowTool', 'RectangleTool',
-                     'EllipseTool', 'PixelateTool', 'BlurTool', 'TextTool']:
+                     'EllipseTool', 'PixelateTool', 'BlurTool', 'TextTool',
+                     'SelectTool', 'HighlighterTool', 'LineTool', 'NumberTool']:
             self.assertIn('AnnotationTool.' + tool, toolbar)
         editor = read('src/Gui/AnnotationEditor.qml')
         self.assertIn('onActivated: root.document.undo()', editor)

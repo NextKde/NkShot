@@ -7,6 +7,7 @@
 #include "Gui/ViewerWindow.h"
 #include "Gui/PinnedImageWindow.h"
 #include <QVideoSink>
+#include <QProcess>
 #include <QVideoFrame>
 #include "Gui/InlineMessageModel.h"
 #include <QEventLoop>
@@ -473,8 +474,14 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_Tab);
         return QTest::qWaitFor([&]{return spin->property("value").toInt()==expected;},500);
     };
+    const bool silentExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SILENT_CLIP");
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
         return fail(QStringLiteral("Export details could not be opened"));
+    if(silentExport) {
+        if(!job->property("includeAudio").toBool()||!click(QStringLiteral("nkshotClipIncludeAudio"))
+            ||job->property("includeAudio").toBool()||!capture(QStringLiteral(".silent-options.png")))
+            return fail(QStringLiteral("Silent export option did not update actual job"));
+    }
     auto cancelControl=visual(viewer()->contentItem(),QStringLiteral("nkshotClipCancel"));
     auto previewControl=visual(viewer()->contentItem(),QStringLiteral("nkshotSoftwareVideoPreview"));
     if(!cancelControl||!previewControl||previewControl->height()<50
@@ -490,6 +497,13 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         ||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("outputUrl").toUrl()==QUrl::fromLocalFile(clip);},30000)
         ||bytes(clip).isEmpty()||bytes(movie)!=movieBytes||!sourcesIntact()||core->currentVideo()!=QUrl::fromLocalFile(movie))
         return fail(QStringLiteral("Real imported MP4 clip export/source isolation failed"));
+    if(silentExport) {
+        QProcess probe;probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),
+            QStringLiteral("-select_streams"),QStringLiteral("a"),QStringLiteral("-show_entries"),QStringLiteral("stream=index"),
+            QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
+        if(!probe.waitForFinished(10000)||probe.exitCode()!=0||!probe.readAllStandardOutput().trimmed().isEmpty())
+            return fail(QStringLiteral("Actual UI silent MP4 still has an audio track"));
+    }
     const auto evidenceClip=screenshot+QStringLiteral(".export-")+QString::number(QDateTime::currentMSecsSinceEpoch())+QStringLiteral(".mp4");
     if(!QFile::copy(clip,evidenceClip))return fail(QStringLiteral("Unable to retain actual export evidence"));
     qInfo()<<"085 actual imported clip artifact"<<evidenceClip;
@@ -528,6 +542,17 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!QTest::qWaitFor([&]{return player->property("hasVideo").toBool();},10000)
             ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
             return fail(QStringLiteral("Original WebM playback restore failed"));
+    }
+    if(silentExport) {
+        // Closing/reopening starts a fresh export with audio included by default.
+        auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+        if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))
+            return fail(QStringLiteral("Silent export panel close failed"));
+        QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
+        if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip"))
+            ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
+            ||!job->property("includeAudio").toBool()||!click(QStringLiteral("nkshotClipCancel")))
+            return fail(QStringLiteral("New export retained an old silent choice"));
     }
     if(!capture(QString()))return fail(QStringLiteral("Final imported media screenshot failed"));
     qInfo()<<"085 actual dialogs: PNG/JPEG/static WebP, edit replacement cancel/failure, new-copy Save, missing ffprobe recovery, real MP4 Qt playback and clip export passed";

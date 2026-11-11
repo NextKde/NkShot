@@ -15,6 +15,7 @@ class VideoClipJob : public QObject {
     Q_PROPERTY(bool ready READ ready NOTIFY changed)
     Q_PROPERTY(qint64 durationMs READ durationMs NOTIFY changed)
     Q_PROPERTY(bool hasAudio READ hasAudio NOTIFY changed)
+    Q_PROPERTY(bool includeAudio READ includeAudio WRITE setIncludeAudio NOTIFY changed)
     Q_PROPERTY(qreal progress READ progress NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     Q_PROPERTY(QUrl outputUrl READ outputUrl NOTIFY changed)
@@ -28,6 +29,8 @@ public:
     bool ready() const { return m_ready; }
     qint64 durationMs() const { return m_duration; }
     bool hasAudio() const { return m_audio; }
+    bool includeAudio() const { return m_includeAudio; }
+    Q_INVOKABLE void setIncludeAudio(bool include);
     qreal progress() const { return m_progress; }
     QString error() const { return m_error; }
     QUrl outputUrl() const { return m_output; }
@@ -58,6 +61,7 @@ private:
     quint64 m_epoch = 0;
     Stage m_stage = None;
     bool m_webm = false;
+    bool m_includeAudio = true, m_encodersChecked = false, m_x264Available = false, m_aacAvailable = false;
     bool m_busy = false, m_ready = false, m_audio = false, m_mediaValid = false;
     qint64 m_duration = 0, m_sourceSize = 0, m_clipDuration = 0, m_start = 0, m_end = 0;
     QDateTime m_sourceModified;

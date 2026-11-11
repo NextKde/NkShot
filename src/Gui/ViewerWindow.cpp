@@ -703,6 +703,7 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
     const QUrl source = m_clipJob->sourceUrl();
     const QString format = m_clipJob->outputFormat();
     const bool gif = format == QStringLiteral("gif");
+    const bool includeAudio = m_clipJob->includeAudio();
     const QFileInfo sourceFile(source.toLocalFile());
     auto dialog = new QFileDialog;
     m_clipSaveDialog = dialog;
@@ -726,8 +727,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         m_clipSaveDialog = nullptr;
         Q_EMIT choosingClipOutputChanged();
     });
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, startMs, endMs] {
-        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->busy()
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, includeAudio, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->includeAudio() != includeAudio || m_clipJob->busy()
             || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
         const auto files = dialog->selectedFiles();
         if (files.size() != 1) return;
