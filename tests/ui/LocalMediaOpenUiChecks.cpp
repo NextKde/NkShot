@@ -505,24 +505,70 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::mouseClick(discard->button(QMessageBox::Cancel),Qt::LeftButton);QTest::qWait(100);
         if(!editor||!editor->isVisible()||!samePixels(editor->document()->renderToImage(),edited))return fail(QStringLiteral("Cancel discarded independent edits"));
         if(!hit(QStringLiteral("nkshotCopyEditorCopy"))||!samePixels(application.clipboard()->image(),edited))return fail(QStringLiteral("Independent copy pixels changed"));
+        // Save the edited revision directly, without creating a pin or replacing the source.
+        QSignalSpy editorSave(editor,&ImageCopyEditor::saveFinished);
+        auto saveDialog=[&]() -> QFileDialog * {
+            for(auto w:QApplication::topLevelWidgets())
+                if(w->objectName()==QStringLiteral("nkshotCopySaveDialog"))return qobject_cast<QFileDialog *>(w);
+            return nullptr;
+        };
+        if(!hit(QStringLiteral("nkshotCopyEditorSave"))||!QTest::qWaitFor([&]{return saveDialog()&&saveDialog()->isVisible();},1000))
+            return fail(QStringLiteral("Direct image save entry did not open"));
+        QPointer<QFileDialog> save=saveDialog();editor->saveAs();
+        if(saveDialog()!=save)return fail(QStringLiteral("Repeated direct save created another dialog"));
+        editor->close();
+        if(!editor||!editor->isVisible())return fail(QStringLiteral("Closing behind save dialog lost the editor"));
+        save->reject();
+        if(!QTest::qWaitFor([&]{return save.isNull();},1000)||!editorSave.isEmpty()||!editor->hasUnsavedChanges())
+            return fail(QStringLiteral("Cancelled direct save marked edits saved"));
+        const auto exportEditor=[&](const QString &path) {
+            editor->saveAs();
+            if(!QTest::qWaitFor([&]{return saveDialog()&&saveDialog()->isVisible();},1000))return false;
+            save=saveDialog();save->setOption(QFileDialog::DontUseNativeDialog);save->selectFile(path);QTest::qWait(200);
+            const auto box=save->findChild<QDialogButtonBox *>();
+            if(!box||!box->button(QDialogButtonBox::Save))return false;
+            QTest::mouseClick(box->button(QDialogButtonBox::Save),Qt::LeftButton);
+            return QTest::qWaitFor([&]{return save.isNull();},1500);
+        };
+        const auto editedPath=screenshot+QStringLiteral(".edited-%1.png").arg(QDateTime::currentMSecsSinceEpoch());
+        if(!exportEditor(editedPath+QStringLiteral(".jpg"))||editorSave.size()!=1||editorSave.last().at(1).toBool()
+            ||QFileInfo::exists(editedPath+QStringLiteral(".jpg"))||!editor->hasUnsavedChanges())
+            return fail(QStringLiteral("Invalid direct save changed success/dirty state"));
+        if(!exportEditor(editedPath)||editorSave.size()!=2||!editorSave.last().at(1).toBool()
+            ||!samePixels(QImage(editedPath),edited)||editor->hasUnsavedChanges()||!editor->isVisible())
+            return fail(QStringLiteral("Direct PNG save did not preserve exact revision/session"));
+        if(!hit(QStringLiteral("nkshotUndo"))||!editor->hasUnsavedChanges())return fail(QStringLiteral("Undo after save lost unsaved protection"));
+        editor->close();discard=nullptr;
+        if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotDiscardCopyDialog"))discard=qobject_cast<QMessageBox *>(w);return discard&&discard->isVisible();},1000))
+            return fail(QStringLiteral("Changed saved revision closed silently"));
+        QTest::mouseClick(discard->button(QMessageBox::Cancel),Qt::LeftButton);QTest::qWait(100);
+        if(!hit(QStringLiteral("nkshotRedo"))||editor->hasUnsavedChanges()||!samePixels(QImage(editedPath),edited))
+            return fail(QStringLiteral("Redo did not restore saved revision; or export was modified"));
         // Verify an actual edited canvas pixel in the window, not only the model.
-        QPoint strokePixel(-1,-1);
-        for(int y=0;y<edited.height()&&strokePixel.x()<0;++y)for(int x=0;x<edited.width();++x) {
+        QList<QPoint> strokePixels;
+        for(int y=0;y<edited.height();++y)for(int x=0;x<edited.width();++x) {
             const auto c=edited.pixelColor(x,y),o=extracted.pixelColor(x,y);
             if(qAbs(c.red()-236)<8&&qAbs(c.green()-57)<8&&qAbs(c.blue()-116)<8
-                &&qAbs(c.red()-o.red())+qAbs(c.green()-o.green())+qAbs(c.blue()-o.blue())>160) {strokePixel={x,y};break;}
+                &&qAbs(c.red()-o.red())+qAbs(c.green()-o.green())+qAbs(c.blue()-o.blue())>160)strokePixels.append({x,y});
         }
-        if(strokePixel.x()<0)return fail(QStringLiteral("No strong edited stroke pixel found"));
+        if(strokePixels.size()<12)return fail(QStringLiteral("No strong edited stroke pixels found"));
         QImage editorShot;
         const auto painted=[&] {
             editor->update();editorShot=editor->grabWindow();
-            const auto location=viewport->mapToScene(strokePixel).toPoint();
-            for(int y=location.y()-2;y<=location.y()+2;++y)for(int x=location.x()-2;x<=location.x()+2;++x) {
-                if(!editorShot.rect().contains(x,y))continue;
-                const auto c=editorShot.pixelColor(x,y);
-                if(qAbs(c.red()-236)<30&&qAbs(c.green()-57)<30&&qAbs(c.blue()-116)<30)return true;
+            int matched=0;
+            // Check the length of the stroke, not a single point that may coincide
+            // with a neighboring fixture color before the canvas redraw arrives.
+            for(int i=0;i<12;++i){
+                const auto location=viewport->mapToScene(strokePixels.at((strokePixels.size()-1)*i/11)).toPoint();
+                bool found=false;
+                for(int y=location.y()-2;y<=location.y()+2;++y)for(int x=location.x()-2;x<=location.x()+2;++x) {
+                    if(!editorShot.rect().contains(x,y))continue;
+                    const auto c=editorShot.pixelColor(x,y);
+                    if(qAbs(c.red()-236)<30&&qAbs(c.green()-57)<30&&qAbs(c.blue()-116)<30)found=true;
+                }
+                matched+=found;
             }
-            return false;
+            return matched>=10;
         };
         if(!QTest::qWaitFor(painted,1500)||!editorShot.save(screenshot+QStringLiteral(".editor.png")))
             return fail(QStringLiteral("Edited canvas did not visibly repaint after redo"));
@@ -550,6 +596,14 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!QTest::qWaitFor([&]{return freshGuard.isNull();},1000)||!samePixels(framePin->snapshot(),extracted)
             ||core->annotationDocument()->renderToImage()!=mainImage||core->annotationDocument()->undoStackDepth()!=mainDepth)
             return fail(QStringLiteral("Discard leaked crop into original documents"));
+        editor=qobject_cast<ImageCopyEditor *>(framePin->editCopy());
+        if(!editor)return fail(QStringLiteral("Saved-close session did not open"));
+        editor->document()->cropCanvas(QRectF(0,0,100,80));
+        if(!exportEditor(editedPath+QStringLiteral(".crop.png"))||editor->hasUnsavedChanges())
+            return fail(QStringLiteral("Cropped copy did not save independently"));
+        editor->close();
+        if(!QTest::qWaitFor([&]{return editor.isNull();},1000)||!samePixels(framePin->snapshot(),extracted))
+            return fail(QStringLiteral("Saved copy did not close cleanly or changed original"));
     }
     framePin->close();
     QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());

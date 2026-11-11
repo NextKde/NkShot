@@ -36,11 +36,12 @@ QQC.Pane {
         spacing: 10
         RowLayout {
             Layout.fillWidth: true
-            QQC.Label { text: i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
+            QQC.Label { visible: root.width >= 480; text: i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
             UndoRedoGroup { editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
             ActionButton { objectName: "nkshotCopyEditorCopy"; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
-            ActionButton { objectName: "nkshotCopyEditorDone"; text: i18nc("@action", "Done"); primary: true; onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
+            ActionButton { objectName: "nkshotCopyEditorSave"; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+            ActionButton { objectName: "nkshotCopyEditorDone"; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
         }
         QQC.Label {
             id: feedback
@@ -48,7 +49,7 @@ QQC.Pane {
             text: i18nc("@info", "Edit freely. The original stays unchanged.")
             color: Kos.AppTheme.mutedText
             wrapMode: Text.Wrap
-            Connections { target: copyEditor; function onImageCopied() { feedback.text = i18nc("@info", "Edited image copied. Use Done to keep a separate image.") } }
+            Connections { target: copyEditor; function onSaveFinished(message, success) { feedback.text = message } function onImageCopied() { feedback.text = i18nc("@info", "Edited image copied. Save a PNG or use Done to keep a separate image.") } }
         }
         Rectangle {
             id: canvas
@@ -113,5 +114,7 @@ QQC.Pane {
             Layout.maximumWidth: root.availableWidth
         }
     }
+    Shortcut { sequence: StandardKey.Save; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { sequence: StandardKey.SaveAs; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
     Shortcut { sequence: StandardKey.Copy; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
 }

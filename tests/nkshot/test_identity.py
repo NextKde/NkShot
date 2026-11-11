@@ -92,6 +92,10 @@ class IdentityTests(unittest.TestCase):
         self.assertGreaterEqual(editor.count('editorDocument: root.document'), 4)
         self.assertIn('QMessageBox::Discard|QMessageBox::Cancel', implementation)
         self.assertIn('pinnedWindow.editCopy()', read('src/Gui/PinnedImage.qml'))
+        self.assertIn('QSaveFile file(paths.first())', implementation)
+        self.assertIn('m_savedImage=snapshot', implementation)
+        self.assertIn('hasUnsavedChanges()', implementation)
+        self.assertIn('StandardKey.Save', editor)
 
     def test_capture_actions_still_present(self):
         overlay = read('src/Gui/CaptureOverlay.qml')

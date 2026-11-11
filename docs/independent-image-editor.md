@@ -48,3 +48,36 @@ involved.
 
 The colorful image is generated non-personal video test content. The pink line
 is an actual pointer-drawn edit; screenshots are not retouched design mockups.
+
+## Direct PNG saving (092)
+
+The editor now has a primary **Save…** action and Ctrl+S/Ctrl+Shift+S. It saves a
+flattened PNG directly, leaving the editor and undo history open; **Done** still
+creates an in-app pin. At narrow widths the redundant title is hidden rather
+than crowding the essential actions. Save is not a claim of a persisted editable
+project: annotations/history are still session-only.
+
+A single window-modal file chooser captures the requested rendered revision.
+Repeated Save reuses the chooser, Cancel changes nothing, and closing the editor
+behind a pending chooser does not discard it. PNG writing uses QSaveFile and only
+a completed commit establishes a saved revision. Invalid extensions and write
+failures retain unsaved protection. Standard file-picker overwrite confirmation
+is retained; originals are not automatically chosen as destinations.
+
+After saving, changing or undoing edits requires another save. Returning exactly
+to the saved rendered revision by redo allows a clean close. Saving does not
+change the original pin, main document, video, global export settings, or the
+existing clipboard. Edited pixels are saved, not a screenshot of the editor.
+
+Automated UI checks exercise actual Save clicks and file-picker buttons,
+repeated invocation, Cancel, invalid extension rejection, pixel-exact PNG
+round-trip, undo-after-save close protection, redo-to-saved state and clean
+close of a saved crop. Light, dark and narrow software-window screenshots are
+reviewed; native file portals, overwrite interaction and crash recovery remain
+outside this acceptance scope.
+
+Reviewed 092 views: [light](screenshots/092-editor-save-light.png),
+[dark](screenshots/092-editor-save-dark.png),
+[420-pixel](screenshots/092-editor-save-compact.png).
+The screenshot harness checks multiple points along the actual drawn stroke
+before capture so an unpainted redo frame cannot count as visual evidence.

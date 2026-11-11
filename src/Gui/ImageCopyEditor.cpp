@@ -14,6 +14,10 @@
 #include <QFontDialog>
 #include <QQuickItem>
 #include <QScreen>
+#include <QFileDialog>
+#include <QImageWriter>
+#include <QSaveFile>
+#include <QStandardPaths>
 
 ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine) : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this))
 {
@@ -33,7 +37,7 @@ ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine) : QQui
     resize(qMin(900, area.width()), qMin(640, area.height()));
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this] { delete this; });
 }
-ImageCopyEditor::~ImageCopyEditor() { delete m_optionsDialog; delete m_closeDialog; }
+ImageCopyEditor::~ImageCopyEditor() { delete m_optionsDialog; delete m_closeDialog; delete m_saveDialog; }
 void ImageCopyEditor::prepareDialog(QWidget *dialog)
 {
     m_optionsDialog=dialog;
@@ -48,6 +52,52 @@ void ImageCopyEditor::copyImage()
     const auto image=m_document->renderToImage();
     if(image.isNull())return;
     QApplication::clipboard()->setImage(image);Q_EMIT imageCopied();
+}
+bool ImageCopyEditor::hasUnsavedChanges() const
+{
+    return m_savedImage.isNull() ? m_document->undoStackDepth() > 0
+        : m_document->renderToImage() != m_savedImage;
+}
+void ImageCopyEditor::saveAs()
+{
+    if(m_saveDialog){m_saveDialog->raise();m_saveDialog->activateWindow();return;}
+    // Capture exactly the requested revision; never mutate global export settings.
+    const QImage snapshot=m_document->renderToImage();
+    if(snapshot.isNull())return;
+    auto dialog=new QFileDialog;
+    m_saveDialog=dialog;
+    dialog->setObjectName(QStringLiteral("nkshotCopySaveDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(i18nc("@title:window","Save Edited Image Copy"));
+    dialog->setAcceptMode(QFileDialog::AcceptSave);
+    dialog->setFileMode(QFileDialog::AnyFile);
+    dialog->setNameFilter(i18nc("@item:inlistbox","PNG image (*.png)"));
+    dialog->setDefaultSuffix(QStringLiteral("png"));
+    dialog->setDirectory(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
+    dialog->selectFile(QStringLiteral("NkShot-edited.png"));
+    dialog->winId();dialog->windowHandle()->setTransientParent(this);
+    dialog->setWindowModality(Qt::WindowModal);
+    connect(dialog,&QFileDialog::accepted,this,[this,dialog,snapshot]{
+        const auto paths=dialog->selectedFiles();
+        if(paths.isEmpty())return;
+        if(!paths.first().endsWith(QStringLiteral(".png"),Qt::CaseInsensitive)){
+            Q_EMIT saveFinished(i18nc("@info","Use a .png filename to save this image."),false);return;
+        }
+        QSaveFile file(paths.first());
+        if(!file.open(QIODevice::WriteOnly)){
+            Q_EMIT saveFinished(i18nc("@info","Could not save image: %1",file.errorString()),false);return;
+        }
+        QImageWriter writer(&file,"png");
+        if(!writer.write(snapshot)){
+            file.cancelWriting();Q_EMIT saveFinished(i18nc("@info","Could not save image: %1",writer.errorString()),false);return;
+        }
+        if(!file.commit()){
+            Q_EMIT saveFinished(i18nc("@info","Could not save image: %1",file.errorString()),false);return;
+        }
+        m_savedImage=snapshot;
+        Q_EMIT saveFinished(i18nc("@info","PNG saved. You can continue editing; further changes need another save."),true);
+    });
+    dialog->open();
 }
 QQuickWindow *ImageCopyEditor::finishCopy()
 {
@@ -101,11 +151,14 @@ void ImageCopyEditor::showFontDialog()
 }
 bool ImageCopyEditor::event(QEvent *event)
 {
-    if(event->type()==QEvent::Close&&!m_acceptClose&&m_document->undoStackDepth()>0){
+    if(event->type()==QEvent::Close&&m_saveDialog){
+        static_cast<QCloseEvent *>(event)->ignore();m_saveDialog->raise();return true;
+    }
+    if(event->type()==QEvent::Close&&!m_acceptClose&&hasUnsavedChanges()){
         static_cast<QCloseEvent *>(event)->ignore();
         if(m_closeDialog){m_closeDialog->raise();return true;}
         auto dialog=new QMessageBox(QMessageBox::Question,i18nc("@title:window","Discard this edited copy?"),
-            i18nc("@info","The original image is unchanged. Use Done to keep an edited copy before closing."),QMessageBox::Discard|QMessageBox::Cancel);
+            i18nc("@info","The original image is unchanged. Save a PNG or use Done to keep this edited copy before closing."),QMessageBox::Discard|QMessageBox::Cancel);
         m_closeDialog=dialog;dialog->setObjectName(QStringLiteral("nkshotDiscardCopyDialog"));
         dialog->setDefaultButton(QMessageBox::Cancel);dialog->setAttribute(Qt::WA_DeleteOnClose);
         dialog->winId();dialog->windowHandle()->setTransientParent(this);dialog->setWindowModality(Qt::WindowModal);
