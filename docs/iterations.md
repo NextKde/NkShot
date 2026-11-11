@@ -1174,3 +1174,27 @@ callbacks in future integration must use QObject-context connections; UI teardow
 from notification handlers should use deleteLater. Required real region selection,
 window exclusion/repaint confirmation, localized accessible controls and successful
 KWin capture/export acceptance remain in [the plan](scroll-capture-plan.md).
+
+## 057 — Verified API5 compositor exclusion gate
+
+Upstream investigation found a real compositor exclusion mechanism, replacing the
+need to invent a timing barrier: ScreenShot2 API5 supports hide-caller-windows and
+filters the DBus caller's PID while rendering a separate scene. Confirmed official
+v6.7.0 XML, DBus and renderer sources; v6.8.0 also advertises API5, whereas checked
+v6.3.0 through v6.6.0 tags advertise API4. References and implementation implications
+are recorded in the rolling capture plan.
+
+The dedicated frame adapter now probes Version asynchronously for every request,
+with no stale global version cache. Only API>=5 issues CaptureScreen with explicit
+caller-window exclusion and native pixels. Failed/unsupported probes fail closed.
+Probe cancellation uses the same generation guard as frame callbacks, and returned
+output metadata must match exactly. This does not introduce any public menu yet.
+
+Final build, CTest 8/8, static 16/16 and whitespace checks pass. Existing offscreen
+unavailable-backend/editor-isolation regression passed and its
+[screenshot](screenshots/057-api-gate-unavailable-editor.png) was reviewed. This is
+not an API5 successful-capture test. A local isolated DBus test could not be started
+because this sandbox forbids Unix socket creation; no workaround or claim of live
+KWin acceptance is made. Native API5 result/exclusion, denial, probe/frame timeout
+and hotplug remain unverified. The next substantive milestone is a single integrated
+selector/session-panel/native-backend workflow, not another synthetic capture demo.

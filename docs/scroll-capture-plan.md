@@ -161,3 +161,47 @@ confirmation explicitly to exercise the state machine; that is not proof of a
 compositor barrier. Need accepted single-output selection, actual KWin wiring,
 localized user statuses, accessible keyboard interaction, real denial/hotplug/
 interruption checks and successful image export before enabling the feature.
+
+## Verified compositor exclusion path (057, supersedes guessed repaint barriers)
+
+Primary-source inspection establishes a better route than a sleep after hiding:
+
+- [KWin v6.7.0 ScreenShot2 XML](https://github.com/KDE/kwin/blob/v6.7.0/src/plugins/screenshot/org.kde.KWin.ScreenShot2.xml)
+  documents `hide-caller-windows` for screen/area/workspace captures, default true,
+  available since **API version 5**.
+- [v6.7.0 DBus implementation](https://github.com/KDE/kwin/blob/v6.7.0/src/plugins/screenshot/screenshotdbusinterface2.cpp)
+  resolves the DBus caller PID and passes it to the screenshot renderer.
+- [v6.7.0 renderer](https://github.com/KDE/kwin/blob/v6.7.0/src/plugins/screenshot/screenshot.cpp)
+  creates a separate scene view, filters windows with the calling PID (and windows
+  excluded from capture), then renders that filtered scene. This is compositor-side
+  exclusion, not a claim that Qt `hide()`, `frameSwapped` or a timer proves repaint.
+- Checked release tags v6.3.0, v6.4.0, v6.5.0 and v6.6.0 advertise API4 and lack
+  this option; v6.7.0 and v6.8.0 advertise API5. Runtime capability, not a guessed
+  desktop version string, remains the gate (distributions can backport changes).
+
+Each ScrollFrameKWin request now asynchronously reads the actual DBus `Version`
+property with a one-second deadline. It does not use the global cached version,
+which could survive a compositor restart. Only version >=5 proceeds, explicitly
+setting `hide-caller-windows=true` and `native-resolution=true`. Failed/old-version
+probes fail closed and never issue the frame request. Probe and frame are covered
+by the same cancellation generation/deadline. Missing output metadata is rejected.
+
+### Product integration decision
+
+The first supported workflow should require API5. Do not implement a guessed
+sleep fallback for API4. Preflight capability before asking for a region, then
+still recheck per frame. The selector must choose one output; the small session
+panel offers Capture next, Finish and Cancel. The main editor may be hidden for
+physical access to the target app, but output safety relies on the compositor's
+PID filter, not that local hide completing. The existing controller's preparation
+confirmation API should be adapted to this explicit exclusion contract when the
+real coordinator is connected; tests invoking confirmation are still not desktop
+acceptance. Window restoration and unchanged editor/history remain mandatory.
+
+Cloud validation cannot replace that integration: this environment has no KWin,
+and trying an isolated local test DBus failed because Unix socket creation is
+prohibited. The implementation builds and the unavailable-backend path passes,
+but API5 success, renderer exclusion, denied permission, probe/frame cancellation
+on a real bus and fractional-DPI output remain unverified. Next work should be
+one integrated selector/panel/backend path with native acceptance, rather than
+more standalone model layers or a fake demonstration.

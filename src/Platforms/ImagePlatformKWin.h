@@ -53,6 +53,7 @@ public:
         IncludeDecoration = 0x2,
         NativeSize = 0x4,
         IncludeShadow = 0x8,
+        HideCallerWindows = 0x10, // ScreenShot2 API >= 5; callers must gate capability.
     };
     Q_DECLARE_FLAGS(ScreenShotFlags, ScreenShotFlag)
 

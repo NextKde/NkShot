@@ -53,3 +53,12 @@ or a count of commits/iterations. Never weaken compositor permission checks.
 cancel safety. This is not a desktop scrolling feature. Connect it only through
 the accepted-frame adapter described in [the plan](scroll-capture-plan.md), and
 validate real KWin output identity, DPR and permission failures before exposing UI.
+
+### Verified compositor route
+
+057 verified KWin ScreenShot2 API5 caller-window exclusion in upstream sources
+(v6.7.0/v6.8.0; v6.6.0 still API4). The first integrated manual-scroll workflow
+should gate on fresh runtime API>=5, explicitly exclude caller windows and avoid
+a sleep-based legacy fallback. See the source references and remaining native
+acceptance checklist in the rolling capture plan. This capability investigation
+and adapter gate are not a delivered user-facing scrolling feature.

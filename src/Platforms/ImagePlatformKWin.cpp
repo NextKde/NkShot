@@ -59,6 +59,9 @@ static QVariantMap screenShotFlagsToVardict(ImagePlatformKWin::ScreenShotFlags f
         options.insert(u"native-resolution"_s, true);
     }
 
+    if (flags & ImagePlatformKWin::ScreenShotFlag::HideCallerWindows) {
+        options.insert(u"hide-caller-windows"_s, true);
+    }
     return options;
 }
 

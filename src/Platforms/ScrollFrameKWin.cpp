@@ -4,6 +4,10 @@
 #include "Imaging/ScrollFrameCrop.h"
 #include "ImageMetaData.h"
 #include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
+#include <QDBusVariant>
 #include <QGuiApplication>
 #include <QScreen>
 #include <KLocalizedString>
@@ -23,6 +27,7 @@ void ScrollFrameKWin::cancel()
 {
     m_timeout.stop(); ++m_generation;
     // ScreenShotSource2's context-bound continuation cannot invoke a destroyed source.
+    delete m_probe.data(); m_probe = nullptr;
     delete m_source.data(); m_source = nullptr; m_ticket = 0;
 }
 bool ScrollFrameKWin::request(quint64 ticket, QScreen *screen, QRect localPixels)
@@ -40,7 +45,28 @@ bool ScrollFrameKWin::request(quint64 ticket, QScreen *screen, QRect localPixels
     const auto outputId = screen->name();
     m_ticket = ticket;
     const auto generation = ++m_generation;
-    auto source = new ScreenShotSourceScreen2(screen, ImagePlatformKWin::ScreenShotFlag::NativeSize);
+    auto query = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin.ScreenShot2"),
+        QStringLiteral("/org/kde/KWin/ScreenShot2"), QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
+    query.setArguments({QStringLiteral("org.kde.KWin.ScreenShot2"),QStringLiteral("Version")});
+    auto probe = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(query,1000),this);
+    m_probe=probe;
+    connect(probe,&QDBusPendingCallWatcher::finished,this,
+        [this,probe,ticket,generation,watchedScreen,geometry,dpr,pixels,localPixels,outputId] {
+        if(m_generation!=generation || m_ticket!=ticket || m_probe!=probe) return;
+        const QDBusPendingReply<QDBusVariant> reply=*probe;
+        m_probe=nullptr; probe->deleteLater();
+        bool ok=false;
+        const uint version=reply.isError() ? 0 : reply.value().variant().toUInt(&ok);
+        if(!ok || version<5) {
+            cancel();
+            Q_EMIT requestFailed(ticket,i18nc("@info", "Safe scrolling capture requires KWin ScreenShot2 API 5 or later. This desktop cannot exclude NkShot windows reliably."));
+            return;
+        }
+        if(!watchedScreen || watchedScreen->geometry()!=geometry || watchedScreen->devicePixelRatio()!=dpr || watchedScreen->name()!=outputId) {
+            cancel(); Q_EMIT requestFailed(ticket,i18nc("@info", "The display changed. Select a new region.")); return;
+        }
+        auto source = new ScreenShotSourceScreen2(watchedScreen,
+            ImagePlatformKWin::ScreenShotFlag::NativeSize | ImagePlatformKWin::ScreenShotFlag::HideCallerWindows);
     source->setParent(this); m_source = source;
     connect(source, &ScreenShotSource2::finished, this,
         [this, source, ticket, generation, watchedScreen, geometry, dpr, pixels, localPixels, outputId](const ResultVariant &result) {
@@ -59,13 +85,14 @@ bool ScrollFrameKWin::request(quint64 ticket, QScreen *screen, QRect localPixels
         }
         const auto &image = std::get<QImage>(result);
         const auto returnedOutput = ImageMetaData::screen(image);
-        const auto frame = returnedOutput.isEmpty() || returnedOutput == outputId
+        const auto frame = returnedOutput == outputId
             ? NkShot::Imaging::cropScrollFrame(image, pixels, localPixels, dpr) : QImage{};
         if (frame.isNull()) {
             Q_EMIT requestFailed(ticket, i18nc("@info", "The captured frame does not match the fixed region or scale. No pixels were added."));
             return;
         }
         Q_EMIT frameReady(ticket, frame);
+    });
     });
     m_timeout.start();
     return true;
