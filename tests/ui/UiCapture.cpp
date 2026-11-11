@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
 #include "Gui/ViewerWindow.h"
+#include "Platforms/ScrollFrameKWin.h"
+#include <QDBusConnection>
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/OcrTextWindow.h"
 #include "Gui/InlineMessageModel.h"
@@ -254,6 +256,24 @@ void installUiCaptureHook(QApplication &application)
                 }
                 if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
                 qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
+                application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_BACKEND_BOUNDARY")) {
+                // This branch verifies unavailable-backend isolation, never successful capture.
+                if (QDBusConnection::sessionBus().isConnected()) { application.exit(171); return; }
+                auto document=SpectacleCore::instance()->annotationDocument();
+                const auto before=document->renderToImage(); const auto depth=document->undoStackDepth();
+                ScrollFrameKWin backend;
+                if (backend.request(1,nullptr,QRect(0,0,40,100)) || backend.busy()
+                    || backend.request(2,viewer->screen(),QRect(0,0,40,100)) || backend.busy()) {
+                    application.exit(172); return;
+                }
+                backend.cancel(); backend.cancel();
+                if (!samePixels(before,document->renderToImage()) || depth!=document->undoStackDepth()) {
+                    application.exit(173); return;
+                }
+                viewer->grabWindow().save(destination);
+                qInfo() << "NkShot unavailable scroll backend refused requests without editor/history mutation; no live capture claim";
                 application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY")) {

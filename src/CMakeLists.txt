@@ -35,6 +35,10 @@ target_sources(spectacle PRIVATE
     ExportManager.cpp
     Geometry.cpp
     OcrManager.cpp
+    Imaging/ScrollFrameCrop.cpp
+    Imaging/ScrollCaptureSession.cpp
+    Platforms/ScrollFrameKWin.cpp
+    Platforms/ScrollFrameKWin.h
     Imaging/ImageTransforms.cpp
     Imaging/VerticalStitcher.cpp
     Gui/SoftwareVideoPreview.cpp

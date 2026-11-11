@@ -17,7 +17,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | Pin Live Text | Not implemented | None; editor OCR is not pin Live Text | Not accepted |
 | Vertical overlapping-image composition | Implemented, manual file input | Exact matching and conservative rejection; actual picker | No desktop scrolling claim |
 | Explicit vertical stacking | Implemented, manual file input | Retained pixels, numeric order, repeated content, metadata/limits | No desktop scrolling claim |
-| Fixed-region manual-scroll capture session | Isolated collector core only (054); no capture adapter/UI | Synthetic frame lifecycle/assembly tests; no live capture source | Needs real KWin session |
+| Fixed-region manual-scroll capture session | Collector (054) and dedicated KWin request adapter (055); no controller/UI | Synthetic frame/crop/lifetime tests and unavailable-backend check; no live capture acceptance | Needs real KWin session |
 | Automatic vertical/horizontal scrolling capture | Not implemented | None; do not assume Wayland input injection | Needs authorized desktop feasibility work |
 | Resize sharing copy | Implemented reusable helper | Actual options/preview/clipboard/PNG and source-history isolation | Native portals pending |
 | Background styling and text watermark | Implemented non-destructive sharing copy (053) | See 053 tests; local render/preview/export, not source mutation | GPU/native desktop acceptance pending |

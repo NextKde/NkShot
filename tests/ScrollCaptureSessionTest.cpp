@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include <QtTest>
 #include <QColorSpace>
+#include <QPromise>
+#include <QThread>
 #include "Imaging/ScrollCaptureSession.h"
+#include "Imaging/ScrollFrameCrop.h"
 using namespace NkShot::Imaging;
 class ScrollCaptureSessionTest : public QObject {
     Q_OBJECT
@@ -13,6 +16,32 @@ class ScrollCaptureSessionTest : public QObject {
     }
     static ScrollCaptureSession::Region region() { return {QRect(-120, 30, 40, 100), QStringLiteral("display-A"), 1}; }
 private Q_SLOTS:
+    void contextBoundCompletionSafety() {
+        QPromise<int> pending; pending.start(); bool invoked=false;
+        auto context=new QObject;
+        auto chained=pending.future().then(context,[&](int) { invoked=true; });
+        delete context; pending.addResult(1); pending.finish();
+        QTest::qWait(10); QVERIFY(!invoked);
+        QPromise<int> live; live.start(); QObject owner;
+        QThread *deliveredThread=nullptr;
+        auto delivered=live.future().then(&owner,[&](int) { deliveredThread=QThread::currentThread(); });
+        auto worker=QThread::create([&] { live.addResult(2); live.finish(); });
+        worker->start(); QVERIFY(worker->wait(1000)); delete worker;
+        QTRY_VERIFY(deliveredThread); QCOMPARE(deliveredThread,owner.thread());
+    }
+    void outputLocalCropValidation() {
+        auto screen=page(); screen.setDevicePixelRatio(2); screen.setColorSpace(QColorSpace::SRgb);
+        const QRect rect(3,20,30,100);
+        auto crop=cropScrollFrame(screen,screen.size(),rect,2);
+        QCOMPARE(crop,screen.copy(rect)); QCOMPARE(crop.devicePixelRatio(),2);
+        QCOMPARE(crop.colorSpace(),screen.colorSpace());
+        QVERIFY(cropScrollFrame(screen,QSize(41,240),rect,2).isNull());
+        QVERIFY(cropScrollFrame(screen,screen.size(),rect,1).isNull());
+        QVERIFY(cropScrollFrame(screen,screen.size(),QRect(-1,0,20,100),2).isNull());
+        QVERIFY(cropScrollFrame(screen,screen.size(),QRect(30,0,20,100),2).isNull());
+        QVERIFY(cropScrollFrame(screen,screen.size(),QRect(),2).isNull());
+        screen.fill(Qt::red); QVERIFY(crop!=screen.copy(rect));
+    }
     void exactFramesAndOwnership() {
         ScrollCaptureSession s;
         const auto original=page();

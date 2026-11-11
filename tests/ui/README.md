@@ -225,3 +225,9 @@ DPR, tagged P3→sRGB conversion, watermark/footer and invalid/bounded inputs.
 language and composition tests open their task submenu through an actual row
 click. `NKSHOT_TEST_BEAUTIFY_LIMIT=1` uses a real 8192×200 image: default padding
 disables Create, then typed zero padding recovers, preserving all other options.
+
+`NKSHOT_TEST_SCROLL_BACKEND_BOUNDARY=1` is only for the cloud/offscreen test
+environment with no session DBus. It verifies null/missing-backend request refusal,
+repeat cancellation, and unchanged editor pixels/history. It exits with an error
+if session DBus is connected rather than claiming a live-capture test. Its screenshot
+is the unchanged existing editor, not a rolling-capture demo.

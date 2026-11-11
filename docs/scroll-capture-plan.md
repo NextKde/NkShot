@@ -68,3 +68,59 @@ ambiguous overlaps, bounds, frame cap, high DPI, buffer ownership and result
 lifetime. These tests establish a collector contract only. Real capture routing,
 permission/UI states, repaint exclusion, native output geometry and user-scrolled
 frame acceptance remain unimplemented and require the desktop milestone above.
+
+## Dedicated KWin request adapter (055, not yet a user workflow)
+
+`Platforms/ScrollFrameKWin` creates its own `ScreenShotSourceScreen2` per request,
+never sharing `SpectacleCore::m_imagePlatform` signals. It requests native pixels
+without cursor/decorations, checks the output/geometry/DPR again when complete,
+and crops only after exact full-output dimension and scale validation. Cropping
+uses output-local physical pixels, never guessed global DIP conversion. It does
+not rescale, pad or silently accept an altered region. Missing session DBus refuses
+the request; ordinary KWin denial/error remains an error. One request can be active;
+a six-second wrapper timeout/cancel drops that request without touching an editor.
+Internal generation and external ticket checks suppress late response reuse.
+
+The reused source's read continuation is now bound to its QObject context. This
+prevents completion from invoking a deleted source and dispatches the result on
+the owning thread. This does **not** claim to forcibly abort a kernel pipe read
+already running in the worker: the result is ignored after source destruction.
+A future adapter must not schedule unbounded retries of a hung source.
+
+The adapter and collector are compiled into NkShot, but no user action instantiates
+them yet. Tests cover crop/metadata/buffer invariants and Qt context-bound callback
+lifetime; an actual offscreen app check covers unavailable-backend refusal with
+unchanged editor pixels/history. Successful KWin capture, permission denial,
+timeout during real capture and screen hotplug are **not** proven by those tests.
+
+### Manual workflow design and remaining controller obligations
+
+- Begin from a clearly named “Scrolling capture” task only when the complete route
+  is available. Do not call ordinary New Screenshot as an implementation shortcut.
+- Select a single-output region; preserve the original editor and undo/export
+  state. Store initial output identity, logical screen geometry, DPR and explicit
+  output-local physical rectangle. Reject configuration changes across requests,
+  not just during an individual request. The adapter's per-request snapshot alone
+  is insufficient to enforce the whole session baseline.
+- One small controller should show accepted frame count and status. The primary
+  action is “Capture next frame”; Finish remains disabled until two frames are
+  accepted and no capture is pending. Cancel is always available. The user scrolls
+  the target normally: no wheel injection or hidden automatic scrolling.
+- Before calling the adapter, hide the controller, editor and other NkShot windows
+  that intersect the region and establish a compositor repaint barrier. A fixed
+  timer alone is not evidence of exclusion. Restore the controller on each result.
+- On `request` returning false, release the collector's matching pending ticket as
+  failure. On response, pass the original ticket and baseline metadata to the
+  collector. Duplicate/no-progress asks the user to scroll farther; ambiguous
+  content asks for a smaller step. Neither loses accepted work.
+- Finish opens a separate sharing preview; Cancel discards only the session.
+  Interrupted/denied/hotplug states must restore hidden windows. A second session
+  must not be affected by pending callbacks from the first.
+
+Do not expose this workflow until the controller/region selector/repaint exclusion
+and real desktop acceptance have been implemented and checked. Current source is
+backend groundwork, not a disabled fake UI or an automatic scrolling claim.
+
+The source also rejects incomplete raw pixel reads instead of accepting a partly
+initialized QImage. Native pipe transport/short-read behavior remains a real KWin
+acceptance item; cloud tests do not emulate that compositor protocol.

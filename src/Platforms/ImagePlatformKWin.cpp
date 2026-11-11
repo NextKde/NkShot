@@ -222,7 +222,9 @@ static ResultVariant readImage(int fileDescriptor, const QVariantMap &metadata)
     }
 
     QDataStream stream(&file);
-    stream.readRawData(reinterpret_cast<char *>(resultImage.bits()), resultImage.sizeInBytes());
+    if (stream.readRawData(reinterpret_cast<char *>(resultImage.bits()), resultImage.sizeInBytes()) != resultImage.sizeInBytes()) {
+        return {i18nc("@info", "The KWin screenshot data was incomplete. No image was accepted.")};
+    }
 
     return result;
 }
@@ -308,7 +310,7 @@ ScreenShotSource2::ScreenShotSource2(const QString &methodName, ArgType... argum
             }
 
             QFuture<ResultVariant> future = QtConcurrent::run(readImage, m_pipeFileDescriptor.takeFileDescriptor(), metadata);
-            future.then([this](const ResultVariant &result) {
+            future.then(this, [this](const ResultVariant &result) {
                 Q_EMIT finished(result);
             });
         }

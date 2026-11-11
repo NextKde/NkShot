@@ -1111,3 +1111,36 @@ This screenshot shows the existing sharing workflow, **not rolling capture**.
 There is deliberately no new button, placeholder or claimed scrolling demo.
 The adapter contract and remaining live KWin/repaint/permission/DPI milestones are
 recorded in [the plan](scroll-capture-plan.md) and capability matrix.
+
+## 055 — Dedicated KWin frame request boundary (still no scrolling UI)
+
+Compiled the isolated collector and a dedicated KWin frame-request adapter into
+the app. Each request owns its ScreenShotSourceScreen2 rather than reusing normal
+editor capture signals. It validates output identity, geometry, DPR and exact
+native dimensions, then crops output-local physical pixels without scaling or
+padding. Only one request is active; cancel/timeout invalidates its generation.
+No controller or UI instantiates the adapter yet.
+
+Inspection found two safety issues in the reused source path: the read-completion
+lambda captured a bare this without a QObject context, and incomplete raw pixel
+reads were not checked. Completion is now context-bound; incomplete data returns
+an error rather than accepting a partly initialized image. Actual KWin transport
+and cancellation acceptance still require the desktop, not a synthetic claim.
+
+Build, CTest 7/7, static 16/16 and diff whitespace checks pass. Extended tests
+verify strict crop bounds/size/scale, metadata and ownership, plus Qt continuation
+suppression after QObject deletion and dispatch to the owning thread. The actual
+offscreen app verifies missing-DBus/null-screen refusal and repeated cancellation
+without changing editor pixels or undo history. Existing sharing-copy options,
+preview/clipboard/PNG and source isolation also pass. Reviewed the
+[unchanged editor](screenshots/055-backend-unavailable-editor-unchanged.png) and
+[sharing regression](screenshots/055-existing-sharing-regression.png).
+Neither screenshot depicts rolling capture.
+
+The [plan](scroll-capture-plan.md) now spells out user-manual-scroll interaction,
+fixed session baseline, single primary next-frame action, Finish/Cancel, failure
+recovery, and the required hide/repaint/restore barrier. Successful native frames,
+real permissions, fractional-DPI conversion, screen hotplug, timeout and window
+exclusion are unverified. The adapter drops late results but does not forcibly
+abort an already-blocking kernel pipe read. No automatic retry loop, scroll input
+injection, fake button or full scrolling feature is advertised.
