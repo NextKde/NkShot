@@ -97,6 +97,7 @@ target_sources(spectacle PRIVATE
     Gui/SpectacleMenu.cpp
     Gui/SpectacleWindow.cpp
     Gui/TextContextMenu.cpp
+    Gui/PresentationPreview.cpp
     Gui/ViewerWindow.cpp
     Main.cpp
     PlasmaVersion.cpp

@@ -6,6 +6,8 @@
 #include "LocalMediaOpenUiChecks.h"
 #include "TranslationUiChecks.h"
 #include "ScrollSessionUiChecks.h"
+#include <QQmlEngine>
+#include <QQuickImageProvider>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include "Gui/ViewerWindow.h"
@@ -1867,7 +1869,53 @@ void installUiCaptureHook(QApplication &application)
                         entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
                     return QTest::qWaitFor([&] { return popup->property("opened").toBool(); }, 1000);
                 };
+                QObject *presentation = beautify ? viewer->property("presentationPreview").value<QObject *>() : nullptr;
+                auto ensurePresentationVisible = [&](QQuickItem *item) {
+                    if (!item || !item->isVisible()) return false;
+                    auto scroll = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationScroll"));
+                    if (!scroll) return false;
+                    for (int attempt = 0; attempt < 12; ++attempt) {
+                        const QRectF bounds(scroll->mapToScene(QPointF()), scroll->size());
+                        const QRectF target(item->mapToScene(QPointF()), item->size());
+                        if (bounds.adjusted(0, 1, 0, -1).contains(target)) { QTest::qWait(100); return true; }
+                        const bool down = target.bottom() > bounds.bottom();
+                        const auto at = scroll->mapToScene(QPointF(scroll->width()/2, scroll->height()/2));
+                        QWheelEvent wheel(at, viewer->mapToGlobal(at.toPoint()), {}, QPoint(0, down ? -120 : 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+                        QCoreApplication::sendEvent(viewer, &wheel); QTest::qWait(100);
+                        const QRectF after(item->mapToScene(QPointF()), item->size());
+                        if (after == target) {
+                            auto bar = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationScrollbar"));
+                            if (!bar || !bar->isVisible()) return false;
+                            const auto from = bar->mapToScene(QPointF(bar->width()/2, (bar->property("position").toReal()+bar->property("size").toReal()/2)*bar->height())).toPoint();
+                            const auto to = bar->mapToScene(QPointF(bar->width()/2, down ? bar->height()-2 : 2)).toPoint();
+                            QTest::mousePress(viewer, Qt::LeftButton, Qt::NoModifier, from);
+                            QTest::mouseMove(viewer, to, 100); QTest::mouseRelease(viewer, Qt::LeftButton, Qt::NoModifier, to); QTest::qWait(150);
+                        }
+                    }
+                    return false;
+                };
+                auto presentationReady = [&] {
+                    auto image = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationPreview"));
+                    return presentation && presentation->property("ready").toBool() && !presentation->property("imageSource").toUrl().isEmpty()
+                        && image && image->isVisible() && image->property("status").toInt() == 1;
+                };
+                auto presentationPixels = [&](const NkShot::Imaging::PresentationOptions &options) {
+                    if (!presentationReady()) return false;
+                    const auto url = presentation->property("imageSource").toUrl();
+                    auto provider = dynamic_cast<QQuickImageProvider *>(viewer->engine()->imageProvider(url.host()));
+                    if (!provider) return false;
+                    QSize size;
+                    const auto actual = provider->requestImage(url.path().mid(1), &size, QSize());
+                    const auto expectedPreview = NkShot::Imaging::previewPresentation(original, options);
+                    return actual.devicePixelRatio() == 1 && size == expectedPreview.size() && samePixels(actual, expectedPreview);
+                };
                 if (!openResize()) { application.exit(140); return; }
+                if (beautify && (!presentation || (!limitTest && !QTest::qWaitFor(presentationReady, 1500)))) {
+                    qWarning() << "106 initial presentation preview not ready"; application.exit(167); return;
+                }
+                if (beautify && !limitTest && !presentationPixels({48, NkShot::Imaging::PresentationStyle(2), QString(), true})) {
+                    qWarning() << "106 initial preview pixels differ"; application.exit(170); return;
+                }
                 if(orient) {
                     for(const auto &name:{QStringLiteral("nkshotCopyRotate"),QStringLiteral("nkshotCopyMirror")}) {
                         auto item=visualItem(viewer->contentItem(),name);
@@ -1878,7 +1926,9 @@ void installUiCaptureHook(QApplication &application)
                 viewer->grabWindow().save(destination + QStringLiteral(".dialog.png"));
                 QTest::keyClick(viewer, Qt::Key_Escape);
                 if (!QTest::qWaitFor([&] { return !popup->property("visible").toBool(); }, 1000)
-                    || !samePixels(document->renderToImage(), original) || document->undoStackDepth() != depth || !openResize()) {
+                    || !samePixels(document->renderToImage(), original) || document->undoStackDepth() != depth
+                    || (beautify && !presentation->property("sourceSize").toSize().isEmpty()) || !openResize()
+                    || (beautify && presentation->property("sourceSize").toSize() != original.size())) {
                     application.exit(141); return;
                 }
                 auto create = visualItem(viewer->contentItem(), beautify ? QStringLiteral("nkshotBeautifyCreate") : QStringLiteral("nkshotResizeCreate"));
@@ -1889,22 +1939,40 @@ void installUiCaptureHook(QApplication &application)
                         viewer->grabWindow().save(destination + QStringLiteral(".limit.png"));
                         auto padding = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationPadding"));
                         auto field = padding ? padding->property("contentItem").value<QQuickItem *>() : nullptr;
-                        if (!field) { application.exit(165); return; }
+                        if (!field || !ensurePresentationVisible(padding)) { application.exit(165); return; }
                         QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, field->mapToScene(QPointF(field->width()/2, field->height()/2)).toPoint());
                         QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
                         QTest::keyClick(viewer, Qt::Key_0); QTest::keyClick(viewer, Qt::Key_Tab);
-                        if (!create->isEnabled() || padding->property("value").toInt() != 0) { application.exit(166); return; }
+                        if (!QTest::qWaitFor([&] { return create->isEnabled() && presentationReady(); }, 1500) || padding->property("value").toInt() != 0) { application.exit(166); return; }
                     }
                     auto style = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationStyle") + QString::number(presentationStyle));
                     auto watermark = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationWatermark"));
                     if (!style || !watermark) { application.exit(162); return; }
+                    for (int choice : { 0, 1, presentationStyle }) {
+                        if (popup->property("styleIndex").toInt() == choice) continue;
+                        auto option = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationStyle") + QString::number(choice));
+                        const auto beforeUrl = presentation->property("imageSource").toUrl();
+                        if (!ensurePresentationVisible(option)) { qWarning() << "106 style option not reachable"; application.exit(168); return; }
+                        QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, option->mapToScene(QPointF(option->width()/2,option->height()/2)).toPoint());
+                        if (!QTest::qWaitFor([&] { return presentationReady() && presentation->property("imageSource").toUrl() != beforeUrl; }, 1500)
+                            || !samePixels(document->renderToImage(), original) || document->undoStackDepth() != depth) {
+                            qWarning() << "106 style refresh or source isolation failed"; application.exit(169); return;
+                        }
+                    }
+                    if (!ensurePresentationVisible(style)) { application.exit(168); return; }
                     QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, style->mapToScene(QPointF(style->width()/2,style->height()/2)).toPoint());
+                    if (!ensurePresentationVisible(watermark)) { qWarning() << "106 watermark not reachable"; application.exit(168); return; }
                     QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, watermark->mapToScene(QPointF(watermark->width()/2,watermark->height()/2)).toPoint());
                     QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
                     for (char c : QByteArray("NkShot demo")) QTest::keyClick(viewer, c);
                     if (watermark->property("text").toString() != QStringLiteral("NkShot demo") || !style->property("checked").toBool()) { application.exit(163); return; }
-                    QTest::qWait(200);
+                    if (!QTest::qWaitFor([&] { return presentationPixels({presentationPadding, NkShot::Imaging::PresentationStyle(presentationStyle), QStringLiteral("NkShot demo"), true}); }, 1500)) {
+                        qWarning() << "106 configured preview/provider pixels differ"; application.exit(170); return;
+                    }
                     viewer->grabWindow().save(destination + QStringLiteral(".configured.png"));
+                    auto previewImage = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationPreview"));
+                    if (!ensurePresentationVisible(previewImage)) { qWarning() << "106 preview not reachable"; application.exit(168); return; }
+                    viewer->grabWindow().save(destination + QStringLiteral(".preview.png"));
                 } else {
                     if(orient) {
                         auto rotate=visualItem(viewer->contentItem(),QStringLiteral("nkshotCopyRotate"));
@@ -1923,6 +1991,9 @@ void installUiCaptureHook(QApplication &application)
                     QTest::keyClick(viewer, Qt::Key_Tab);
                     if (widthInput->property("value").toInt() != 320) { application.exit(143); return; }
                     QTest::qWait(100);viewer->grabWindow().save(destination+QStringLiteral(".configured.png"));
+                }
+                if (beautify && !QRectF(QPointF(), viewer->size()).contains(QRectF(create->mapToScene(QPointF()), create->size()))) {
+                    qWarning() << "106 fixed Create footer clipped"; application.exit(171); return;
                 }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
                     create->mapToScene(QPointF(create->width()/2, create->height()/2)).toPoint());

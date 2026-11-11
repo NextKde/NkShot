@@ -21,4 +21,7 @@ struct PresentationOptions {
 };
 // A separate, opaque sRGB sharing canvas. Original pixels/metadata are untouched.
 QImage composePresentation(const QImage &source, const PresentationOptions &options, qint64 maximumPixels = 40000000);
+// Same composition in original coordinates, rendered directly into a bounded
+// preview surface. Does not allocate the full output canvas. DPR is 1 for UI use.
+QImage previewPresentation(const QImage &source, const PresentationOptions &options, int maximumEdge = 1024, qint64 maximumPixels = 40000000);
 }

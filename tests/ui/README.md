@@ -668,3 +668,17 @@ cycles. It verifies C++ ownership, Quick Note visible/hidden/reopened draft and
 normal Color Picker/Scroll Preview close destruction. Actual frame-pin Edit and
 Done flows also check GC survival and edited-pin close destruction. This caught
 a real pre-existing visible-window collection bug before the ownership fix.
+
+### Sharing-copy preview (106)
+
+`NKSHOT_TEST_BEAUTIFY=1` exercises the real menu, popup, repeated style choices,
+watermark input, preview provider pixels and DPR, Escape/clear/reopen, copy creation,
+clipboard and PNG save. `NKSHOT_TEST_PRESENTATION_STYLE=0|1|2` selects the final
+style. `NKSHOT_TEST_DARK=1` and `NKSHOT_TEST_UI_SIZE=420x520` cover responsive layouts; the helper scrolls controls into
+view before real clicks and keeps Create in the fixed footer. `.dialog.png` is
+initial rendered preview; `.configured.png` shows configured controls; `.preview.png`
+shows the preview again after scrolling on narrow windows. The existing
+`NKSHOT_TEST_BEAUTIFY_LIMIT=1` fixture checks invalid padding size and recovery.
+The new `presentation_preview_test` covers immutable/external-buffer input,
+reduced rendering, exact unscaled composition, cancellation/accepted-source
+preservation, invalid settings and engine lifetime. None is native KDE capture QA.

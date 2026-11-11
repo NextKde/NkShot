@@ -15,6 +15,7 @@
 class ViewerWindowPrivate;
 class VideoClipJob;
 class ImageCopyEditor;
+class PresentationPreview;
 class QVideoSink;
 namespace NkShot { class LocalMediaLoader; }
 
@@ -32,6 +33,7 @@ class ViewerWindow : public SpectacleWindow
     Q_PROPERTY(bool scanningCode READ scanningCode NOTIFY scanningCodeChanged)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
+    Q_PROPERTY(QObject *presentationPreview READ presentationPreviewObject CONSTANT)
     Q_PROPERTY(QObject *clipJob READ clipJobObject CONSTANT)
     Q_PROPERTY(QObject *recentMedia READ recentMediaObject CONSTANT)
     Q_PROPERTY(bool choosingClipOutput READ choosingClipOutput NOTIFY choosingClipOutputChanged)
@@ -65,6 +67,10 @@ public:
     Q_INVOKABLE QSize imageSnapshotSize() const;
     Q_INVOKABLE void resizeImageCopy(int width, int quarterTurns = 0, bool mirror = false);
     Q_INVOKABLE void beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded);
+    QObject *presentationPreviewObject() const;
+    Q_INVOKABLE bool beginPresentationPreview();
+    Q_INVOKABLE void cancelPresentationPreview();
+    Q_INVOKABLE bool createPresentationCopy();
     bool resizingImage() const { return m_resizingImage; }
     Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false, bool horizontal = false);
     bool combiningImages() const { return m_combiningImages; }
@@ -93,7 +99,7 @@ private:
     ~ViewerWindow();
 
     void loadOpenedMedia(const QUrl &url);
-    void createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure);
+    void createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure, const QImage &sourceSnapshot = {});
     void setMode(ViewerWindow::Mode mode);
     Q_SLOT void updateColor();
     Q_SLOT void updateMinimumSize();
@@ -118,6 +124,7 @@ private:
     bool m_scanningCode = false;
     quint64 m_codeScanEpoch = 0;
     bool m_resizingImage = false;
+    PresentationPreview *m_presentationPreview = nullptr;
     bool m_pixmapExists = false;
     QPalette::ColorRole m_backgroundColorRole;
     Qt::WindowStates m_oldWindowStates;

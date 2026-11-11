@@ -308,6 +308,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('m_ownedPreparedOutput->identityMatches()', start)
         self.assertIn('if (!stream)', start)
 
+    def test_presentation_preview_uses_immutable_bounded_shared_renderer(self):
+        source = read('src/Gui/PresentationPreview.cpp')
+        self.assertIn('source.copy()', source)
+        self.assertIn('Imaging::previewPresentation(m_source, m_options)', source)
+        renderer = read('src/Imaging/ImageTransforms.cpp')
+        self.assertIn('QImage image(renderSize', renderer)
+        self.assertIn('return renderPresentation(source, options, maximumPixels, maximumEdge)', renderer)
+        viewer = read('src/Gui/ViewerWindow.cpp')
+        self.assertIn('const auto source = m_presentationPreview->source()', viewer)
+        self.assertIn('const auto options = m_presentationPreview->options()', viewer)
+        self.assertIn('sourceSnapshot.isNull() ?', viewer)
+
     def test_qml_returned_windows_keep_cpp_lifetime(self):
         for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow'):
             source = read('src/Gui/' + name + '.cpp')

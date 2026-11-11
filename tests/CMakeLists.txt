@@ -185,3 +185,8 @@ set_tests_properties(local_media_loader_test PROPERTIES TIMEOUT 60)
 ecm_add_test(RecentMediaModelTest.cpp ../src/RecentMediaModel.cpp ../src/RecentMediaModel.h
     TEST_NAME recent_media_model_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(recent_media_model_test PROPERTIES TIMEOUT 30)
+
+# Immutable sharing-preview session and bounded exact-composition renderer.
+ecm_add_test(PresentationPreviewTest.cpp ../src/Gui/PresentationPreview.cpp ../src/Gui/PresentationPreview.h ../src/Imaging/ImageTransforms.cpp
+    TEST_NAME presentation_preview_test LINK_LIBRARIES Qt::Test Qt::Quick KF6::I18n)
+set_tests_properties(presentation_preview_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

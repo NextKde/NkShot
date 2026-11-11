@@ -16,6 +16,7 @@
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
 #include "ImageCopyEditor.h"
+#include "PresentationPreview.h"
 #include "QuickNoteWindow.h"
 #include "ColorPickerWindow.h"
 #include "OcrTextWindow.h"
@@ -61,6 +62,7 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
 {
     s_viewerWindowInstance = this;
     s_isAnnotating = false;
+    m_presentationPreview = new PresentationPreview(engine, this);
     m_clipJob = new VideoClipJob(this);
     connect(m_clipJob, &VideoClipJob::exported, this, [](const QUrl &url) { NkShot::RecentMediaModel::instance()->remember(url); });
     m_mediaLoader = new NkShot::LocalMediaLoader(this);
@@ -209,10 +211,30 @@ void ViewerWindow::beautifyImageCopy(int padding, int style, const QString &wate
         i18nc("@title:window", "Styled Copy — NkShot"),
         i18nc("@info", "The styled copy could not be created. Use a smaller image or less padding. Your original and edits are unchanged."));
 }
-void ViewerWindow::createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure)
+QObject *ViewerWindow::presentationPreviewObject() const { return m_presentationPreview; }
+bool ViewerWindow::beginPresentationPreview()
+{
+    if (m_resizingImage || SpectacleCore::instance()->videoMode()) return false;
+    if (m_presentationPreview->begin(SpectacleCore::instance()->annotationDocument()->renderToImage())) return true;
+    InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+        i18nc("@info", "This image cannot be previewed. Use a smaller image. Your original is unchanged."));
+    return false;
+}
+void ViewerWindow::cancelPresentationPreview() { m_presentationPreview->clear(); }
+bool ViewerWindow::createPresentationCopy()
+{
+    if (m_resizingImage || SpectacleCore::instance()->videoMode() || !m_presentationPreview->ready()) return false;
+    const auto source = m_presentationPreview->source();
+    const auto options = m_presentationPreview->options();
+    createImageCopy([options](const QImage &snapshot) { return NkShot::Imaging::composePresentation(snapshot, options); },
+        i18nc("@title:window", "Styled Copy — NkShot"),
+        i18nc("@info", "The styled copy could not be created. Your original and edits are unchanged."), source);
+    return true;
+}
+void ViewerWindow::createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure, const QImage &sourceSnapshot)
 {
     if (m_resizingImage || SpectacleCore::instance()->videoMode()) return;
-    const auto snapshot = SpectacleCore::instance()->annotationDocument()->renderToImage();
+    const auto snapshot = sourceSnapshot.isNull() ? SpectacleCore::instance()->annotationDocument()->renderToImage() : sourceSnapshot;
     m_resizingImage = true;
     Q_EMIT resizingImageChanged();
     auto watcher = new QFutureWatcher<QImage>(this);

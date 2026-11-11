@@ -31,7 +31,7 @@ QImage resizedToWidth(const QImage &source, int width, qint64 maximumPixels)
 #include <QColorSpace>
 #include <QLinearGradient>
 namespace NkShot::Imaging {
-QImage composePresentation(const QImage &source, const PresentationOptions &options, qint64 maximumPixels)
+static QImage renderPresentation(const QImage &source, const PresentationOptions &options, qint64 maximumPixels, int previewEdge)
 {
     const auto style = int(options.style);
     if (source.isNull() || options.padding < 0 || options.padding > 240 || style < 0 || style > 2
@@ -41,7 +41,10 @@ QImage composePresentation(const QImage &source, const PresentationOptions &opti
     const qint64 width = qint64(source.width()) + options.padding * 2;
     const qint64 height = qint64(source.height()) + options.padding * 2 + footer;
     if (width > 8192 || height > 32000 || width * height > maximumPixels) return {};
-    QImage image(int(width), int(height), QImage::Format_ARGB32_Premultiplied);
+    const QSize fullSize{int(width), int(height)};
+    const auto renderSize = previewEdge > 0 && qMax(width, height) > previewEdge
+        ? fullSize.scaled(previewEdge, previewEdge, Qt::KeepAspectRatio).expandedTo(QSize(1, 1)) : fullSize;
+    QImage image(renderSize, QImage::Format_ARGB32_Premultiplied);
     if (image.isNull()) return {};
     image.setColorSpace(QColorSpace::SRgb);
     QImage content = source.colorSpace().isValid() ? source.convertedToColorSpace(QColorSpace::SRgb) : source;
@@ -50,11 +53,13 @@ QImage composePresentation(const QImage &source, const PresentationOptions &opti
     {
         QPainter painter(&image);
         painter.setRenderHint(QPainter::Antialiasing);
+        if (previewEdge > 0) painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.scale(double(renderSize.width()) / width, double(renderSize.height()) / height);
         QLinearGradient gradient(0, 0, width, height);
         const bool dark = options.style == PresentationStyle::Dark;
         gradient.setColorAt(0, QColor(dark ? "#202126" : style == 2 ? "#c7dcff" : "#f5f5f7"));
         gradient.setColorAt(1, QColor(dark ? "#414553" : style == 2 ? "#ead5ff" : "#e9edf4"));
-        painter.fillRect(image.rect(), gradient);
+        painter.fillRect(QRectF(0, 0, width, height), gradient);
         const QRectF rect(options.padding, options.padding, source.width(), source.height());
         const qreal radius = options.rounded ? qMin(16, qMin(source.width(), source.height()) / 4) : 0;
         if (options.padding >= 16) {
@@ -77,7 +82,16 @@ QImage composePresentation(const QImage &source, const PresentationOptions &opti
                 painter.fontMetrics().elidedText(watermark, Qt::ElideRight, label.width()));
         }
     }
-    image.setDevicePixelRatio(source.devicePixelRatio());
+    image.setDevicePixelRatio(previewEdge > 0 ? 1 : source.devicePixelRatio());
     return image;
+}
+QImage composePresentation(const QImage &source, const PresentationOptions &options, qint64 maximumPixels)
+{
+    return renderPresentation(source, options, maximumPixels, 0);
+}
+QImage previewPresentation(const QImage &source, const PresentationOptions &options, int maximumEdge, qint64 maximumPixels)
+{
+    if (maximumEdge < 1 || maximumEdge > 2048) return {};
+    return renderPresentation(source, options, maximumPixels, maximumEdge);
 }
 }

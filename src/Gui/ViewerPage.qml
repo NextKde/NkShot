@@ -227,7 +227,7 @@ EmptyPage {
                             icon.name: "color-management"
                             icon.color: palette.buttonText
                             enabled: !contextWindow.resizingImage
-                            onTriggered: { beautifyPopup.sourceSize = contextWindow.imageSnapshotSize(); beautifyPopup.open() }
+                            onTriggered: { if (contextWindow.beginPresentationPreview()) beautifyPopup.open() }
                         }
                         QQC.MenuItem {
                             objectName: "nkshotResizeImageAction"
@@ -643,7 +643,7 @@ EmptyPage {
 
     BeautifyImagePopup {
         id: beautifyPopup
-        onCreateCopy: (padding, style, watermark, rounded) => contextWindow.beautifyImageCopy(padding, style, watermark, rounded)
+        previewModel: contextWindow.presentationPreview
     }
 
     ImageCombinePopup {
