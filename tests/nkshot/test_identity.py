@@ -16,6 +16,22 @@ def read(path):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_horizontal_composition_has_one_contextual_entry(self):
+        page = read('src/Gui/ViewerPage.qml')
+        popup = read('src/Gui/ImageCombinePopup.qml')
+        core = read('src/Gui/ViewerWindow.cpp')
+        api = read('src/Imaging/VerticalStitcher.h')
+        self.assertIn('ImageCombinePopup', page)
+        self.assertNotIn('nkshotStackImagesAction', page)
+        for name in ('Vertical', 'Horizontal', 'Match', 'Stack', 'Choose', 'Cancel'):
+            self.assertIn('nkshotCombine' + name, popup)
+        self.assertIn('autoExclusive: true', popup)
+        self.assertIn('not selection order', popup)
+        self.assertIn('stackHorizontal', api)
+        self.assertIn('stitchHorizontal', api)
+        self.assertIn('same height', core)
+        self.assertIn('32000', core)
+
     def test_global_shortcuts_are_opt_in_and_preserve_custom_keys(self):
         core = read('src/SpectacleCore.cpp')
         self.assertNotIn('setGlobalShortcut(', core)

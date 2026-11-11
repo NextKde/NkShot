@@ -66,7 +66,7 @@ public:
     Q_INVOKABLE void resizeImageCopy(int width, int quarterTurns = 0, bool mirror = false);
     Q_INVOKABLE void beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded);
     bool resizingImage() const { return m_resizingImage; }
-    Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);
+    Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false, bool horizontal = false);
     bool combiningImages() const { return m_combiningImages; }
     QObject *clipJobObject() const;
     VideoClipJob *clipJob() const { return m_clipJob; }

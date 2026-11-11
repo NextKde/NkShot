@@ -2252,6 +2252,7 @@ void installUiCaptureHook(QApplication &application)
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
                 const bool stacking = qEnvironmentVariableIsSet("NKSHOT_TEST_STACK");
+                const bool horizontal = qEnvironmentVariableIsSet("NKSHOT_TEST_HORIZONTAL");
                 auto document = SpectacleCore::instance()->annotationDocument();
                 const auto original = document->renderToImage();
                 QTemporaryDir files;
@@ -2279,14 +2280,60 @@ void installUiCaptureHook(QApplication &application)
                 // replacing the document-like visual fixture with random noise.
                 for (int y = 0; y < expected.height(); ++y)
                     expected.setPixelColor(0, y, QColor(y % 256, y / 256, 240));
+                if (horizontal) {
+                    expected = QImage(600, 320, QImage::Format_RGBA8888);
+                    expected.fill(QColor("#f5f5f7"));
+                    QPainter painter(&expected);
+                    painter.setPen(QColor("#202126"));
+                    painter.setFont(QFont(QStringLiteral("DejaVu Sans"), 16, QFont::Bold));
+                    painter.drawText(24, 40, QStringLiteral("A wider view"));
+                    painter.setFont(QFont(QStringLiteral("DejaVu Sans"), 9));
+                    painter.setPen(QColor("#747680"));
+                    painter.drawText(24, 64, QStringLiteral("Synthetic local image composition"));
+                    for (int column = 0; column < 3; ++column) {
+                        const int x = 24 + column*190;
+                        painter.fillRect(QRect(x, 86, 172, 208), Qt::white);
+                        painter.setPen(QColor("#202126"));
+                        painter.setFont(QFont(QStringLiteral("DejaVu Sans"), 12, QFont::DemiBold));
+                        painter.drawText(x+12, 116, QStringLiteral("%1. %2").arg(column+1).arg(QStringList{QStringLiteral("Capture"), QStringLiteral("Refine"), QStringLiteral("Share")}[column]));
+                        painter.fillRect(QRect(x+12, 134, 148, 76), QColor(column==0 ? "#dcecff" : column==1 ? "#e8e2ff" : "#dff4e9"));
+                        for (int line=0; line<4; ++line) painter.fillRect(QRect(x+12, 228+line*12, 138-line*12, 4), QColor("#dfe1e7"));
+                    }
+                    painter.end();
+                    for (int x=0; x<expected.width(); ++x) expected.setPixelColor(x,0,QColor(x%256,x/256,240));
+                }
+                const auto slice = [&](int offset, int length, int trimCross=0) {
+                    return horizontal ? expected.copy(offset,0,length,320-trimCross) : expected.copy(0,offset,320-trimCross,length);
+                };
                 const auto top = files.filePath(QStringLiteral("frame2.png"));
                 const auto bottom = files.filePath(QStringLiteral("frame10.png"));
-                if (!files.isValid() || !expected.copy(0, 0, 320, stacking ? 300 : 360).save(top)
-                    || !expected.copy(0, stacking ? 300 : 240, 320, stacking ? 300 : 360).save(bottom)) { application.exit(72); return; }
-                if (!openTaskMenu(viewer, QStringLiteral("nkshotCombineMenu"))) { application.exit(73); return; }
-                auto entry = visualItem(viewer->contentItem(), stacking ? QStringLiteral("nkshotStackImagesAction") : QStringLiteral("nkshotCombineImagesAction"));
-                if (!entry) { application.exit(73); return; }
-                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
+                if (!files.isValid() || !slice(0, stacking ? 300 : 360).save(top)
+                    || !slice(stacking ? 300 : 240, stacking ? 300 : 360).save(bottom)) { application.exit(72); return; }
+                auto clickCombine = [&](const QString &name) {
+                    auto item = visualItem(viewer->contentItem(), name);
+                    if (!item || !item->isVisible() || !item->isEnabled()) return false;
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());
+                    QTest::qWait(120); return true;
+                };
+                auto openConfig = [&] {
+                    viewer->requestActivate(); QTest::qWait(100);
+                    auto more = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                    if (!more || !QMetaObject::invokeMethod(more,"open")) return false;
+                    QTest::qWait(200);
+                    return clickCombine(QStringLiteral("nkshotCombineImagesAction"));
+                };
+                if (!openConfig()
+                    || !clickCombine(horizontal ? QStringLiteral("nkshotCombineHorizontal") : QStringLiteral("nkshotCombineVertical"))
+                    || !clickCombine(stacking ? QStringLiteral("nkshotCombineStack") : QStringLiteral("nkshotCombineMatch"))
+                    || !viewer->grabWindow().save(destination+QStringLiteral(".setup.png"))
+                    || !clickCombine(QStringLiteral("nkshotCombineCancel")) || viewer->combiningImages()
+                    || !samePixels(document->renderToImage(),original) || !openConfig()) { application.exit(73); return; }
+                auto direction = visualItem(viewer->contentItem(), horizontal ? QStringLiteral("nkshotCombineHorizontal") : QStringLiteral("nkshotCombineVertical"));
+                auto method = visualItem(viewer->contentItem(), stacking ? QStringLiteral("nkshotCombineStack") : QStringLiteral("nkshotCombineMatch"));
+                if (!clickCombine(horizontal ? QStringLiteral("nkshotCombineHorizontal") : QStringLiteral("nkshotCombineVertical"))
+                    || !clickCombine(stacking ? QStringLiteral("nkshotCombineStack") : QStringLiteral("nkshotCombineMatch"))) { application.exit(73); return; }
+                if (!direction || !method || !direction->property("checked").toBool() || !method->property("checked").toBool()
+                    || !clickCombine(QStringLiteral("nkshotCombineChoose"))) { application.exit(73); return; }
                 QTest::qWait(200);
                 auto currentDialog = []() -> QFileDialog * {
                     for (auto widget : QApplication::topLevelWidgets())
@@ -2295,11 +2342,11 @@ void installUiCaptureHook(QApplication &application)
                 };
                 QPointer<QFileDialog> dialog = currentDialog();
                 if (!dialog) { application.exit(74); return; }
-                viewer->combineImages(stacking);
+                viewer->combineImages(stacking, horizontal);
                 if (currentDialog() != dialog) { application.exit(75); return; }
                 dialog->reject();
                 if (!QTest::qWaitFor([&] { return dialog.isNull(); }, 1000) || viewer->combiningImages()) { application.exit(76); return; }
-                viewer->combineImages(stacking); QTest::qWait(200);
+                viewer->combineImages(stacking, horizontal); QTest::qWait(200);
                 dialog = currentDialog();
                 auto filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
                 if (!filename) { application.exit(77); return; }
@@ -2314,7 +2361,7 @@ void installUiCaptureHook(QApplication &application)
                     qCritical() << "Combined image mismatch" << bool(combined);
                     application.exit(79); return;
                 }
-                combined->resize(380, 520); QTest::qWait(250);
+                combined->resize(horizontal ? QSize(720, 440) : QSize(380, 520)); QTest::qWait(250);
                 if (!combined->grabWindow().save(destination)) { application.exit(80); return; }
                 combined->close();
                 if (!QTest::qWaitFor([&] { return combined.isNull(); }, 1000)) { application.exit(81); return; }
@@ -2324,9 +2371,9 @@ void installUiCaptureHook(QApplication &application)
                 }
                 // Duplicate frames must reject rather than fabricate a long image.
                 const auto duplicate = files.filePath(QStringLiteral("frame3.png"));
-                if (!expected.copy(0, 0, 320, 360).save(duplicate)) { application.exit(82); return; }
+                if (!slice(0, 360).save(duplicate)) { application.exit(82); return; }
                 const auto beforeWarning = InlineMessageModel::instance()->rowCount();
-                viewer->combineImages(); QTest::qWait(200);
+                viewer->combineImages(false, horizontal); QTest::qWait(200);
                 dialog = currentDialog();
                 filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
                 if (!filename) { application.exit(83); return; }
@@ -2345,20 +2392,20 @@ void installUiCaptureHook(QApplication &application)
                     const auto wrongWidth = files.filePath(QStringLiteral("frame20-width.png"));
                     const auto missingOverlap = files.filePath(QStringLiteral("frame20-gap.png"));
                     const auto broken = files.filePath(QStringLiteral("frame20-broken.png"));
-                    QImage gap(320, 360, QImage::Format_RGBA8888); gap.fill(QColor(222, 222, 222));
+                    QImage gap(horizontal ? 360 : 320, horizontal ? 320 : 360, QImage::Format_RGBA8888); gap.fill(QColor(222, 222, 222));
                     QFile damaged(broken);
-                    if (!expected.copy(0, 240, 319, 360).save(wrongWidth) || !gap.save(missingOverlap)
+                    if (!slice(240, 360, 1).save(wrongWidth) || !gap.save(missingOverlap)
                         || !damaged.open(QIODevice::WriteOnly)) { application.exit(87); return; }
                     damaged.write("not an image"); damaged.close();
                     const QList<QPair<QStringList, QString>> errors = {
-                        {{top, wrongWidth}, QStringLiteral("same width")},
+                        {{top, wrongWidth}, horizontal ? QStringLiteral("same height") : QStringLiteral("same width")},
                         {{top, broken}, QStringLiteral("could not be read")},
                         {{top}, QStringLiteral("Choose 2")},
                         {{top, missingOverlap}, QStringLiteral("No unchanged overlap")},
                     };
                     for (const auto &test : errors) {
                         auto messages = InlineMessageModel::instance(); messages->clear();
-                        viewer->combineImages(); QTest::qWait(200); dialog = currentDialog();
+                        viewer->combineImages(false, horizontal); QTest::qWait(200); dialog = currentDialog();
                         filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
                         if (!filename) { application.exit(88); return; }
                         QStringList quoted;

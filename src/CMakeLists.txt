@@ -243,6 +243,7 @@ qt_target_qml_sources(spectacle
     Gui/RecordingModeMenuButton.qml
     Gui/RecordingSettingsColumn.qml
     Gui/BeautifyImagePopup.qml
+    Gui/ImageCombinePopup.qml
     Gui/ResizeImagePopup.qml
     Gui/RecordingView.qml
     Gui/PrivacyRegionOverlay.qml

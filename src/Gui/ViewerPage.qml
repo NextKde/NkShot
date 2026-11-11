@@ -283,26 +283,15 @@ EmptyPage {
                             color: Kos.AppTheme.mutedText
                         }
                     }
-                    TaskMenu {
-                        objectName: "nkshotCombineMenu"
-                        title: i18nc("@action:menu", "Combine images")
+                    QQC.MenuItem {
+                        objectName: "nkshotCombineImagesAction"
+                        visible: !SpectacleCore.videoMode
+                        height: visible ? implicitHeight : 0
+                        text: contextWindow.combiningImages ? i18nc("@info", "Combining…") : i18nc("@action", "Combine images…")
                         icon.name: "view-preview"
-                        QQC.MenuItem {
-                            objectName: "nkshotCombineImagesAction"
-                            text: contextWindow.combiningImages ? i18nc("@info", "Combining…") : i18nc("@action", "Match overlapping screenshots…")
-                            icon.name: "view-preview"
-                            icon.color: palette.buttonText
-                            enabled: !contextWindow.combiningImages
-                            onTriggered: contextWindow.combineImages()
-                        }
-                        QQC.MenuItem {
-                            objectName: "nkshotStackImagesAction"
-                            text: i18nc("@action", "Stack without overlap…")
-                            icon.name: "view-sort-descending"
-                            icon.color: palette.buttonText
-                            enabled: !contextWindow.combiningImages
-                            onTriggered: contextWindow.combineImages(true)
-                        }
+                        icon.color: palette.buttonText
+                        enabled: !contextWindow.combiningImages
+                        onTriggered: combinePopup.open()
                     }
                     TaskMenu {
                         objectName: "nkshotPinsNotesMenu"
@@ -655,6 +644,12 @@ EmptyPage {
     BeautifyImagePopup {
         id: beautifyPopup
         onCreateCopy: (padding, style, watermark, rounded) => contextWindow.beautifyImageCopy(padding, style, watermark, rounded)
+    }
+
+    ImageCombinePopup {
+        id: combinePopup
+        busy: contextWindow.combiningImages
+        onChooseImages: (keepAllPixels, horizontal) => contextWindow.combineImages(keepAllPixels, horizontal)
     }
 
     ResizeImagePopup {

@@ -122,8 +122,10 @@ must be false. Merely setting QSG_RHI_BACKEND=vulkan is not evidence that the
 application used Vulkan; the offscreen platform can choose software. Explicit
 QT_QUICK_BACKEND=rhi currently fails to create a Vulkan instance in the cloud.
 
-`NKSHOT_TEST_COMBINE=1` drives More → Combine screenshots and the widget file
-picker. It tests reuse, cancel/reopen, reverse-selected natural filename order,
+`NKSHOT_TEST_COMBINE=1` drives More → Combine images, the contextual direction/
+method chooser and widget file picker. The chooser is canceled/reopened, selected
+options are clicked repeatedly and must remain selected. A `.setup.png` captures
+the actual configuration window. It tests reuse, cancel/reopen, reverse-selected natural filename order,
 exact output pixels and unchanged editor content, then rejects duplicate frames.
 The capture is the actual resulting pin containing a synthetic document fixture.
 Native file portals and automatic scrolling are not covered.
@@ -160,7 +162,9 @@ pixels and undo depth. Run separately from TEXT_INPUT/REDACTION tests because
 those tests intentionally assert history starting from an unedited document.
 Redaction regressions require `make_fixture.py --texture`.
 
-Add `NKSHOT_TEST_STACK=1` to COMBINE for the explicit no-overlap action. The input
+Add `NKSHOT_TEST_HORIZONTAL=1` for left-to-right composition, including a readable
+wide synthetic fixture, exact pixels and direction-correct failure messages.
+Add `NKSHOT_TEST_STACK=1` to COMBINE for explicit no-overlap composition. The input
 fixture is split into two non-overlapping halves. The actual menu, picker reuse,
 cancel/reopen, reversed numeric filename selection, exact reconstructed pixels,
 preview close and unchanged editor are checked. Stack mode intentionally does

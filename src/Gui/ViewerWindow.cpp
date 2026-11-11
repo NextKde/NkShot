@@ -240,7 +240,7 @@ void ViewerWindow::createImageCopy(std::function<QImage(const QImage &)> transfo
     watcher->setFuture(QtConcurrent::run([snapshot, transform] { return transform(snapshot); }));
 }
 
-void ViewerWindow::combineImages(bool stackWithoutOverlap)
+void ViewerWindow::combineImages(bool stackWithoutOverlap, bool horizontal)
 {
     if (m_combiningImages) return;
     if (auto existing = qobject_cast<QFileDialog *>(m_combineDialog.data())) {
@@ -250,18 +250,23 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
     m_combineDialog = dialog;
     dialog->setObjectName(QStringLiteral("nkshotCombineDialog"));
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(stackWithoutOverlap
+    dialog->setWindowTitle(horizontal
+        ? (stackWithoutOverlap
+            ? i18nc("@title:window", "Stack images — retain all content, left to right by filename")
+            : i18nc("@title:window", "Combine overlapping screenshots — left to right by filename"))
+        : stackWithoutOverlap
         ? i18nc("@title:window", "Stack images — retain all content, top to bottom by filename")
         : i18nc("@title:window", "Combine overlapping screenshots — top to bottom by filename"));
     dialog->setFileMode(QFileDialog::ExistingFiles);
     dialog->setNameFilter(i18nc("@item:inlistbox", "Images (*.png *.jpg *.jpeg *.webp *.bmp)"));
     dialog->winId();
     dialog->windowHandle()->setTransientParent(this);
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, stackWithoutOverlap] {
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, stackWithoutOverlap, horizontal] {
         auto paths = dialog->selectedFiles();
         if (paths.size() < 2 || paths.size() > 16) {
             InlineMessageModel::instance()->push(InlineMessageModel::Warning,
-                i18nc("@info", "Choose 2–16 images. Number their filenames from top to bottom."));
+                horizontal ? i18nc("@info", "Choose 2–16 images. Number their filenames from left to right.")
+                    : i18nc("@info", "Choose 2–16 images. Number their filenames from top to bottom."));
             return;
         }
         QCollator order(QLocale(QLocale::English, QLocale::UnitedStates));
@@ -273,7 +278,7 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
         m_combiningImages = true;
         Q_EMIT combiningImagesChanged();
         auto watcher = new QFutureWatcher<NkShot::Imaging::StitchResult>(this);
-        connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, stackWithoutOverlap] {
+        connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, stackWithoutOverlap, horizontal] {
             const auto result = watcher->result();
             watcher->deleteLater();
             m_combiningImages = false;
@@ -284,17 +289,21 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
                 switch (result.error) {
                 case Error::InvalidInput:
                     reason = stackWithoutOverlap ? i18nc("@info", "An image could not be read. Choose intact image files.")
+                        : horizontal ? i18nc("@info", "An image could not be read or is too narrow. Choose intact images wider than 24 pixels.")
                         : i18nc("@info", "An image could not be read or is too short. Choose intact images taller than 24 pixels."); break;
                 case Error::IncompatibleFrames:
-                    reason = i18nc("@info", "Images must have the same width, scale and color profile. Use screenshots from the same capture session."); break;
+                    reason = horizontal ? i18nc("@info", "Images must have the same height, scale and color profile. Use screenshots from the same capture session.")
+                        : i18nc("@info", "Images must have the same width, scale and color profile. Use screenshots from the same capture session."); break;
                 case Error::NoOverlap:
-                    reason = i18nc("@info", "No unchanged overlap was found. Number images top to bottom and retain at least 24 overlapping pixels. Prefer original PNG screenshots."); break;
+                    reason = horizontal ? i18nc("@info", "No unchanged overlap was found. Number images left to right and retain at least 24 overlapping pixels. Prefer original PNG screenshots.")
+                        : i18nc("@info", "No unchanged overlap was found. Number images top to bottom and retain at least 24 overlapping pixels. Prefer original PNG screenshots."); break;
                 case Error::AmbiguousOverlap:
                     reason = i18nc("@info", "Repeated content makes the overlap ambiguous. Choose screenshots with more distinctive overlapping content."); break;
                 case Error::NoProgress:
                     reason = i18nc("@info", "A repeated image adds no new content. Remove duplicate or fully overlapping screenshots."); break;
                 case Error::TooLarge:
-                    reason = i18nc("@info", "These images exceed the safe size limit. Use fewer or smaller images: 40 megapixels total, at most 8192 pixels wide and 32000 pixels tall."); break;
+                    reason = horizontal ? i18nc("@info", "These images exceed the safe size limit. Use fewer or smaller images: 40 megapixels total, at most 32000 pixels wide and 8192 pixels tall.")
+                        : i18nc("@info", "These images exceed the safe size limit. Use fewer or smaller images: 40 megapixels total, at most 8192 pixels wide and 32000 pixels tall."); break;
                 case Error::None: break;
                 }
                 InlineMessageModel::instance()->push(InlineMessageModel::Warning,
@@ -314,7 +323,7 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
             InlineMessageModel::instance()->push(InlineMessageModel::Saved,
                 i18nc("@info", "Combined image opened in a separate window. Copy or Save As there; the source images and current edit are unchanged."));
         });
-        watcher->setFuture(QtConcurrent::run([paths, stackWithoutOverlap] {
+        watcher->setFuture(QtConcurrent::run([paths, stackWithoutOverlap, horizontal] {
             QList<QImage> frames;
             qint64 pixels = 0;
             for (const auto &path : paths) {
@@ -323,13 +332,15 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
                 const qint64 count = qint64(size.width()) * size.height();
                 if (!size.isValid() || count < 1)
                     return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::InvalidInput};
-                if (count > 40000000 - pixels || size.width() > 8192 || size.height() > 32000)
+                if (count > 40000000 - pixels || size.width() > (horizontal ? 32000 : 8192) || size.height() > (horizontal ? 8192 : 32000))
                     return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::TooLarge};
                 pixels += count;
                 auto image = reader.read();
                 if (image.isNull()) return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::InvalidInput};
                 frames.append(image);
             }
+            if (horizontal)
+                return stackWithoutOverlap ? NkShot::Imaging::stackHorizontal(frames) : NkShot::Imaging::stitchHorizontal(frames);
             return stackWithoutOverlap ? NkShot::Imaging::stackVertical(frames) : NkShot::Imaging::stitchVertical(frames);
         }));
     });
