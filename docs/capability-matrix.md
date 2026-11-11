@@ -14,7 +14,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | Copy/save and immutable pins | Implemented | Pixels, PNG Save As, cancellation/reopen, multiple pins and lifetime | Native portals/stacking pending |
 | Opaque cover | Rectangle preset, not destructive source erasure | Opaque interior, unchanged selected mark/outside pixels, undo/redo and exports | Pending real desktop use |
 | Local OCR | Implemented result view, installed-model choice, UTF-8 save | Real Tesseract eng/chi_sim, copy/save and error boundaries | General accuracy not certified |
-| Pin Live Text | Not implemented | None; editor OCR is not pin Live Text | Not accepted |
+| Text extraction from pins / Live Text | Local whole-image text extraction implemented (060); inline word highlighting/selection not implemented | Real eng/chi_sim recognition, actual pin action and result copy/save, close/hidden lifecycle and error states | Native focus/accessibility and full Live Text parity not accepted |
 | Vertical overlapping-image composition | Implemented, manual file input | Exact matching and conservative rejection; actual picker | No desktop scrolling claim |
 | Explicit vertical stacking | Implemented, manual file input | Retained pixels, numeric order, repeated content, metadata/limits | No desktop scrolling claim |
 | Fixed-region manual-scroll capture session | Opt-in preview (058), keyboard-adjustable selector (059), runtime API5 gate; default off | Synthetic core/timeout/coordinate tests, unavailable-state/menu/cancel and keyboard-selection UI; no live capture acceptance | Needs real KWin session |

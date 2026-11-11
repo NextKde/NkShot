@@ -12,7 +12,7 @@ Preservation responsibilities remain:
 - Keep original area/window/screen, delay, pointer and recording/audio routes.
 - Keep all annotation tools, contextual options, history and exports reachable.
 - Test source immutability and exact export pixels when adding sharing transforms.
-- Distinguish editor OCR from pin Live Text, manual file composition from rolling
+- Distinguish whole-image editor/pin OCR from inline Live Text, manual file composition from rolling
   capture, and static image annotations from annotations during recording.
 - QR decoding remains inherited source without a focused acceptance test.
 - Native dialogs, global shortcuts, real KWin capture and hardware presentation

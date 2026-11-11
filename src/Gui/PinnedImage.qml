@@ -17,6 +17,7 @@ QQC.Pane {
     }
     component PinButton: QQC.ToolButton {
         icon.color: Kos.AppTheme.paletteText
+        implicitWidth: display === QQC.AbstractButton.IconOnly ? 36 : implicitContentWidth + leftPadding + rightPadding
         implicitHeight: 36
         QQC.ToolTip.visible: hovered
         QQC.ToolTip.text: text
@@ -43,7 +44,7 @@ QQC.Pane {
             }
             QQC.Label {
                 // Keep all actions reachable at the 260 px minimum width.
-                visible: root.width >= 340
+                visible: root.width >= 440
                 text: pinnedWindow.snapshotSize.width + " × " + pinnedWindow.snapshotSize.height
                 color: Kos.AppTheme.paletteText
             }
@@ -54,7 +55,7 @@ QQC.Pane {
                 property bool copied: false
                 text: copied ? i18nc("@info", "Copied") : i18nc("@action", "Copy")
                 icon.name: copied ? "dialog-ok" : "edit-copy"
-                display: root.width < 420 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
+                display: root.width < 500 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
                 Connections {
                     target: pinnedWindow
                     function onImageCopied() { copyButton.copied = true; copyFeedback.restart() }
@@ -65,6 +66,15 @@ QQC.Pane {
                     onTriggered: copyButton.copied = false
                 }
                 onClicked: pinnedWindow.copyImage()
+            }
+            PinButton {
+                objectName: "nkshotPinExtractText"
+                text: pinnedWindow.extractingText ? i18nc("@info", "Reading text…") : i18nc("@action", "Extract text")
+                display: QQC.AbstractButton.IconOnly
+                icon.name: pinnedWindow.extractingText ? "" : "document-scan"
+                enabled: !pinnedWindow.extractingText
+                onClicked: pinnedWindow.extractText()
+                QQC.BusyIndicator {anchors.centerIn: parent; width: 20; height: 20; running: pinnedWindow.extractingText; visible: running}
             }
             PinButton {
                 objectName: "nkshotPinSave"
@@ -91,6 +101,7 @@ QQC.Pane {
             Connections {
                 target: pinnedWindow
                 function onSaveFinished(message, success) { saveStatus.text = message }
+                function onTextExtractionStatus(message) { saveStatus.text = message }
             }
         }
         Image {

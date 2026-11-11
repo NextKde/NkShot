@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "PinnedImageWindow.h"
+#include "OcrTextWindow.h"
+#include "Imaging/LocalTextExtraction.h"
+#include "settings.h"
+#include <QtConcurrentRun>
 #include <QApplication>
 #include <QClipboard>
 #include <QFileDialog>
@@ -56,6 +60,7 @@ PinnedImageWindow::PinnedImageWindow(const QImage &image, QQmlEngine *engine)
 
 PinnedImageWindow::~PinnedImageWindow()
 {
+    if(m_ocrCancelled) m_ocrCancelled->store(true);
     delete m_saveDialog;
     if (m_sharedEngine) m_sharedEngine->removeImageProvider(m_providerId);
 }
@@ -117,6 +122,59 @@ bool PinnedImageWindow::event(QEvent *event)
 {
     const auto type = event->type();
     const bool result = QQuickView::event(event);
-    if (type == QEvent::Close && event->isAccepted()) deleteLater();
+    if (type == QEvent::Close && event->isAccepted()) {m_closing=true;if(m_ocrCancelled)m_ocrCancelled->store(true);deleteLater();}
     return result;
+}
+
+void PinnedImageWindow::extractText(const QString &language)
+{
+    if(m_extractingText || m_closing) return;
+    auto languages=language.isEmpty()?Settings::ocrLanguages():language.split(u'+',Qt::SkipEmptyParts);
+    if(languages.isEmpty()) languages={QStringLiteral("eng")};
+    if(!m_pendingText.isEmpty() && m_pendingLanguages==languages) {
+        if(isVisible() && visibility()!=QWindow::Minimized) {
+            showExtractedText(m_pendingText);
+            m_pendingText.clear();
+        }
+        return;
+    }
+    m_pendingText.clear();m_pendingLanguages.clear();
+    m_extractingText=true;m_ocrCancelled=std::make_shared<std::atomic_bool>(false);
+    Q_EMIT extractingTextChanged();
+    Q_EMIT textExtractionStatus(i18nc("@info","Reading text locally…"));
+    const auto image=m_image;const auto cancelled=m_ocrCancelled;
+    QtConcurrent::run([image,languages,cancelled]{return NkShot::Imaging::extractLocalText(image,languages,cancelled);})
+        .then(this,[this,cancelled,languages](const NkShot::Imaging::TextExtractionResult &result){
+        if(m_closing || cancelled->load()) return;
+        m_extractingText=false;Q_EMIT extractingTextChanged();
+        using Error=NkShot::Imaging::TextExtractionError;
+        if(result.error!=Error::None) {
+            Q_EMIT textExtractionStatus(result.error==Error::Unavailable || result.error==Error::InvalidLanguage
+                ? i18nc("@info","The configured OCR language data is unavailable. Check OCR languages in Options.")
+                : result.error==Error::Busy ? i18nc("@info","Other text extractions are running. Try again shortly.")
+                : result.error==Error::InvalidInput ? i18nc("@info","This image is too large for text extraction. Use a smaller sharing copy.")
+                : i18nc("@info","Text extraction failed or timed out. The image and clipboard are unchanged."));
+            return;
+        }
+        if(result.text.isEmpty()) {Q_EMIT textExtractionStatus(i18nc("@info","No text was found. The image and clipboard are unchanged."));return;}
+        // Scrolling capture temporarily hides pins. Never steal focus from its selector.
+        if(!isVisible() || visibility()==QWindow::Minimized) {
+            m_pendingText=result.text;m_pendingLanguages=languages;
+            Q_EMIT textExtractionStatus(i18nc("@info","Text ready. Choose Extract text to view it."));
+            return;
+        }
+        showExtractedText(result.text);
+    });
+}
+
+void PinnedImageWindow::showExtractedText(const QString &text)
+{
+    auto textWindow=new OcrTextWindow(text,m_sharedEngine);
+    if(textWindow->status()!=QQuickView::Ready) {
+        delete textWindow;
+        Q_EMIT textExtractionStatus(i18nc("@info","The text preview could not open. Try again."));
+        return;
+    }
+    textWindow->setScreen(screen());textWindow->show();textWindow->requestActivate();
+    Q_EMIT textExtractionStatus(i18nc("@info","Text ready. Select, copy or save it in the text window."));
 }

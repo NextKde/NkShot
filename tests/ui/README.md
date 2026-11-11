@@ -248,3 +248,17 @@ edges/minimums, Tab focus to Cancel/Use region, Return activation and keyboard
 cancellation. It verifies too-small regions disable confirmation. `.keyboard-layout.png`
 and `.invalid-region.png` remain layout/input diagnostics, with C++ Setup state and
 zero captured frames throughout. No compositor success is simulated.
+
+
+### Pinned-image local text (060)
+
+`NKSHOT_TEST_PIN_TEXT=1` creates an explicitly synthetic text pin and clicks its
+real Extract text action. It checks busy/repeat protection, actual OCR, result
+copy and UTF-8 save, unchanged source/history/configuration, no automatic
+clipboard writes, hidden-pin result deferral and close-during-work suppression.
+`NKSHOT_TEST_PIN_TEXT_CHINESE=1` uses Noto Sans CJK SC and real chi_sim data;
+`NKSHOT_TEST_PIN_TEXT_COMPACT=1` tests the 260-pixel toolbar.
+`NKSHOT_TEST_PIN_TEXT_BLANK=1` and `NKSHOT_TEST_PIN_TEXT_MISSING=1` check no-result
+and missing-model UI without a result window or state mutation. The fixture
+language setting is restored after each run. These tests need installed eng and
+chi_sim models and do not establish native compositor focus or general OCR accuracy.

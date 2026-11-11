@@ -1275,3 +1275,42 @@ No native KWin success, compositor focus/transparency or screen-reader acceptanc
 is claimed. The preview remains default-off. The current preview guide replaces
 its former “keyboard resizing not implemented” limitation with the implemented
 controls and remaining native acceptance boundary.
+
+## 060 — Independent local text extraction from pinned images
+
+Pinned snapshots now have a local Extract text action using the user's configured
+OCR languages. A separate selectable text window supports Copy all and UTF-8 Save
+As. It does not automatically replace the clipboard, alter the source image,
+annotation history or language settings. Empty/missing-model results explain the
+problem in place instead of creating an empty result window. This is practical
+whole-image OCR, not inline word-highlight Live Text or translation.
+
+The reusable `LocalTextExtraction` helper owns a Tesseract instance per job, with
+bounded image size, language validation, a two-job budget and cooperative
+recognition cancellation/deadline. Closing a pin suppresses late results; hidden
+or minimized pins keep successful text pending until the next explicit action,
+so a late result cannot interrupt the scrolling region selector. No network
+processing or forced worker termination is added.
+
+The real offscreen UI test clicks the toolbar, recognizes English and Chinese,
+checks repeat protection, copies and saves exact UTF-8 text, hides/reopens the pin
+and closes it during a fresh job. Source/history/configuration and automatic
+clipboard non-mutation are asserted. Blank and unavailable-model UI paths are
+checked separately. The existing pin Copy/top-toggle/Save As/cancel/reopen/source
+isolation tests still pass. CTest 9/9 and static checks 16/16 pass.
+
+Visual review caught the fifth toolbar action clipping at 260 pixels. Icon-only
+buttons now use explicit 36-pixel widths, and the test asserts every action stays
+within the window. Reviewed the corrected [compact pin](screenshots/060-pin-text-compact.png.pin.png),
+[dark pin](screenshots/060-pin-text-dark.png.pin.png),
+[English result](screenshots/060-pin-text-english.png),
+[Chinese result](screenshots/060-pin-text-chinese.png),
+[empty state](screenshots/060-pin-text-empty.png) and
+[missing-language state](screenshots/060-pin-text-unavailable.png).
+All pictures use synthetic non-personal fixtures and software Qt rendering.
+
+The available environment was rechecked: only the cloud computer is available,
+without a live KDE session. Native focus/accessibility, general OCR accuracy,
+compositor capture/recording and GPU liquid-material acceptance remain unverified.
+The 15-second recognition deadline does not bound language-model initialization.
+No scrolling-preview gate was relaxed.

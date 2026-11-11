@@ -22,7 +22,8 @@ See [iterations](iterations.md), [building](building.md) and
    assess automatic and horizontal scrolling. File composition is not scrolling.
 2. **Non-destructive sharing:** background/watermark copies and reusable image
    processing must preserve original documents/history and verify exported pixels.
-3. **Local text workflows:** pin Live Text and practical OCR usability. Translation
+3. **Local text workflows:** whole-image OCR from immutable pins is implemented
+   in 060; inline word highlighting/selection remains a Live Text gap. Translation
    is requested separately and is not yet implemented. Prefer local processing;
    any external provider requires explicit opt-in identifying data/destination.
 4. **Recording beyond capture:** actual KWin/PipeWire recording/A/V acceptance,

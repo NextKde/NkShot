@@ -81,3 +81,9 @@ set_tests_properties(scroll_capture_session_test PROPERTIES TIMEOUT 20)
 ecm_add_test(ScrollCaptureControllerTest.cpp ../src/Imaging/ScrollCaptureController.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/VerticalStitcher.cpp
     TEST_NAME scroll_capture_controller_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(scroll_capture_controller_test PROPERTIES TIMEOUT 20)
+
+# Independent OCR job: no singleton/clipboard/configuration side effects.
+ecm_add_test(LocalTextExtractionTest.cpp ../src/Imaging/LocalTextExtraction.cpp
+    TEST_NAME local_text_extraction_test LINK_LIBRARIES Qt::Test Qt::Gui PkgConfig::TESSERACT)
+target_compile_options(local_text_extraction_test PRIVATE -fexceptions)
+set_tests_properties(local_text_extraction_test PROPERTIES TIMEOUT 40 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

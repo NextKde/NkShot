@@ -104,3 +104,28 @@ The dialog shows output dimensions and disables Create when canvas limits would
 be exceeded. Reduce padding to recover without losing entered options. More is
 grouped by task: sharing, extracting text and combining images; recording mode
 only exposes recording-file actions rather than irrelevant image tools.
+
+## Read text from a pinned image (060)
+
+Use **Extract text** in a pinned image's toolbar. Recognition runs on the immutable
+pin, using the OCR languages selected in Options. The result opens separately for
+selection, Copy all or UTF-8 Save As. Nothing is copied automatically, and the
+editor, pin pixels, edit history and language preferences remain unchanged.
+Recognition is local; installed Tesseract models are required. Missing models and
+empty results leave an explanatory message in the pin instead of opening an empty
+window. This is a whole-image text view, not inline word selection or highlighting.
+
+The UI prevents repeat jobs for one pin; the shared helper allows at most two
+concurrent jobs. Inputs are limited to 20 million pixels, 8192 pixels wide and
+32000 pixels high, with up to four configured language codes. Recognition has a
+15-second cooperative deadline; this is not a hard deadline for loading language
+models. Closing the pin requests cancellation and suppresses late result windows.
+When a pin is hidden/minimized, completed text is held locally until the user
+chooses Extract text again. It does not interrupt a capture selector with a popup.
+Changing the selected languages discards that pending result and re-recognizes.
+
+The UI-independent `Imaging/LocalTextExtraction` helper owns a separate Tesseract
+instance per request; it does not use the editor OCR singleton or its clipboard
+behavior. Real English/Chinese fixture recognition and Qt offscreen interactions
+are tested. General recognition quality, native window focus and accessibility
+still require real desktop acceptance.

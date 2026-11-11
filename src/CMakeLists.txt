@@ -40,6 +40,7 @@ target_sources(spectacle PRIVATE
     Imaging/ScrollCaptureSession.cpp
     Platforms/ScrollFrameKWin.cpp
     Platforms/ScrollFrameKWin.h
+    Imaging/LocalTextExtraction.cpp
     Imaging/ImageTransforms.cpp
     Imaging/VerticalStitcher.cpp
     Gui/SoftwareVideoPreview.cpp

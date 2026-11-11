@@ -25,6 +25,9 @@
 #include <QImage>
 #include <QInputMethodEvent>
 #include <QClipboard>
+#include <QScopeGuard>
+#include <QThreadPool>
+#include "settings.h"
 #include <QMimeData>
 #include <QFileInfo>
 #include <QFile>
@@ -86,7 +89,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -259,6 +262,82 @@ void installUiCaptureHook(QApplication &application)
                 if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
                 qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
                 application.exit(0); return;
+            }
+            if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT")) {
+                const auto configured=Settings::ocrLanguages();
+                const auto restore=qScopeGuard([configured]{Settings::setOcrLanguages(configured);});
+                const bool chinese=qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_CHINESE");
+                Settings::setOcrLanguages({chinese?QStringLiteral("chi_sim"):QStringLiteral("eng")});
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_MISSING")) Settings::setOcrLanguages({QStringLiteral("nkshot_missing_model")});
+                const auto selected=Settings::ocrLanguages();
+                auto document=SpectacleCore::instance()->annotationDocument();
+                const auto original=document->renderToImage();const auto depth=document->undoStackDepth();
+                QImage fixture(1000,220,QImage::Format_ARGB32);fixture.fill(Qt::white);
+                {QPainter p(&fixture);QFont f(chinese?QStringLiteral("Noto Sans CJK SC"):QStringLiteral("DejaVu Sans"));f.setPixelSize(64);p.setFont(f);p.setPen(Qt::black);p.drawText(fixture.rect(),Qt::AlignCenter,chinese?QStringLiteral("中文截图编辑 12345"):QStringLiteral("HELLO NKSHOT 12345"));}
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_BLANK")) fixture.fill(Qt::white);
+                QPointer<PinnedImageWindow> pin=new PinnedImageWindow(fixture,viewer->engine());pin->show();
+                QSignalSpy extractionStatus(pin,&PinnedImageWindow::textExtractionStatus);
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_COMPACT")) pin->resize(260,220);
+                QTest::qWait(150);
+                auto extract=visualItem(pin->contentItem(),QStringLiteral("nkshotPinExtractText"));
+                if(!extract || !extract->isVisible()) {application.exit(210);return;}
+                for(const auto &name:{"nkshotPinTop","nkshotPinCopy","nkshotPinExtractText","nkshotPinSave","nkshotPinClose"}) {
+                    auto action=visualItem(pin->contentItem(),QString::fromLatin1(name));
+                    const auto topLeft=action?action->mapToScene(QPointF()):QPointF(-1,-1);
+                    if(!action || !action->isVisible() || topLeft.x()<0 || topLeft.x()+action->width()>pin->width() || topLeft.y()<0 || topLeft.y()+action->height()>pin->height()) {application.exit(231);return;}
+                }
+                QApplication::clipboard()->setText(QStringLiteral("keep clipboard"));
+                QTest::mouseClick(pin,Qt::LeftButton,Qt::NoModifier,extract->mapToScene(QPointF(extract->width()/2,extract->height()/2)).toPoint());
+                if(!pin->extractingText()) {application.exit(211);return;}
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_MISSING") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_BLANK")) {
+                    if(!QTest::qWaitFor([&]{return !pin->extractingText();},15000)) {application.exit(228);return;}
+                    for(auto w:QGuiApplication::allWindows()) if(qobject_cast<OcrTextWindow *>(w)) {application.exit(229);return;}
+                    const auto message=extractionStatus.isEmpty()?QString():extractionStatus.last().first().toString();
+                    const bool missing=qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_MISSING");
+                    if(!message.contains(missing?QStringLiteral("unavailable"):QStringLiteral("No text")) || QApplication::clipboard()->text()!=QStringLiteral("keep clipboard") || !samePixels(pin->snapshot(),fixture) || !samePixels(document->renderToImage(),original) || depth!=document->undoStackDepth() || Settings::ocrLanguages()!=selected) {application.exit(230);return;}
+                    QTest::qWait(150);pin->grabWindow().save(destination);pin->close();
+                    qInfo()<<"NkShot pin text empty/missing model UI boundary passed";
+                    application.exit(0);return;
+                }
+                pin->extractText(); // Repeated action must not create a second job/result.
+                QPointer<OcrTextWindow> result;
+                if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows()) if(auto candidate=qobject_cast<OcrTextWindow *>(w)) result=candidate;return result && !pin->extractingText();},15000)) {application.exit(212);return;}
+                auto normalized=result->recognizedText().simplified();if(chinese) normalized.remove(u' ');
+                if(normalized!=(chinese?QStringLiteral("中文截图编辑12345"):QStringLiteral("HELLO NKSHOT 12345")) || QApplication::clipboard()->text()!=QStringLiteral("keep clipboard") || Settings::ocrLanguages()!=selected || !samePixels(pin->snapshot(),fixture) || !samePixels(document->renderToImage(),original) || depth!=document->undoStackDepth()) {application.exit(213);return;}
+                int count=0;for(auto w:QGuiApplication::allWindows()) if(qobject_cast<OcrTextWindow *>(w)) ++count;
+                if(count!=1) {application.exit(214);return;}
+                QTest::qWait(150);pin->grabWindow().save(destination+QStringLiteral(".pin.png"));result->grabWindow().save(destination);
+                auto copy=visualItem(result->contentItem(),QStringLiteral("nkshotOcrCopy"));
+                auto save=visualItem(result->contentItem(),QStringLiteral("nkshotOcrSave"));
+                if(!copy || !save) {application.exit(215);return;}
+                QTest::mouseClick(result,Qt::LeftButton,Qt::NoModifier,copy->mapToScene(QPointF(copy->width()/2,copy->height()/2)).toPoint());
+                if(QApplication::clipboard()->text()!=result->recognizedText()) {application.exit(216);return;}
+                QTest::mouseClick(result,Qt::LeftButton,Qt::NoModifier,save->mapToScene(QPointF(save->width()/2,save->height()/2)).toPoint());QTest::qWait(150);
+                QFileDialog *dialog=nullptr;for(auto w:QApplication::topLevelWidgets()) if(w->objectName()==QStringLiteral("nkshotOcrSaveDialog")) dialog=qobject_cast<QFileDialog *>(w);
+                auto filename=dialog?dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")):nullptr;
+                QTemporaryDir folder;const auto output=folder.filePath(QStringLiteral("pin-text.txt"));
+                if(!filename || !folder.isValid()) {application.exit(217);return;}
+                filename->setFocus();filename->selectAll();QTest::keyClicks(filename,output);
+                if(!QMetaObject::invokeMethod(dialog,"accept") || !QTest::qWaitFor([&]{return QFileInfo::exists(output);},1500)) {application.exit(218);return;}
+                QFile saved(output);if(!saved.open(QIODevice::ReadOnly) || saved.readAll()!=result->recognizedText().toUtf8()) {application.exit(219);return;}
+                result->close();if(!QTest::qWaitFor([&]{return result.isNull();},1000)) {application.exit(220);return;}
+                // Hidden pins must not open a late result over a capture selector.
+                pin->extractText();pin->hide();
+                if(!QTest::qWaitFor([&]{return !pin->extractingText();},15000)) {application.exit(224);return;}
+                for(auto w:QGuiApplication::allWindows()) if(qobject_cast<OcrTextWindow *>(w)) {application.exit(225);return;}
+                pin->show();QTest::qWait(100);pin->extractText();
+                for(auto w:QGuiApplication::allWindows()) if(auto candidate=qobject_cast<OcrTextWindow *>(w)) result=candidate;
+                if(!result || result->recognizedText().isEmpty() || pin->extractingText()) {application.exit(226);return;}
+                result->close();if(!QTest::qWaitFor([&]{return result.isNull();},1000)) {application.exit(227);return;}
+                // An immediate pin close cancels cooperatively and suppresses late UI/clipboard writes.
+                QApplication::clipboard()->setText(QStringLiteral("after close"));
+                pin->extractText();pin->close();
+                if(!QTest::qWaitFor([&]{return pin.isNull() && QThreadPool::globalInstance()->activeThreadCount()==0;},15000)) {application.exit(221);return;}
+                QTest::qWait(150);
+                for(auto w:QGuiApplication::allWindows()) if(qobject_cast<OcrTextWindow *>(w)) {application.exit(222);return;}
+                if(QApplication::clipboard()->text()!=QStringLiteral("after close") || !samePixels(document->renderToImage(),original) || depth!=document->undoStackDepth() || Settings::ocrLanguages()!=selected) {application.exit(223);return;}
+                qInfo()<<"NkShot pin local text actual action/repeat/result/copy/UTF8 save/hidden deferral/close suppression and source/clipboard/config isolation passed";
+                application.exit(0);return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_PREVIEW")) {
                 if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_VIDEO")) SpectacleCore::instance()->setVideoMode(true);
