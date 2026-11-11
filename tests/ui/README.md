@@ -738,3 +738,18 @@ real software-window capture. Existing `NKSHOT_TEST_RECENT_MEDIA=1` inside the
 local-media workflow separately exercises normal recent-file reopening.
 The decoder and session targets cover source bounds/identity, formats, cache
 lifetime, serial-queue completion barriers and stale-result isolation.
+
+## Reviewed text covering (111)
+
+`NKSHOT_TEST_TEXT_COVER=1` creates a synthetic English OCR fixture and an unsaved
+annotation in an independent editor. It drives actual search, match selection,
+query invalidation, Cancel/Escape, Create and result Copy. It checks exact opaque
+output pixels and unchanged original/history/dirty state. Dark and compact modes
+use `NKSHOT_TEST_DARK=1` and `NKSHOT_TEST_COMPACT=1`;
+`NKSHOT_TEST_TEXT_COVER_MANY=1` checks 20 rows with forward/reverse Tab visibility.
+Two consecutive Space presses must preserve checkbox focus across selection
+updates. After Create, the source editor is forced active to prove Copy/Save are
+blocked until an explicit return to original; closing the result cannot bypass
+that pause. Captures: `.text-cover.png`, `.text-cover-preview.png`,
+`.covered-copy.png`, `.original-paused.png`. These are software-window checks,
+not native KDE capture or guaranteed OCR privacy coverage.

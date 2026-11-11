@@ -218,3 +218,12 @@ set_tests_properties(media_thumbnail_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_
 ecm_add_test(RecentThumbnailsTest.cpp ../src/Gui/RecentThumbnails.cpp ../src/Gui/RecentThumbnails.h ../src/Imaging/MediaThumbnail.cpp
     TEST_NAME recent_thumbnails_test LINK_LIBRARIES Qt::Test Qt::Quick Qt::Concurrent)
 set_tests_properties(recent_thumbnails_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Literal OCR-word matching and independent opaque covering renderer.
+ecm_add_test(TextCoverTest.cpp ../src/Imaging/TextCover.cpp
+    TEST_NAME text_cover_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(text_cover_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+ecm_add_test(TextCoverSessionTest.cpp ../src/Gui/TextCoverSession.cpp ../src/Gui/TextCoverSession.h ../src/Imaging/TextCover.cpp ../src/Imaging/LocalTextExtraction.cpp
+    TEST_NAME text_cover_session_test LINK_LIBRARIES Qt::Test Qt::Quick Qt::Concurrent KF6::I18n PkgConfig::TESSERACT)
+target_compile_options(text_cover_session_test PRIVATE -fexceptions)
+set_tests_properties(text_cover_session_test PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -5,12 +5,18 @@
 #include <QImage>
 #include <KQuickImageEditor/AnnotationDocument>
 class ImageAdjustmentsPreview;
+class TextCoverSession;
 class QMessageBox;
 class QFileDialog;
 class QWidget;
 // Standalone editing session. No dependency on SpectacleCore or its document.
 class ImageCopyEditor : public QQuickView {
     Q_OBJECT
+    Q_PROPERTY(QObject *textCoverSession READ textCoverSessionObject CONSTANT)
+    Q_PROPERTY(bool coverReviewPending READ coverReviewPending NOTIFY adjustmentStateChanged)
+    Q_PROPERTY(bool hasCoveredCopy READ hasCoveredCopy NOTIFY adjustmentStateChanged)
+    Q_PROPERTY(bool coveringCopy READ coveringCopy NOTIFY adjustmentStateChanged)
+    Q_PROPERTY(bool editToolsBlocked READ editToolsBlocked NOTIFY adjustmentStateChanged)
     Q_PROPERTY(QObject *adjustmentPreview READ adjustmentPreviewObject CONSTANT)
     Q_PROPERTY(bool adjustingCopy READ adjustingCopy NOTIFY adjustmentStateChanged)
     Q_PROPERTY(bool adjustmentBlocked READ adjustmentBlocked NOTIFY adjustmentStateChanged)
@@ -33,6 +39,16 @@ public:
     Q_INVOKABLE void endComparison();
     bool annotationMode() const { return m_annotationMode; }
     AnnotationDocument *document() { return m_document; }
+    QObject *textCoverSessionObject() const;
+    bool coveringCopy() const { return m_coverBusy; }
+    bool coverReviewPending() const { return m_coverReviewPending; }
+    bool hasCoveredCopy() const { return !m_coveredPin.isNull(); }
+    Q_INVOKABLE void showCoveredCopy();
+    Q_INVOKABLE void resumeOriginalAfterCover();
+    bool editToolsBlocked() const { return adjustmentBlocked() || m_coverActive || m_coverBusy || m_coverReviewPending; }
+    Q_INVOKABLE bool beginTextCover();
+    Q_INVOKABLE void cancelTextCover();
+    Q_INVOKABLE bool createCoveredCopy();
     QObject *adjustmentPreviewObject() const;
     bool adjustingCopy() const { return m_adjustmentBusy; }
     bool adjustmentBlocked() const { return m_adjustmentActive || m_adjustmentBusy; }
@@ -61,6 +77,9 @@ private:
     void prepareDialog(QWidget *dialog);
     bool commitAnnotations();
     AnnotationDocument *m_document;
+    TextCoverSession *m_textCoverSession = nullptr;
+    bool m_coverActive = false, m_coverBusy = false, m_coverReviewPending = false;
+    QPointer<QQuickWindow> m_coveredPin;
     ImageAdjustmentsPreview *m_adjustmentPreview = nullptr;
     bool m_adjustmentActive = false;
     bool m_adjustmentBusy = false;

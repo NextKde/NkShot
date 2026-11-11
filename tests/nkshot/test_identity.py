@@ -355,7 +355,7 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('const auto snapshot = m_adjustmentPreview->source()', editor)
         self.assertIn('const auto options = m_adjustmentPreview->options()', editor)
         self.assertIn('QtConcurrent::run([snapshot, options]', editor)
-        self.assertIn('if (adjustmentBlocked()) return', editor)
+        self.assertIn('if (editToolsBlocked()) return', editor)
         self.assertIn('root.updatePreview()', popup)
         self.assertIn('resetValues()', popup)
 
@@ -372,6 +372,21 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('contextWindow.clearRecentThumbnails()', popup)
         self.assertIn('contextWindow.recentThumbnails.urlFor(row.url)', popup)
         self.assertNotIn('source: row.url', popup)
+
+    def test_text_cover_is_reviewed_and_separate(self):
+        renderer = read('src/Imaging/TextCover.cpp')
+        session = read('src/Gui/TextCoverSession.cpp')
+        editor = read('src/Gui/ImageCopyEditor.cpp')
+        popup = read('src/Gui/TextCoverPopup.qml')
+        self.assertIn('QImage::Format_RGB32', renderer)
+        self.assertIn('result.fill(Qt::white)', renderer)
+        self.assertIn('painter.fillRect(rect,Qt::black)', renderer)
+        self.assertIn('!result.wordsComplete', session)
+        self.assertIn('epoch==m_epoch', session)
+        self.assertIn('const auto regions = m_textCoverSession->selectedRegions()', editor)
+        self.assertIn('QtConcurrent::run([snapshot, regions]', editor)
+        self.assertIn('clearMatches()', popup)
+        self.assertIn('OCR can miss text', popup)
 
     def test_qml_returned_windows_keep_cpp_lifetime(self):
         for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow'):

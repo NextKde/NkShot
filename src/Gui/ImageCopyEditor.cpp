@@ -2,6 +2,9 @@
 #include "RecentMediaModel.h"
 #include "ImageCopyEditor.h"
 #include "ImageAdjustmentsPreview.h"
+#include "TextCoverSession.h"
+#include "Imaging/TextCover.h"
+#include "settings.h"
 #include "Imaging/ImageAdjustments.h"
 #include <QFutureWatcher>
 #include <QtConcurrentRun>
@@ -31,6 +34,7 @@ ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool a
     : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this)), m_originalImage(image.copy()), m_annotationMode(annotationMode)
 {
     m_adjustmentPreview = new ImageAdjustmentsPreview(engine, this);
+    m_textCoverSession = new TextCoverSession(engine, this);
     // C++ owns close/draft lifetime; QML return values must not become GC-owned.
     QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     connect(this, &QWindow::activeChanged, this, [this] { if (!isActive()) endComparison(); });
@@ -81,7 +85,7 @@ ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool a
 ImageCopyEditor::~ImageCopyEditor() { delete m_optionsDialog; delete m_closeDialog; delete m_saveDialog; }
 void ImageCopyEditor::beginComparison()
 {
-    if (adjustmentBlocked() || m_comparing || !compareAvailable() || !isVisible() || !isActive()
+    if (editToolsBlocked() || m_comparing || !compareAvailable() || !isVisible() || !isActive()
         || m_optionsDialog || m_closeDialog || m_saveDialog) return;
     m_comparing = true;
     Q_EMIT comparingChanged();
@@ -104,7 +108,7 @@ void ImageCopyEditor::prepareDialog(QWidget *dialog)
 }
 void ImageCopyEditor::copyImage()
 {
-    if (adjustmentBlocked()) return;
+    if (editToolsBlocked()) return;
     endComparison();
     if (m_annotationMode) return;
     const auto image=m_document->renderToImage();
@@ -118,7 +122,7 @@ bool ImageCopyEditor::hasUnsavedChanges() const
 }
 void ImageCopyEditor::saveAs()
 {
-    if (adjustmentBlocked()) return;
+    if (editToolsBlocked()) return;
     endComparison();
     if (m_annotationMode) return;
     if(m_saveDialog){m_saveDialog->raise();m_saveDialog->activateWindow();return;}
@@ -171,7 +175,7 @@ bool ImageCopyEditor::webpAvailable() const
 }
 bool ImageCopyEditor::exportAs(int format, int quality)
 {
-    if (adjustmentBlocked()) return false;
+    if (editToolsBlocked()) return false;
     endComparison();
     if (m_annotationMode) return false;
     if (m_saveDialog) { m_saveDialog->raise(); m_saveDialog->activateWindow(); return false; }
@@ -219,7 +223,7 @@ bool ImageCopyEditor::exportAs(int format, int quality)
 }
 QQuickWindow *ImageCopyEditor::finishCopy()
 {
-    if (adjustmentBlocked()) return nullptr;
+    if (editToolsBlocked()) return nullptr;
     endComparison();
     if (m_annotationMode) { commitAnnotations(); return nullptr; }
     const auto image=m_document->renderToImage();
@@ -271,7 +275,7 @@ bool ImageCopyEditor::commitAnnotations()
 }
 void ImageCopyEditor::showColorDialog(int option)
 {
-    if (adjustmentBlocked()) return;
+    if (editToolsBlocked()) return;
     endComparison();
     if(m_optionsDialog){m_optionsDialog->raise();return;}
     auto tool=m_document->tool();auto selected=m_document->selectedItemWrapper();
@@ -296,7 +300,7 @@ void ImageCopyEditor::showColorDialog(int option)
 }
 void ImageCopyEditor::showFontDialog()
 {
-    if (adjustmentBlocked()) return;
+    if (editToolsBlocked()) return;
     endComparison();
     if(m_optionsDialog){m_optionsDialog->raise();return;}
     auto tool=m_document->tool();auto selected=m_document->selectedItemWrapper();
@@ -335,7 +339,7 @@ bool ImageCopyEditor::event(QEvent *event)
     if (event->type() == QEvent::Close || event->type() == QEvent::Hide
         || event->type() == QEvent::FocusOut || event->type() == QEvent::WindowDeactivate)
         endComparison();
-    if (event->type() == QEvent::Close && adjustmentBlocked()) {
+    if (event->type() == QEvent::Close && (adjustmentBlocked() || m_coverActive || m_coverBusy)) {
         static_cast<QCloseEvent *>(event)->ignore();
         return true;
     }
@@ -366,7 +370,7 @@ bool ImageCopyEditor::event(QEvent *event)
 QObject *ImageCopyEditor::adjustmentPreviewObject() const { return m_adjustmentPreview; }
 bool ImageCopyEditor::beginAdjustments()
 {
-    if (m_annotationMode || adjustmentBlocked() || !isVisible() || m_optionsDialog || m_saveDialog || m_closeDialog) return false;
+    if (m_annotationMode || editToolsBlocked() || !isVisible() || m_optionsDialog || m_saveDialog || m_closeDialog) return false;
     endComparison();
     if (rootObject()) QMetaObject::invokeMethod(rootObject(), "commitOptions");
     m_document->selectedItemWrapper()->commitChanges();
@@ -415,4 +419,95 @@ bool ImageCopyEditor::createAdjustedCopy()
     });
     watcher->setFuture(QtConcurrent::run([snapshot, options] { return NkShot::Imaging::adjustedCopy(snapshot, options); }));
     return true;
+}
+
+QObject *ImageCopyEditor::textCoverSessionObject() const { return m_textCoverSession; }
+bool ImageCopyEditor::beginTextCover()
+{
+    if (m_annotationMode || editToolsBlocked() || !isVisible() || m_optionsDialog || m_saveDialog || m_closeDialog) return false;
+    endComparison();
+    if (rootObject()) QMetaObject::invokeMethod(rootObject(), "commitOptions");
+    m_document->selectedItemWrapper()->commitChanges();
+    auto languages = Settings::ocrLanguages();
+    if (languages.isEmpty()) languages = {QStringLiteral("eng")};
+    const QPointer<ImageCopyEditor> guard(this);
+    const bool started = m_textCoverSession->begin(m_document->renderToImage(), languages);
+    if (!guard) return false;
+    if (!started) {
+        Q_EMIT saveFinished(i18nc("@info", "Text covering is unavailable for this image or the previous reading is still finishing. Try a smaller image or wait briefly."), false);
+        return false;
+    }
+    m_coverActive = true;
+    Q_EMIT adjustmentStateChanged();
+    return true;
+}
+void ImageCopyEditor::cancelTextCover()
+{
+    const QPointer<ImageCopyEditor> guard(this);
+    m_textCoverSession->clear();
+    if (!guard) return;
+    m_coverActive = false;
+    Q_EMIT adjustmentStateChanged();
+}
+bool ImageCopyEditor::createCoveredCopy()
+{
+    if (!m_coverActive || m_coverBusy || m_annotationMode || !m_textCoverSession->ready()) return false;
+    const auto snapshot = m_textCoverSession->source();
+    const auto regions = m_textCoverSession->selectedRegions();
+    if (snapshot.isNull() || regions.isEmpty()) return false;
+    m_coverBusy = true;
+    const QPointer<ImageCopyEditor> guard(this);
+    Q_EMIT adjustmentStateChanged();
+    if (!guard) return false;
+    auto watcher = new QFutureWatcher<QImage>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
+        const auto image = watcher->result();
+        watcher->deleteLater();
+        const QPointer<ImageCopyEditor> guard(this);
+        if (image.isNull()) {
+            m_coverBusy = false;
+            Q_EMIT adjustmentStateChanged();
+            if (guard) Q_EMIT saveFinished(i18nc("@info", "The covered copy could not be created. Your original and edits are unchanged."), false);
+            return;
+        }
+        auto pin = new PinnedImageWindow(image, engine());
+        if (pin->status() != QQuickView::Ready) {
+            delete pin;
+            m_coverBusy = false;
+            Q_EMIT adjustmentStateChanged();
+            if (guard) Q_EMIT saveFinished(i18nc("@info", "The covered copy could not be opened. Your original and edits are unchanged."), false);
+            return;
+        }
+        pin->setObjectName(QStringLiteral("nkshotCoveredTextPin"));
+        pin->setTitle(i18nc("@title:window", "Covered text copy — NkShot"));
+        pin->setScreen(screen());
+        m_coveredPin = pin;
+        // Compositors may decline activation. Keep the original copy/save routes
+        // paused until the user deliberately returns, not just until output ends.
+        m_coverReviewPending = true;
+        m_coverBusy = false;
+        connect(pin, &QObject::destroyed, this, &ImageCopyEditor::adjustmentStateChanged);
+        Q_EMIT adjustmentStateChanged();
+        if (!guard) { delete pin; return; }
+        pin->show();
+        pin->requestActivate();
+        Q_EMIT saveFinished(i18nc("@info", "Use the covered copy to share. The original editor is paused until you explicitly return."), true);
+    });
+    watcher->setFuture(QtConcurrent::run([snapshot, regions] { return NkShot::Imaging::coveredTextCopy(snapshot, regions); }));
+    return true;
+}
+
+void ImageCopyEditor::showCoveredCopy()
+{
+    if (!m_coveredPin) return;
+    m_coveredPin->showNormal();
+    m_coveredPin->requestActivate();
+}
+void ImageCopyEditor::resumeOriginalAfterCover()
+{
+    if (!m_coverReviewPending || m_coverActive || m_coverBusy) return;
+    m_coverReviewPending = false;
+    const QPointer<ImageCopyEditor> guard(this);
+    Q_EMIT adjustmentStateChanged();
+    if (guard) Q_EMIT saveFinished(i18nc("@info", "Original editing resumed. This image still contains the original text; use the separate covered copy when sharing."), true);
 }

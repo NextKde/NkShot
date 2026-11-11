@@ -22,6 +22,7 @@
 #include "Gui/ImageCopyEditor.h"
 #include "ImageExportUiChecks.h"
 #include "ImageAdjustmentsUiChecks.h"
+#include "TextCoverUiChecks.h"
 #include "MediaDropUiChecks.h"
 #include "RecentThumbnailsUiChecks.h"
 #include "Gui/QuickNoteWindow.h"
@@ -1863,6 +1864,37 @@ void installUiCaptureHook(QApplication &application)
                 const bool passed = MediaDropUiChecks::run(application,viewer,destination,&failure);
                 qInfo() << "108 local media drop UI" << passed << failure;
                 application.exit(passed ? 0 : 240); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_TEXT_COVER")) {
+                const bool manyMatches=qEnvironmentVariableIsSet("NKSHOT_TEST_TEXT_COVER_MANY");
+                QImage input(900,manyMatches?1600:480,QImage::Format_RGB32); input.fill(Qt::white);
+                {
+                    QPainter painter(&input); painter.setPen(Qt::black);
+                    QFont font(QStringLiteral("DejaVu Sans")); font.setPixelSize(48); painter.setFont(font);
+                    if(manyMatches) {
+                        for(int row=0;row<20;++row)painter.drawText(QPoint(50,70+row*60),QStringLiteral("SECRET item %1").arg(row+1));
+                        painter.drawText(QPoint(50,1400),QStringLiteral("PUBLIC NOTES"));
+                    } else {
+                        painter.drawText(QPoint(50,100),QStringLiteral("SECRET account 12345"));
+                        painter.drawText(QPoint(50,200),QStringLiteral("PUBLIC NOTES"));
+                        painter.drawText(QPoint(50,300),QStringLiteral("SECRET code 67890"));
+                    }
+                    font.setPixelSize(20); painter.setFont(font);
+                    painter.drawText(QPoint(75,manyMatches?1530:415),QStringLiteral("Synthetic sample. Review the whole copy before sharing."));
+                }
+                auto editor = new ImageCopyEditor(input,viewer->engine());
+                if(editor->status()!=QQuickView::Ready){delete editor;application.exit(242);return;}
+                editor->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(900,640));
+                editor->show();editor->requestActivate();QTest::qWait(200);
+                auto document=editor->document();document->tool()->setType(AnnotationTool::RectangleTool);
+                document->tool()->setStrokeColor(QColor(QStringLiteral("#007aff")));document->tool()->setStrokeWidth(3);
+                document->tool()->setFillColor(Qt::transparent);document->tool()->setShadow(false);
+                document->beginItem({60,qreal(manyMatches?1475:375)});document->continueItem({700,qreal(manyMatches?1550:435)});document->finishItem();
+                const auto languages=Settings::ocrLanguages();Settings::setOcrLanguages({QStringLiteral("eng")});
+                QString failure;const bool passed=TextCoverUiChecks::run(application,editor,destination,&failure);
+                Settings::setOcrLanguages(languages);
+                qInfo()<<"111 actual find-and-cover UI"<<passed<<failure;
+                application.exit(passed?0:242);return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_EXPORT_DEMO") || qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_ADJUSTMENTS")) {
                 const auto input = SpectacleCore::instance()->annotationDocument()->renderToImage();
