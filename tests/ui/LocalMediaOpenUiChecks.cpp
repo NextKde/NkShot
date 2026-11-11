@@ -10,6 +10,8 @@
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/ImageCopyEditor.h"
 #include <QColorDialog>
+#include <QInputMethodEvent>
+#include <QKeyEvent>
 #include <QVideoSink>
 #include <QProcess>
 #include <QVideoFrame>
@@ -489,6 +491,56 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     QTest::qWait(400);
     if(framePin->snapshot()!=extracted||bytes(movie)!=movieBytes)
         return fail(QStringLiteral("Seeking changed immutable frame or original recording"));
+    const auto compareEditor=[&](ImageCopyEditor *window,const QImage &input,const QString &suffix) {
+        if(!qEnvironmentVariableIsSet("NKSHOT_TEST_COMPARE_EDITOR"))return true;
+        window->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(820,640));window->show();window->requestActivate();
+        if(!QTest::qWaitFor([&]{return QGuiApplication::focusWindow()==window;},1500))return false;
+        QTest::qWait(150);
+        auto button=visual(window->contentItem(),QStringLiteral("nkshotCopyEditorCompare"));
+        auto layer=visual(window->contentItem(),QStringLiteral("nkshotCopyEditorBeforeLayer"));
+        auto before=visual(window->contentItem(),QStringLiteral("nkshotCopyEditorBeforeImage"));
+        auto view=visual(window->contentItem(),QStringLiteral("nkshotCopyEditorViewport"));
+        if(!button||!layer||!before||!view||!button->isVisible()||!window->compareAvailable()||!samePixels(window->originalImage(),input))return false;
+        const auto rendered=window->document()->renderToImage();const int depth=window->document()->undoStackDepth();
+        const qreal x=view->property("contentX").toReal(),y=view->property("contentY").toReal();
+        const auto point=button->mapToScene(QPointF(button->width()/2,button->height()/2)).toPoint();
+        if(!QRectF(QPointF(),window->size()).contains(QRectF(button->mapToScene(QPointF()),button->size())))return false;
+        QTest::mousePress(window,Qt::LeftButton,Qt::NoModifier,point);
+        if(!QTest::qWaitFor([&]{return window->comparing()&&layer->isVisible();},1000))return false;
+        const QRectF rect=before->property("displayRect").toRectF();
+        if(rect.isEmpty()||qAbs(rect.width()/rect.height()-double(input.width())/input.height())>.001
+            ||!samePixels(before->property("image").value<QImage>(),input))return false;
+        QTest::keyClick(window,Qt::Key_Z,Qt::ControlModifier);
+        QInputMethodEvent inputEvent;inputEvent.setCommitString(QStringLiteral("hidden edit"));QCoreApplication::sendEvent(window,&inputEvent);
+        if(!samePixels(window->document()->renderToImage(),rendered)||window->document()->undoStackDepth()!=depth)return false;
+        QTest::qWait(100);if(!window->grabWindow().save(screenshot+suffix+QStringLiteral(".before.png")))return false;
+        QTest::mouseRelease(window,Qt::LeftButton,Qt::NoModifier,point);
+        if(!QTest::qWaitFor([&]{return !window->comparing()&&!layer->isVisible();},1000))return false;
+        if(!samePixels(window->document()->renderToImage(),rendered)||window->document()->undoStackDepth()!=depth
+            ||view->property("contentX").toReal()!=x||view->property("contentY").toReal()!=y)return false;
+        QTest::qWait(100);if(!window->grabWindow().save(screenshot+suffix+QStringLiteral(".after.png")))return false;
+        button->forceActiveFocus();QTest::keyPress(window,Qt::Key_Space);
+        if(!QTest::qWaitFor([&]{return window->comparing();},1000))return false;
+        QKeyEvent repeatedRelease(QEvent::KeyRelease,Qt::Key_Space,Qt::NoModifier,QString(),true);
+        QCoreApplication::sendEvent(window,&repeatedRelease);if(!window->comparing())return false;
+        QTest::keyRelease(window,Qt::Key_Space);
+        if(!QTest::qWaitFor([&]{return !window->comparing();},1000))return false;
+        QTest::mousePress(window,Qt::LeftButton,Qt::NoModifier,point);
+        if(!window->comparing())return false;
+        QTest::mouseMove(window,QPoint(2,2),50);QTest::mouseRelease(window,Qt::LeftButton,Qt::NoModifier,QPoint(2,2));
+        if(window->comparing())return false;
+        QTest::mousePress(window,Qt::LeftButton,Qt::NoModifier,point);QTest::keyClick(window,Qt::Key_C,Qt::ControlModifier);
+        QTest::mouseRelease(window,Qt::LeftButton,Qt::NoModifier,point);
+        if(window->comparing()||!samePixels(application.clipboard()->image(),rendered))return false;
+        QTest::mousePress(window,Qt::LeftButton,Qt::NoModifier,point);viewer()->requestActivate();
+        if(!QTest::qWaitFor([&]{return !window->comparing();},1500))return false;
+        QTest::mouseRelease(window,Qt::LeftButton,Qt::NoModifier,point);window->requestActivate();
+        if(!QTest::qWaitFor([&]{return QGuiApplication::focusWindow()==window;},1500))return false;
+        QTest::mousePress(window,Qt::LeftButton,Qt::NoModifier,point);window->hide();
+        if(window->comparing())return false;
+        QTest::mouseRelease(window,Qt::LeftButton,Qt::NoModifier,point);window->show();window->requestActivate();QTest::qWait(100);
+        return !window->comparing()&&samePixels(window->document()->renderToImage(),rendered)&&window->document()->undoStackDepth()==depth;
+    };
     if(qEnvironmentVariableIsSet("NKSHOT_TEST_COPY_EDITOR")) {
         const auto mainImage=core->annotationDocument()->renderToImage();
         const auto mainDepth=core->annotationDocument()->undoStackDepth();
@@ -528,6 +580,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(samePixels(edited,extracted)||!hit(QStringLiteral("nkshotUndo"))||!samePixels(editor->document()->renderToImage(),extracted)
             ||!hit(QStringLiteral("nkshotRedo"))||!samePixels(editor->document()->renderToImage(),edited))
             return fail(QStringLiteral("Independent undo/redo failed"));
+        if(!compareEditor(editor,extracted,QStringLiteral(".compare")))return fail(QStringLiteral("Actual before/after comparison changed editor history or output"));
         editor->close();QMessageBox *discard=nullptr;
         if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotDiscardCopyDialog"))discard=qobject_cast<QMessageBox *>(w);return discard&&discard->isVisible();},1000))
             return fail(QStringLiteral("Unsaved independent edit closed without protection"));
@@ -618,6 +671,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!fresh)return fail(QStringLiteral("Independent crop session failed to reopen"));
         fresh->document()->cropCanvas(QRectF(0,0,100,80));
         if(fresh->document()->renderToImage().size()!=QSize(100,80))return fail(QStringLiteral("Isolated crop model failed"));
+        if(!compareEditor(fresh,extracted,QStringLiteral(".compare-crop")))return fail(QStringLiteral("Cropped comparison lost full input or viewport"));
         fresh->close();discard=nullptr;
         if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotDiscardCopyDialog"))discard=qobject_cast<QMessageBox *>(w);return discard&&discard->isVisible();},1000))
             return fail(QStringLiteral("Cropped session lost discard protection"));
@@ -633,6 +687,17 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         editor->close();
         if(!QTest::qWaitFor([&]{return editor.isNull();},1000)||!samePixels(framePin->snapshot(),extracted))
             return fail(QStringLiteral("Saved copy did not close cleanly or changed original"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPARE_EDITOR")) {
+            QImage alpha(320,240,QImage::Format_ARGB32);alpha.fill(QColor(30,110,220,128));alpha.setDevicePixelRatio(2);
+            const auto immutable=alpha.copy();QPointer<ImageCopyEditor> transparent=new ImageCopyEditor(alpha,viewer()->engine());
+            alpha.fill(Qt::red);transparent->show();transparent->document()->cropCanvas(QRectF(20,15,70,50));
+            if(!compareEditor(transparent,immutable,QStringLiteral(".compare-alpha-dpr2"))||transparent->originalImage().devicePixelRatio()!=2)
+                return fail(QStringLiteral("DPR2 alpha/crop comparison lost immutable input"));
+            transparent->document()->undo();transparent->close();
+            if(!QTest::qWaitFor([&]{return transparent.isNull();},1000))return fail(QStringLiteral("Comparison-only editor was marked changed"));
+            qInfo()<<"104 actual comparison hold/Space/cancel/focus/hide/copy, crop/alpha/DPR2 and source/history preservation passed";
+        }
+
     }
     framePin->close();
     QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());

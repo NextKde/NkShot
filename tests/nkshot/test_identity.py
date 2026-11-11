@@ -16,6 +16,19 @@ def read(path):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_before_preview_is_immutable_and_output_safe(self):
+        h = read('src/Gui/ImageCopyEditor.h')
+        cpp = read('src/Gui/ImageCopyEditor.cpp')
+        qml = read('src/Gui/ImageCopyEditor.qml')
+        for token in ('originalImage', 'compareAvailable', 'beginComparison', 'endComparison'):
+            self.assertIn(token, h)
+        self.assertIn('m_originalImage', cpp)
+        self.assertIn('QEvent::InputMethod', cpp)
+        self.assertIn('nkshotCopyEditorCompare', qml)
+        self.assertIn('Before editing', qml)
+        self.assertIn('Qt.TabFocus', qml)
+        self.assertNotIn('setBaseImage', qml)
+
     def test_export_speed_is_separate_from_playback(self):
         job = read('src/Media/VideoClipJob.h')
         popup = read('src/Gui/VideoClipPopup.qml')

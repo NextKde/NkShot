@@ -10,6 +10,8 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QKeyEvent>
+#include <QKeySequence>
 #include <QMessageBox>
 #include <QColorDialog>
 #include <QFontDialog>
@@ -21,14 +23,17 @@
 #include <QStandardPaths>
 
 ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool annotationMode)
-    : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this)), m_annotationMode(annotationMode)
+    : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this)), m_originalImage(image.copy()), m_annotationMode(annotationMode)
 {
+    connect(this, &QWindow::activeChanged, this, [this] { if (!isActive()) endComparison(); });
+    connect(this, &QWindow::visibleChanged, this, [this](bool visible) { if (!visible) endComparison(); });
     setObjectName(QStringLiteral("nkshotImageCopyEditor"));
     setTitle(m_annotationMode ? i18nc("@title:window", "Video annotations — NkShot")
                              : i18nc("@title:window", "Edit image copy — NkShot"));
     setMinimumSize({400, 400});
     setResizeMode(SizeRootObjectToView);
-    auto reference = image.copy();
+    // One owned input snapshot shared through QImage copy-on-write, never edited.
+    auto reference = m_originalImage;
     if (m_annotationMode) reference.setDevicePixelRatio(1);
     m_document->setBaseImage(reference);
     if (m_annotationMode) {
@@ -66,8 +71,22 @@ ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool a
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this] { delete this; });
 }
 ImageCopyEditor::~ImageCopyEditor() { delete m_optionsDialog; delete m_closeDialog; delete m_saveDialog; }
+void ImageCopyEditor::beginComparison()
+{
+    if (m_comparing || !compareAvailable() || !isVisible() || !isActive()
+        || m_optionsDialog || m_closeDialog || m_saveDialog) return;
+    m_comparing = true;
+    Q_EMIT comparingChanged();
+}
+void ImageCopyEditor::endComparison()
+{
+    if (!m_comparing) return;
+    m_comparing = false;
+    Q_EMIT comparingChanged();
+}
 void ImageCopyEditor::prepareDialog(QWidget *dialog)
 {
+    endComparison();
     m_optionsDialog=dialog;
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->winId();dialog->windowHandle()->setTransientParent(this);
@@ -77,6 +96,7 @@ void ImageCopyEditor::prepareDialog(QWidget *dialog)
 }
 void ImageCopyEditor::copyImage()
 {
+    endComparison();
     if (m_annotationMode) return;
     const auto image=m_document->renderToImage();
     if(image.isNull())return;
@@ -89,6 +109,7 @@ bool ImageCopyEditor::hasUnsavedChanges() const
 }
 void ImageCopyEditor::saveAs()
 {
+    endComparison();
     if (m_annotationMode) return;
     if(m_saveDialog){m_saveDialog->raise();m_saveDialog->activateWindow();return;}
     // Capture exactly the requested revision; never mutate global export settings.
@@ -132,6 +153,7 @@ void ImageCopyEditor::saveAs()
 }
 QQuickWindow *ImageCopyEditor::finishCopy()
 {
+    endComparison();
     if (m_annotationMode) { commitAnnotations(); return nullptr; }
     const auto image=m_document->renderToImage();
     if(image.isNull())return nullptr;
@@ -182,6 +204,7 @@ bool ImageCopyEditor::commitAnnotations()
 }
 void ImageCopyEditor::showColorDialog(int option)
 {
+    endComparison();
     if(m_optionsDialog){m_optionsDialog->raise();return;}
     auto tool=m_document->tool();auto selected=m_document->selectedItemWrapper();
     const bool useSelected=tool->type()==AnnotationTool::SelectTool
@@ -205,6 +228,7 @@ void ImageCopyEditor::showColorDialog(int option)
 }
 void ImageCopyEditor::showFontDialog()
 {
+    endComparison();
     if(m_optionsDialog){m_optionsDialog->raise();return;}
     auto tool=m_document->tool();auto selected=m_document->selectedItemWrapper();
     const bool useSelected=tool->type()==AnnotationTool::SelectTool
@@ -221,6 +245,27 @@ void ImageCopyEditor::showFontDialog()
 }
 bool ImageCopyEditor::event(QEvent *event)
 {
+    if (m_comparing) {
+        if (event->type() == QEvent::InputMethod || event->type() == QEvent::ShortcutOverride) {
+            event->accept();
+            return true; // No hidden text commits or focus-item shortcut interception.
+        }
+        if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease) {
+            const auto key = static_cast<QKeyEvent *>(event);
+            if (event->type() == QEvent::KeyPress) {
+                if (key->key() == Qt::Key_Escape) endComparison();
+                else if (key->matches(QKeySequence::Copy)) copyImage();
+                else if (key->matches(QKeySequence::Save) || key->matches(QKeySequence::SaveAs)) saveAs();
+            } else if (key->key() == Qt::Key_Space && !key->isAutoRepeat()) {
+                endComparison();
+            }
+            event->accept();
+            return true;
+        }
+    }
+    if (event->type() == QEvent::Close || event->type() == QEvent::Hide
+        || event->type() == QEvent::FocusOut || event->type() == QEvent::WindowDeactivate)
+        endComparison();
     if (event->type() == QEvent::Close && m_annotationMode) {
         static_cast<QCloseEvent *>(event)->ignore();
         commitAnnotations();

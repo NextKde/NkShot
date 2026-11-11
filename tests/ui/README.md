@@ -642,3 +642,11 @@ Save dialog after changing speed, checks the resulting MP4 duration against the
 preview, source preservation and fresh-session reset. Combine with crop/privacy,
 annotation/resolution/silent flags; WebM also exercises actual GIF export. This
 is software-window UI, not native KDE capture acceptance.
+
+### Input/edited comparison (104)
+
+`NKSHOT_TEST_COPY_EDITOR=1 NKSHOT_TEST_COMPARE_EDITOR=1` extends the local-media
+workflow with real hold/release, keyboard Space, drag-out, focus-loss, hide/reopen,
+copy output, immutable full-input pixels, crop/aspect ratio, history and viewport
+preservation. `.compare.before.png`/`.compare.after.png` and cropped variants are
+actual software-window evidence, not native compositor acceptance.

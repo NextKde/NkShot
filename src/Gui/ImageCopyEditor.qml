@@ -38,10 +38,10 @@ QQC.Pane {
             Layout.fillWidth: true
             QQC.Label { visible: root.width >= 480; text: copyEditor.annotationMode ? i18nc("@title", "Video annotations") : i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
-            UndoRedoGroup { editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
-            ActionButton { objectName: "nkshotCopyEditorCopy"; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
-            ActionButton { objectName: "nkshotCopyEditorSave"; visible: !copyEditor.annotationMode; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
-            ActionButton { objectName: "nkshotCopyEditorDone"; primary: copyEditor.annotationMode; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
+            UndoRedoGroup { enabled: !copyEditor.comparing; editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
+            ActionButton { objectName: "nkshotCopyEditorCopy"; enabled: !copyEditor.comparing; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
+            ActionButton { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing; visible: !copyEditor.annotationMode; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+            ActionButton { objectName: "nkshotCopyEditorDone"; enabled: !copyEditor.comparing; primary: copyEditor.annotationMode; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
         }
         QQC.Label {
             id: feedback
@@ -62,10 +62,11 @@ QQC.Pane {
             clip: true
             Flickable {
                 id: view
+                objectName: "nkshotCopyEditorViewport"
                 anchors.fill: parent
                 contentWidth: Math.max(width, editor.width * root.viewZoom + 24)
                 contentHeight: Math.max(height, editor.height * root.viewZoom + 24)
-                interactive: root.document.tool.type === AnnotationTool.NoTool
+                interactive: !copyEditor.comparing && root.document.tool.type === AnnotationTool.NoTool
                 boundsBehavior: Flickable.StopAtBounds
                 QQC.ScrollBar.vertical: QQC.ScrollBar { }
                 QQC.ScrollBar.horizontal: QQC.ScrollBar { }
@@ -90,14 +91,85 @@ QQC.Pane {
                     active: !copyEditor.annotationMode && root.document.tool.type === AnnotationTool.CropTool
                 }
             }
+            Rectangle {
+                id: comparisonLayer
+                objectName: "nkshotCopyEditorBeforeLayer"
+                anchors.fill: parent
+                visible: copyEditor.comparing
+                color: Kos.AppTheme.contentBackground
+                // Independent full-input Fit. Never reuse the cropped document's
+                // canvas geometry, scale or pan for the before-editing image.
+                ImageOverlayPreview {
+                    objectName: "nkshotCopyEditorBeforeImage"
+                    anchors.fill: parent
+                    image: copyEditor.originalImage
+                    readonly property real fit: copyEditor.originalSize.width > 0 && copyEditor.originalSize.height > 0
+                        ? Math.max(0, Math.min((width - 24) / copyEditor.originalSize.width, (height - comparisonLabels.height - 32) / copyEditor.originalSize.height)) : 0
+                    displayRect: Qt.rect((width - copyEditor.originalSize.width * fit) / 2,
+                        comparisonLabels.height + 20 + (height - comparisonLabels.height - 32 - copyEditor.originalSize.height * fit) / 2,
+                        copyEditor.originalSize.width * fit, copyEditor.originalSize.height * fit)
+                }
+                Column {
+                    id: comparisonLabels
+                    x: 12; y: 10; width: parent.width - 24
+                    spacing: 4
+                    QQC.Label {
+                        objectName: "nkshotCopyEditorBeforeLabel"
+                        width: parent.width
+                        text: i18nc("@info", "Before editing · Full image")
+                        horizontalAlignment: Text.AlignHCenter
+                        color: Kos.AppTheme.paletteText
+                    }
+                    QQC.Label {
+                        objectName: "nkshotCopyEditorCompareHint"
+                        width: parent.width
+                        text: i18nc("@info", "Fit to view; release to return. Copy and Save always use the edited image.")
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        color: Kos.AppTheme.mutedText
+                    }
+                }
+                MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+            }
         }
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
-            ActionButton { text: i18nc("@action", "Fit"); onClicked: root.zoom = 0 }
-            ActionButton { objectName: "nkshotCopyEditorZoomOut"; text: "−"; Accessible.name: i18nc("@action", "Zoom out"); onClicked: root.zoom = Math.max(root.fitZoom, root.viewZoom / 1.25) }
-            QQC.Label { text: Math.round(root.viewZoom*100)+"%"; color: Kos.AppTheme.mutedText }
-            ActionButton { objectName: "nkshotCopyEditorZoomIn"; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: root.zoom = Math.min(4, root.viewZoom * 1.25) }
+            ActionButton { enabled: !copyEditor.comparing; text: i18nc("@action", "Fit"); onClicked: root.zoom = 0 }
+            ActionButton { objectName: "nkshotCopyEditorZoomOut"; enabled: !copyEditor.comparing; text: "−"; Accessible.name: i18nc("@action", "Zoom out"); onClicked: root.zoom = Math.max(root.fitZoom, root.viewZoom / 1.25) }
+            QQC.Label { Layout.preferredWidth: 45; horizontalAlignment: Text.AlignHCenter; text: copyEditor.comparing ? i18nc("@info", "Fit") : Math.round(root.viewZoom*100)+"%"; color: Kos.AppTheme.mutedText }
+            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: root.zoom = Math.min(4, root.viewZoom * 1.25) }
+            ActionButton {
+                id: compareButton
+                objectName: "nkshotCopyEditorCompare"
+                visible: !copyEditor.annotationMode
+                enabled: copyEditor.compareAvailable
+                text: i18nc("@action", "Compare")
+                focusPolicy: Qt.TabFocus
+                Accessible.name: i18nc("@action", "Hold to view before editing")
+                QQC.ToolTip.visible: hovered && !pressed
+                QQC.ToolTip.text: i18nc("@info", "Hold to view the full input image. Release to return.")
+                onPressed: copyEditor.beginComparison()
+                onReleased: copyEditor.endComparison()
+                onCanceled: copyEditor.endComparison()
+                onDownChanged: if (!down && pressed) copyEditor.endComparison()
+                onActiveFocusChanged: if (!activeFocus && !pressed) copyEditor.endComparison()
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Space) {
+                        if (!event.isAutoRepeat) copyEditor.beginComparison()
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Escape) {
+                        copyEditor.endComparison()
+                        event.accepted = true
+                    }
+                }
+                Keys.onReleased: event => {
+                    if (event.key === Qt.Key_Space) {
+                        if (!event.isAutoRepeat) copyEditor.endComparison()
+                        event.accepted = true
+                    }
+                }
+            }
         }
         AnnotationOptionsToolBarContents {
             id: options
@@ -107,6 +179,7 @@ QQC.Pane {
             displayMode: QQC.AbstractButton.IconOnly
         }
         AnnotationsToolBarContents {
+            enabled: !copyEditor.comparing
             editorDocument: root.document
             annotationOnly: copyEditor.annotationMode
             essentialsOnly: true
@@ -117,8 +190,18 @@ QQC.Pane {
             Layout.maximumWidth: root.availableWidth
         }
     }
+    // Preserve focused text/options and unfinished crop state; intercept new
+    // pointer input rather than disabling the underlying editors.
+    MouseArea {
+        anchors.fill: parent
+        z: 1000
+        visible: copyEditor.comparing
+        acceptedButtons: Qt.AllButtons
+        onWheel: wheel => wheel.accepted = true
+    }
+    Shortcut { enabled: copyEditor.comparing; sequence: "Escape"; onActivated: copyEditor.endComparison() }
     Shortcut { enabled: copyEditor.annotationMode; sequence: "Escape"; onActivated: {root.commitOptions(); copyEditor.finishCopy()} }
-    Shortcut { enabled: !copyEditor.annotationMode; sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { enabled: !copyEditor.annotationMode; sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { enabled: !copyEditor.annotationMode; sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
+    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing; sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing; sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing; sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
 }

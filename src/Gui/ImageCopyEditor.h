@@ -12,9 +12,19 @@ class ImageCopyEditor : public QQuickView {
     Q_OBJECT
     Q_PROPERTY(AnnotationDocument *document READ document CONSTANT)
     Q_PROPERTY(bool annotationMode READ annotationMode CONSTANT)
+    Q_PROPERTY(QImage originalImage READ originalImage CONSTANT)
+    Q_PROPERTY(QSize originalSize READ originalSize CONSTANT)
+    Q_PROPERTY(bool compareAvailable READ compareAvailable CONSTANT)
+    Q_PROPERTY(bool comparing READ comparing NOTIFY comparingChanged)
 public:
     ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool annotationMode = false);
     ~ImageCopyEditor() override;
+    QImage originalImage() const { return m_annotationMode ? QImage() : m_originalImage; }
+    QSize originalSize() const { return originalImage().size(); }
+    bool compareAvailable() const { return !m_annotationMode && !m_originalImage.isNull(); }
+    bool comparing() const { return m_comparing; }
+    Q_INVOKABLE void beginComparison();
+    Q_INVOKABLE void endComparison();
     bool annotationMode() const { return m_annotationMode; }
     AnnotationDocument *document() { return m_document; }
     Q_INVOKABLE void copyImage();
@@ -25,6 +35,7 @@ public:
     Q_INVOKABLE void showFontDialog();
     Q_INVOKABLE qreal dprRound(qreal value) const { return qRound(value * devicePixelRatio()) / devicePixelRatio(); }
 Q_SIGNALS:
+    void comparingChanged();
     void imageCopied();
     void annotationsCommitted(const QImage &image);
     void saveFinished(const QString &message, bool success);
@@ -37,6 +48,8 @@ private:
     QPointer<QWidget> m_optionsDialog;
     QPointer<QMessageBox> m_closeDialog;
     QPointer<QFileDialog> m_saveDialog;
+    const QImage m_originalImage;
+    bool m_comparing = false;
     QImage m_savedImage;
     const bool m_annotationMode;
     QImage m_referenceImage;
