@@ -14,6 +14,7 @@ and the distinction between source checks and native desktop acceptance.
 | Region/window/screen capture, delay/pointer options | Spectacle routes retained | Build; synthetic selection-window interaction | Pending KWin permission/capture checks |
 | Core annotation/crop/text/undo/redo | Existing document model and new shared UI | Actual gestures, English/Chinese IME, export pixel checks; not every gesture combination | Pending compositor/input/DPI matrix |
 | Copy/save and immutable pins | Implemented; view-only zoom/pan for long images (061) | Pixels, PNG Save As, cancellation/reopen, multiple pins/lifetime, actual Fit/zoom/drag/wheel/keyboard and full-image copy | Native portals/stacking/high-DPI/touch pending |
+| Independent image-copy editor (091) | Pins and extracted frames open their own document using shared annotation/crop/history components; Done yields a new pin | Actual entry/drawing/color/undo/redo/copy, close Cancel/Discard, cropped model and original/video isolation; [scope](independent-image-editor.md) | Native dialogs/IME/GPU and every gesture combination remain pending; not a persisted photo library |
 | Opaque cover | Rectangle preset, not destructive source erasure | Opaque interior, unchanged selected mark/outside pixels, undo/redo and exports | Pending real desktop use |
 | Local OCR | Implemented result view, installed-model choice, UTF-8 save | Real Tesseract eng/chi_sim, copy/save and error boundaries | General accuracy not certified |
 | Text extraction from pins / Live Text | Local whole-image (060), rectangle OCR (069), and bounded inline OCR word-range selection (070) with drag-edge scrolling (071) implemented | Real eng/chi_sim words/geometry/spacing, whole/area/inline actions, DPR=2 pan/zoom/keyboard selection, explicit text/image copy and PNG export, cancellation/hidden lifecycle and error states | Native focus/accessibility and full Live Text parity not accepted; no character-level selection |
@@ -58,5 +59,5 @@ OCR, offline translation and implemented image transforms are local. Future exte
 must be explicit about local vs external processing; no screenshots or recognized
 text may silently leave the device. Original edit history is preserved, so sharing
 copies must be reviewed before distribution. ImageTransforms/VerticalStitcher are
-UI-independent Qt helpers; the document/annotation model remains reusable but is
-not yet a separately packaged photo-editor library.
+UI-independent Qt helpers; the independent copy editor now composes the shared document/canvas/tools in its
+own session, but is not yet a separately packaged photo-editor library.

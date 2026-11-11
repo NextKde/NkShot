@@ -8,6 +8,8 @@
 #include <atomic>
 #include <memory>
 
+class ImageCopyEditor;
+
 // A local immutable snapshot, independent of the editable document.
 class PinnedImageWindow : public QQuickView
 {
@@ -46,6 +48,7 @@ public:
     Q_INVOKABLE void selectAllText();
     Q_INVOKABLE void copySelectedText();
     Q_INVOKABLE void copyImage();
+    Q_INVOKABLE QQuickWindow *editCopy();
     Q_INVOKABLE void saveAs();
 Q_SIGNALS:
     void textSelectionActiveChanged();
@@ -75,6 +78,7 @@ private:
     bool m_extractingText=false;
     bool m_closing=false;
     std::shared_ptr<std::atomic_bool> m_ocrCancelled;
+    QPointer<ImageCopyEditor> m_copyEditor;
     const QImage m_image;
     const QString m_providerId;
     QPointer<QQmlEngine> m_sharedEngine;

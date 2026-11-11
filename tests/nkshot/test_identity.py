@@ -83,6 +83,16 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('setApplicationDomain(QByteArrayLiteral("nkshot"))', main)
         self.assertIn(f'registerService(u"{APP_ID}"_s)', main)
 
+    def test_independent_copy_editor_owns_document(self):
+        implementation = read('src/Gui/ImageCopyEditor.cpp')
+        self.assertNotIn('SpectacleCore', implementation)
+        self.assertIn('new AnnotationDocument(this)', implementation)
+        editor = read('src/Gui/ImageCopyEditor.qml')
+        self.assertIn('readonly property var document: copyEditor.document', editor)
+        self.assertGreaterEqual(editor.count('editorDocument: root.document'), 4)
+        self.assertIn('QMessageBox::Discard|QMessageBox::Cancel', implementation)
+        self.assertIn('pinnedWindow.editCopy()', read('src/Gui/PinnedImage.qml'))
+
     def test_capture_actions_still_present(self):
         overlay = read('src/Gui/CaptureOverlay.qml')
         for action in ['AcceptAction', 'CancelAction', 'SaveAction', 'SaveAsAction',

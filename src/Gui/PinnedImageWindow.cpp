@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "PinnedImageWindow.h"
+#include "ImageCopyEditor.h"
 #include "OcrTextWindow.h"
 #include "Imaging/LocalTextExtraction.h"
 #include "settings.h"
@@ -76,6 +77,16 @@ PinnedImageWindow::~PinnedImageWindow()
 }
 QUrl PinnedImageWindow::imageSource() const { return QUrl(QStringLiteral("image://%1/snapshot").arg(m_providerId)); }
 void PinnedImageWindow::copyImage() { QApplication::clipboard()->setImage(m_image); Q_EMIT imageCopied(); }
+QQuickWindow *PinnedImageWindow::editCopy()
+{
+    if(m_image.isNull()||qint64(m_image.width())*m_image.height()>40'000'000)return nullptr;
+    if(!m_copyEditor) {
+        auto editor=new ImageCopyEditor(m_image,engine());
+        if(editor->status()!=QQuickView::Ready){delete editor;return nullptr;}
+        m_copyEditor=editor;
+    }
+    m_copyEditor->show();m_copyEditor->requestActivate();return m_copyEditor;
+}
 void PinnedImageWindow::saveAs()
 {
     if (auto existing = qobject_cast<QFileDialog *>(m_saveDialog.data())) {

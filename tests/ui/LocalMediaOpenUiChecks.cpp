@@ -6,6 +6,8 @@
 #include "CaptureModeModel.h"
 #include "Gui/ViewerWindow.h"
 #include "Gui/PinnedImageWindow.h"
+#include "Gui/ImageCopyEditor.h"
+#include <QColorDialog>
 #include <QVideoSink>
 #include <QProcess>
 #include <QVideoFrame>
@@ -458,6 +460,97 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     QTest::qWait(400);
     if(framePin->snapshot()!=extracted||bytes(movie)!=movieBytes)
         return fail(QStringLiteral("Seeking changed immutable frame or original recording"));
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_COPY_EDITOR")) {
+        const auto mainImage=core->annotationDocument()->renderToImage();
+        const auto mainDepth=core->annotationDocument()->undoStackDepth();
+        const auto mainColor=core->annotationDocument()->tool()->strokeColor();
+        auto editAction=visual(framePin->contentItem(),QStringLiteral("nkshotPinEditCopy"));
+        if(!editAction)return fail(QStringLiteral("Pin edit-copy entry missing"));
+        QTest::mouseClick(framePin,Qt::LeftButton,Qt::NoModifier,editAction->mapToScene(QPointF(editAction->width()/2,editAction->height()/2)).toPoint());
+        QPointer<ImageCopyEditor> editor;
+        if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows())if(auto e=qobject_cast<ImageCopyEditor *>(w))editor=e;
+            return editor&&editor->isVisible()&&editor->status()==QQuickView::Ready;},2000))return fail(QStringLiteral("Independent editor did not load"));
+        editor->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(900,640));QTest::qWait(150);
+        if(editor->document()==core->annotationDocument()||!samePixels(editor->document()->renderToImage(),extracted)
+            ||framePin->editCopy()!=editor)return fail(QStringLiteral("Editor did not isolate/reuse its own document"));
+        const auto hit=[&](const QString &name) {
+            auto item=visual(editor->contentItem(),name);
+            if(!item||!item->isVisible()||!item->isEnabled())return false;
+            const auto point=item->mapToScene(QPointF(item->width()/2,item->height()/2));
+            if(!QRectF(QPointF(),editor->size()).contains(point))return false;
+            QTest::mouseClick(editor,Qt::LeftButton,Qt::NoModifier,point.toPoint());return true;
+        };
+        if(!hit(QStringLiteral("nkshotFreehandTool")))return fail(QStringLiteral("Shared freehand tool inaccessible"));
+        editor->showColorDialog(AnnotationTool::StrokeOption);
+        QColorDialog *color=nullptr;
+        if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotCopyColorDialog"))color=qobject_cast<QColorDialog *>(w);return color&&color->isVisible();},1000))
+            return fail(QStringLiteral("Isolated color chooser failed"));
+        color->setCurrentColor(QColor("#ec3974"));color->accept();QTest::qWait(100);
+        if(editor->document()->tool()->strokeColor()!=QColor("#ec3974")||core->annotationDocument()->tool()->strokeColor()!=mainColor)
+            return fail(QStringLiteral("Color chooser mutated the main editor"));
+        auto viewport=visual(editor->contentItem(),QStringLiteral("nkshotAnnotationViewport"));
+        if(!viewport)return fail(QStringLiteral("Shared independent viewport missing"));
+        const QPointF a(extracted.width()*.2,extracted.height()*.25),b(extracted.width()*.75,extracted.height()*.7);
+        QTest::mousePress(editor,Qt::LeftButton,Qt::NoModifier,viewport->mapToScene(a).toPoint());
+        for(int i=1;i<=12;++i)QTest::mouseMove(editor,viewport->mapToScene(a+(b-a)*(i/12.)).toPoint(),15);
+        QTest::mouseRelease(editor,Qt::LeftButton,Qt::NoModifier,viewport->mapToScene(b).toPoint());
+        if(!QTest::qWaitFor([&]{return editor->document()->undoStackDepth()>0;},1000))return fail(QStringLiteral("Independent drawing did not create history"));
+        const auto edited=editor->document()->renderToImage();
+        if(samePixels(edited,extracted)||!hit(QStringLiteral("nkshotUndo"))||!samePixels(editor->document()->renderToImage(),extracted)
+            ||!hit(QStringLiteral("nkshotRedo"))||!samePixels(editor->document()->renderToImage(),edited))
+            return fail(QStringLiteral("Independent undo/redo failed"));
+        editor->close();QMessageBox *discard=nullptr;
+        if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotDiscardCopyDialog"))discard=qobject_cast<QMessageBox *>(w);return discard&&discard->isVisible();},1000))
+            return fail(QStringLiteral("Unsaved independent edit closed without protection"));
+        QTest::mouseClick(discard->button(QMessageBox::Cancel),Qt::LeftButton);QTest::qWait(100);
+        if(!editor||!editor->isVisible()||!samePixels(editor->document()->renderToImage(),edited))return fail(QStringLiteral("Cancel discarded independent edits"));
+        if(!hit(QStringLiteral("nkshotCopyEditorCopy"))||!samePixels(application.clipboard()->image(),edited))return fail(QStringLiteral("Independent copy pixels changed"));
+        // Verify an actual edited canvas pixel in the window, not only the model.
+        QPoint strokePixel(-1,-1);
+        for(int y=0;y<edited.height()&&strokePixel.x()<0;++y)for(int x=0;x<edited.width();++x) {
+            const auto c=edited.pixelColor(x,y),o=extracted.pixelColor(x,y);
+            if(qAbs(c.red()-236)<8&&qAbs(c.green()-57)<8&&qAbs(c.blue()-116)<8
+                &&qAbs(c.red()-o.red())+qAbs(c.green()-o.green())+qAbs(c.blue()-o.blue())>160) {strokePixel={x,y};break;}
+        }
+        if(strokePixel.x()<0)return fail(QStringLiteral("No strong edited stroke pixel found"));
+        QImage editorShot;
+        const auto painted=[&] {
+            editor->update();editorShot=editor->grabWindow();
+            const auto location=viewport->mapToScene(strokePixel).toPoint();
+            for(int y=location.y()-2;y<=location.y()+2;++y)for(int x=location.x()-2;x<=location.x()+2;++x) {
+                if(!editorShot.rect().contains(x,y))continue;
+                const auto c=editorShot.pixelColor(x,y);
+                if(qAbs(c.red()-236)<30&&qAbs(c.green()-57)<30&&qAbs(c.blue()-116)<30)return true;
+            }
+            return false;
+        };
+        if(!QTest::qWaitFor(painted,1500)||!editorShot.save(screenshot+QStringLiteral(".editor.png")))
+            return fail(QStringLiteral("Edited canvas did not visibly repaint after redo"));
+        if(!hit(QStringLiteral("nkshotCopyEditorDone")))return fail(QStringLiteral("Independent Done action unavailable"));
+        QPointer<PinnedImageWindow> result;
+        if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows())if(w->objectName()==QStringLiteral("nkshotEditedImagePin"))result=qobject_cast<PinnedImageWindow *>(w);return result&&editor.isNull();},2000)
+            ||!samePixels(result->snapshot(),edited)||!samePixels(framePin->snapshot(),extracted)
+            ||core->annotationDocument()->renderToImage()!=mainImage||core->annotationDocument()->undoStackDepth()!=mainDepth
+            ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
+            return fail(QStringLiteral("Independent result altered original pin/main media/history"));
+        result->close();
+        auto fresh=qobject_cast<ImageCopyEditor *>(framePin->editCopy());
+        if(!fresh||fresh->document()->undoStackDepth()!=0||!samePixels(fresh->document()->renderToImage(),extracted))
+            return fail(QStringLiteral("New edit session reused an old edited copy"));
+        QPointer<ImageCopyEditor> freshGuard=fresh;fresh->close();
+        if(!QTest::qWaitFor([&]{return freshGuard.isNull();},1000))return fail(QStringLiteral("Unchanged independent editor did not close"));
+        fresh=qobject_cast<ImageCopyEditor *>(framePin->editCopy());freshGuard=fresh;
+        if(!fresh)return fail(QStringLiteral("Independent crop session failed to reopen"));
+        fresh->document()->cropCanvas(QRectF(0,0,100,80));
+        if(fresh->document()->renderToImage().size()!=QSize(100,80))return fail(QStringLiteral("Isolated crop model failed"));
+        fresh->close();discard=nullptr;
+        if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotDiscardCopyDialog"))discard=qobject_cast<QMessageBox *>(w);return discard&&discard->isVisible();},1000))
+            return fail(QStringLiteral("Cropped session lost discard protection"));
+        QTest::mouseClick(discard->button(QMessageBox::Discard),Qt::LeftButton);
+        if(!QTest::qWaitFor([&]{return freshGuard.isNull();},1000)||!samePixels(framePin->snapshot(),extracted)
+            ||core->annotationDocument()->renderToImage()!=mainImage||core->annotationDocument()->undoStackDepth()!=mainDepth)
+            return fail(QStringLiteral("Discard leaked crop into original documents"));
+    }
     framePin->close();
     QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
     if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip")))return fail(QStringLiteral("Imported MP4 clip entry unavailable"));

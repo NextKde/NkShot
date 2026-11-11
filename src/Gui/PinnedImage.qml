@@ -22,7 +22,7 @@ QQC.Pane {
     component PinButton: QQC.ToolButton {
         property bool selected: false
         icon.color: Kos.AppTheme.paletteText
-        implicitWidth: display === QQC.AbstractButton.IconOnly ? 36 : implicitContentWidth + leftPadding + rightPadding
+        implicitWidth: display === QQC.AbstractButton.IconOnly ? 32 : implicitContentWidth + leftPadding + rightPadding
         implicitHeight: 36
         QQC.ToolTip.visible: hovered
         QQC.ToolTip.text: text
@@ -71,6 +71,14 @@ QQC.Pane {
                     onTriggered: copyButton.copied = false
                 }
                 onClicked: pinnedWindow.copyImage()
+            }
+            PinButton {
+                objectName: "nkshotPinEditCopy"
+                text: i18nc("@action", "Edit a copy…")
+                display: QQC.AbstractButton.IconOnly
+                icon.name: "document-edit"
+                enabled: pinnedWindow.snapshotSize.width * pinnedWindow.snapshotSize.height <= 40000000
+                onClicked: { root.cancelArea(); pinnedWindow.cancelTextSelection(); pinnedWindow.editCopy() }
             }
             PinButton {
                 objectName: "nkshotPinExtractText"

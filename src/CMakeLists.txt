@@ -68,6 +68,7 @@ target_sources(spectacle PRIVATE
     Gui/OcrTextWindow.h
     Gui/ScrollCaptureWindow.cpp
     Gui/ScrollCaptureWindow.h
+    Gui/ImageCopyEditor.cpp
     Gui/PinnedImageWindow.cpp
     Gui/PinnedImageWindow.h
     Gui/PortableAnnotationViewport.cpp
@@ -255,6 +256,7 @@ qt_target_qml_sources(spectacle
     Gui/QuickNote.qml
     Gui/OcrText.qml
     Gui/ScrollCapture.qml
+    Gui/ImageCopyEditor.qml
     Gui/PinnedImage.qml
     Gui/ViewerPage.qml
 )
