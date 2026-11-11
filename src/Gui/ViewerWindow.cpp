@@ -9,6 +9,7 @@
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
 #include "QuickNoteWindow.h"
+#include "ColorPickerWindow.h"
 #include "OcrTextWindow.h"
 #include "Imaging/ImageTransforms.h"
 #include "Imaging/CodeScanner.h"
@@ -487,4 +488,28 @@ void ViewerWindow::scanImageCode()
         preview->requestActivate();
     });
     watcher->setFuture(QtConcurrent::run([snapshot] { return NkShot::Imaging::scanImageCode(snapshot); }));
+}
+
+QQuickWindow *ViewerWindow::openColorPicker()
+{
+    if (SpectacleCore::instance()->videoMode() || !isVisible()) return nullptr;
+    if (m_colorPicker && !m_colorPicker->isVisible()) delete m_colorPicker;
+    if (!m_colorPicker) {
+        auto picker = new ColorPickerWindow(SpectacleCore::instance()->annotationDocument()->renderToImage(), engine());
+        if (!picker->valid() || picker->status() != QQuickView::Ready) {
+            delete picker;
+            InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+                i18nc("@info", "Color sampling needs an image of at most 20 megapixels. Crop or resize a copy and try again."));
+            return nullptr;
+        }
+        m_colorPicker = picker;
+        picker->setTransientParent(this);
+        connect(this, &QObject::destroyed, picker, [picker] { delete picker; });
+        connect(this, &QWindow::visibleChanged, picker, [picker](bool visible) { if (!visible) picker->close(); });
+        picker->setScreen(screen());
+    }
+    m_colorPicker->show();
+    m_colorPicker->setWindowStates(m_colorPicker->windowStates().setFlag(Qt::WindowMinimized, false));
+    m_colorPicker->requestActivate();
+    return m_colorPicker;
 }

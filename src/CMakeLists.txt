@@ -47,6 +47,9 @@ target_sources(spectacle PRIVATE
     Gui/SoftwareVideoPreview.h
     Gui/QuickNoteWindow.cpp
     Gui/QuickNoteWindow.h
+    Gui/ColorPickerWindow.cpp
+    Gui/ColorPickerWindow.h
+    Imaging/ColorSample.cpp
     Imaging/CodeScanner.cpp
     Imaging/NoteCard.cpp
     Gui/OcrTextWindow.cpp
@@ -224,6 +227,7 @@ qt_target_qml_sources(spectacle
     Gui/TextContextMenuConnection.qml
     Gui/TtToolButton.qml
     Gui/UndoRedoGroup.qml
+    Gui/ColorPicker.qml
     Gui/QuickNote.qml
     Gui/OcrText.qml
     Gui/ScrollCapture.qml

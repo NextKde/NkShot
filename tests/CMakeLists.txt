@@ -107,3 +107,8 @@ set_tests_properties(note_card_test PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_QPA_PL
 ecm_add_test(CodeScannerTest.cpp ../src/Imaging/CodeScanner.cpp
     TEST_NAME code_scanner_test LINK_LIBRARIES Qt::Test Qt::Gui KF6::Prison KF6::PrisonScanner)
 set_tests_properties(code_scanner_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Physical-pixel image sampling, color-space normalization and immutable snapshots.
+ecm_add_test(ColorSampleTest.cpp ../src/Imaging/ColorSample.cpp
+    TEST_NAME color_sample_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(color_sample_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

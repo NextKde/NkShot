@@ -218,7 +218,7 @@ EmptyPage {
                     TaskMenu {
                         id: ocrLanguageMenu
                         objectName: "nkshotOcrLanguageMenu"
-                        title: i18nc("@action:menu", "Read text and codes")
+                        title: i18nc("@action:menu", "Read from image")
                         icon.name: "document-scan"
                         property var languages: SpectacleCore.ocrAvailable ? SpectacleCore.ocrAvailableLanguages() : ({})
                         QQC.MenuItem {
@@ -247,6 +247,13 @@ EmptyPage {
                             icon.color: palette.buttonText
                             enabled: !contextWindow.scanningCode
                             onTriggered: contextWindow.scanImageCode()
+                        }
+                        QQC.MenuItem {
+                            objectName: "nkshotColorPickerAction"
+                            text: i18nc("@action", "Pick a color…")
+                            icon.name: "color-picker"
+                            icon.color: palette.buttonText
+                            onTriggered: contextWindow.openColorPicker()
                         }
                         QQC.Label {
                             visible: !SpectacleCore.ocrAvailable

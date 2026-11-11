@@ -169,7 +169,7 @@ during setup; actual compositor exclusion timing still needs native KDE testing.
 
 ## Read QR and barcodes (067)
 
-More → Read text and codes → Read QR or barcode scans an immutable snapshot of
+More → Read from image → Read QR or barcode scans an immutable snapshot of
 the current edited image locally. It displays one decoded textual result in the
 shared read-only result window. Copy and UTF-8 Save As are explicit actions; URLs,
 HTML and commands stay plain text and are never opened or executed by this flow.
@@ -180,3 +180,26 @@ the clipboard. The helper rejects images over 20 megapixels and composites alpha
 onto white for recognition. A repeated request is ignored while decoding; a hidden
 viewer, changed image or switch to video discards the obsolete result. Multiple
 codes are not enumerated, and damaged-code accuracy is not guaranteed.
+
+
+## Sample image colors (068)
+
+More → Read from image → Pick a color opens a focused sampler for an immutable
+snapshot of the edited image. Click or drag to select an image pixel; arrow keys
+move one physical image pixel. Tab returns to the image for keyboard navigation.
+The 11×11 neighborhood is enlarged without interpolation, with the selected pixel
+at its center. The image and its undo history never change.
+
+Values are 8-bit, straight-alpha sRGB. Tagged images are converted to sRGB;
+untagged images are assumed to already contain sRGB values. Alpha is preserved:
+HEX uses #RRGGBB or CSS #RRGGBBAA (alpha last), while RGB uses rgb() or rgba().
+The checkerboard is only a transparency preview, never part of the sampled color.
+Coordinates are zero-based physical image pixels, irrespective of source DPR.
+Images above 20 megapixels are rejected with a crop/resize suggestion.
+
+Copy HEX (or Ctrl+C) and Copy RGB are explicit clipboard actions; selecting or
+closing does not copy anything. A repeat open raises the existing sampler.
+Closing destroys its snapshot; the next open reads the current edited image.
+Hiding the viewer closes the sampler before capture setup. This is local image
+sampling, not a global desktop eyedropper, monitor-profile accuracy, HDR sampling
+or native high-DPI/GPU acceptance.

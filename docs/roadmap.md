@@ -33,7 +33,8 @@ See [iterations](iterations.md), [building](building.md) and
    editor tools as these workflows or add fake placeholders.
 
 Quick-note image cards are implemented in 066 as a session-only workflow, not a
-persistent notes application.
+persistent notes application. Image-local color sampling is implemented in 068;
+a global desktop eyedropper remains a separate gap.
 
 ## Release gates
 

@@ -6,6 +6,8 @@
 #include <QDBusConnection>
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/QuickNoteWindow.h"
+#include "Gui/ColorPickerWindow.h"
+#include "Imaging/ColorSample.h"
 #include "Gui/OcrTextWindow.h"
 #include "Gui/InlineMessageModel.h"
 #include "Imaging/ImageTransforms.h"
@@ -263,6 +265,87 @@ void installUiCaptureHook(QApplication &application)
                 }
                 if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
                 qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
+                application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_COLOR")) {
+                auto fail = [&](const char *step) { qCritical() << "Color sampler failure:" << step; application.exit(210); };
+                auto document = SpectacleCore::instance()->annotationDocument();
+                const auto original = document->renderToImage();
+                const auto expected = NkShot::Imaging::colorSampleSnapshot(original);
+                const auto depth = document->undoStackDepth();
+                QApplication::clipboard()->setText(QStringLiteral("untouched"));
+                if (!openTaskMenu(viewer, QStringLiteral("nkshotOcrLanguageMenu"))) { fail("menu"); return; }
+                auto action = visualItem(viewer->contentItem(), QStringLiteral("nkshotColorPickerAction"));
+                if (!action || !action->isVisible()) { fail("action"); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, action->mapToScene(QPointF(action->width()/2, action->height()/2)).toPoint());
+                QTest::qWait(200);
+                QPointer<ColorPickerWindow> picker;
+                for (auto window : QGuiApplication::allWindows()) if (auto candidate = qobject_cast<ColorPickerWindow *>(window)) picker = candidate;
+                if (!picker || picker->status() != QQuickView::Ready || picker->hasSample()
+                    || QApplication::clipboard()->text() != QStringLiteral("untouched")) { fail("initial state"); return; }
+                if (viewer->openColorPicker() != picker) { fail("duplicate window"); return; }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_COLOR_COMPACT")) picker->resize(400, 460);
+                picker->requestActivate(); QTest::qWait(200);
+                auto viewport = visualItem(picker->contentItem(), QStringLiteral("nkshotColorViewport"));
+                auto hex = visualItem(picker->contentItem(), QStringLiteral("nkshotColorCopyHex"));
+                auto rgb = visualItem(picker->contentItem(), QStringLiteral("nkshotColorCopyRgb"));
+                if (!viewport || !hex || !rgb || hex->isEnabled() || rgb->isEnabled() || !viewport->hasActiveFocus()) { fail("focus / disabled controls"); return; }
+                picker->copyHex(); picker->copyRgb();
+                if (QApplication::clipboard()->text() != QStringLiteral("untouched")) { fail("empty copy"); return; }
+                if (!picker->grabWindow().save(destination + QStringLiteral(".empty.png"))) { fail("initial capture"); return; }
+                const QPoint scene = viewport->mapToScene(QPointF(viewport->width()*0.5, viewport->height()*0.5)).toPoint();
+                const QPointF local = viewport->mapFromScene(scene);
+                const auto pixel = NkShot::Imaging::colorSamplePixelAt(local, {viewport->width(), viewport->height()}, expected.size());
+                QTest::mouseClick(picker, Qt::LeftButton, Qt::NoModifier, scene);
+                if (!picker->hasSample() || picker->pixel() != pixel || picker->sampleColor().rgba() != expected.pixelColor(pixel).rgba()
+                    || QApplication::clipboard()->text() != QStringLiteral("untouched")) { fail("mouse pixel / no implicit copy"); return; }
+                picker->sampleAt(-1, -1, viewport->width(), viewport->height());
+                if (picker->pixel() != pixel) { fail("letterbox leaves selection"); return; }
+                QTest::keyClick(picker, Qt::Key_Right);
+                if (picker->pixel() != pixel + QPoint(1, 0)) { fail("arrow key"); return; }
+                auto click = [&](QQuickItem *item) { QTest::mouseClick(picker, Qt::LeftButton, Qt::NoModifier, item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint()); };
+                click(hex);
+                if (QApplication::clipboard()->text() != picker->hexValue()) { fail("HEX copy"); return; }
+                click(rgb);
+                if (QApplication::clipboard()->text() != picker->rgbValue()) { fail("RGB copy"); return; }
+                QTest::keyClick(picker, Qt::Key_C, Qt::ControlModifier);
+                if (QApplication::clipboard()->text() != picker->hexValue()) { fail("copy shortcut"); return; }
+                bool returnedToImage = false;
+                for (int i = 0; i < 8 && !returnedToImage; ++i) {
+                    QTest::keyClick(picker, Qt::Key_Tab);
+                    returnedToImage = viewport->hasActiveFocus();
+                }
+                if (!returnedToImage) { fail("Tab returns to image"); return; }
+                for (auto item : {viewport, hex, rgb}) {
+                    if (!QRectF(0, 0, picker->width(), picker->height()).contains(item->mapRectToScene({0, 0, item->width(), item->height()}))) { fail("clipped controls"); return; }
+                }
+                QTest::qWait(100);
+                if (!picker->grabWindow().save(destination)) { fail("sample capture"); return; }
+                picker->setWindowStates(Qt::WindowMinimized); QTest::qWait(50);
+                if (viewer->openColorPicker() != picker || picker->windowStates().testFlag(Qt::WindowMinimized)) { fail("restore minimized sampler"); return; }
+                const auto selected = picker->pixel();
+                picker->resize(picker->width() + 60, picker->height() + 40); QTest::qWait(100);
+                if (picker->pixel() != selected) { fail("resize changes sample"); return; }
+                QTest::mousePress(picker, Qt::LeftButton, Qt::NoModifier, viewport->mapToScene(QPointF(viewport->width()/2, viewport->height()/2)).toPoint());
+                const QPoint dragEnd = viewport->mapToScene(QPointF(viewport->width()*0.7, viewport->height()/2)).toPoint();
+                QTest::mouseMove(picker, dragEnd); QTest::mouseRelease(picker, Qt::LeftButton, Qt::NoModifier, dragEnd);
+                const auto draggedPixel = NkShot::Imaging::colorSamplePixelAt(viewport->mapFromScene(dragEnd), {viewport->width(), viewport->height()}, expected.size());
+                if (picker->pixel() != draggedPixel) { fail("drag"); return; }
+                picker->moveSample(345 - picker->pixel().x(), 300 - picker->pixel().y());
+                QTest::qWait(100);
+                if (!picker->grabWindow().save(destination + QStringLiteral(".edge.png"))) { fail("edge capture"); return; }
+                // Capture setup must not leave a floating image sampler in the frame.
+                viewer->hide(); QTest::qWait(100);
+                if (picker) { fail("viewer hide cleanup"); return; }
+                viewer->show();
+                picker = qobject_cast<ColorPickerWindow *>(viewer->openColorPicker());
+                if (!picker || picker->hasSample()) { fail("reopen"); return; }
+                picker->requestActivate(); QTest::qWait(100); QTest::keyClick(picker, Qt::Key_Escape); QTest::qWait(100);
+                if (picker || !samePixels(original, document->renderToImage()) || depth != document->undoStackDepth()) { fail("close / source isolation"); return; }
+                SpectacleCore::instance()->setVideoMode(true);
+                if (viewer->openColorPicker()) { fail("video guard"); return; }
+                SpectacleCore::instance()->setVideoMode(false);
+                qInfo() << "Color sampler actual menu, pixels, keyboard, drag, explicit copy, resize, repeated open, hide/close and source isolation passed";
                 application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE")) {

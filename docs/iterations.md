@@ -1524,3 +1524,43 @@ outstanding Save As dialog. Hide/show still discards the in-flight result.
 [discarded stale result](screenshots/067-code-stale.png), and
 [shared OCR regression](screenshots/067-ocr-regression.png) are actual software
 window captures reviewed for this stage.
+
+## 068 — Focused image-local color sampling
+
+The existing reading group is now named Read from image and adds Pick a color,
+without another root menu entry. Its separate, restrained window uses a private
+snapshot of the edited image, an aspect-fit preview and an unfiltered 11×11 pixel
+neighborhood. Click/drag or arrow keys choose physical image pixels. HEX/RGB copy
+is explicit; selection never changes the clipboard or the source document.
+
+The reusable helper normalizes tagged input to 8-bit straight-alpha sRGB and assumes
+sRGB for untagged input. CSS HEX alpha is last (#RRGGBBAA), with rgba() alongside it.
+Alpha/DPR, external backing memory, profiles, the 20-megapixel bound, letterbox
+edges and extreme coordinate inputs are covered by focused Qt tests. A repeated
+open raises the same sampler, minimizing/restoring retains the selection, closing
+releases the snapshot, and viewer hiding closes it before capture setup.
+
+Independent review prompted a returnable Tab focus stop and visible focus ring,
+an explicit imageScale name, and a Canvas checkerboard instead of thousands of
+scene objects. Screenshot review moved Close to the trailing edge and improved
+fit-preview interpolation while preserving unfiltered neighborhood pixels.
+
+Final build, CTest 15/15, static 18/18 and whitespace checks pass. Actual window
+interaction covers initial disabled copy, menu entry, exact sampled values, drag,
+arrow/Tab/Ctrl+C, explicit copies, resize, repeated/minimized open, hide/Escape
+cleanup, video rejection and unchanged source pixels/history. QR decode/export
+and Chinese OCR export also pass as regressions. No QML errors or binding loops
+were reported in the final interaction runs.
+
+Reviewed actual software-window captures:
+[light](screenshots/068-color-light.png),
+[dark](screenshots/068-color-dark.png),
+[400×460](screenshots/068-color-compact.png),
+[alpha](screenshots/068-color-alpha.png),
+[initial state](screenshots/068-color-light.png.empty.png),
+[edge neighborhood](screenshots/068-color-light.png.edge.png),
+[reading menu](screenshots/068-color-light.png.task.png),
+[QR regression](screenshots/068-code-regression.png) and
+[Chinese OCR regression](screenshots/068-ocr-regression.png).
+All source images are synthetic fixtures. This is not a global screen eyedropper,
+HDR/monitor-profile validation, real KWin capture or GPU/native-DPI acceptance.

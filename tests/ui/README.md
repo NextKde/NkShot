@@ -307,3 +307,20 @@ transparency/DPI and pixel bounds; this is not an accuracy benchmark.
 no result or warning. `NKSHOT_TEST_CODE_MAXIMIZE=1` maximizes while decoding and
 requires a normal result. Successful-result runs also verify UTF-8 export, repeat
 scan after close, and result/dialog destruction while Save As is open.
+
+
+## Image-local color sampling (068)
+
+Generate the synthetic fixture with `python3 tests/ui/make_color_fixture.py /tmp/color.png`;
+add `--alpha` for the translucent variant. `NKSHOT_TEST_COLOR=1` drives the actual
+Read from image menu and sampler window. It asserts no implicit clipboard change,
+initial disabled copy, source-pixel selection, arrow nudging, pointer drag, HEX/RGB
+and Ctrl+C copy, resize preservation, repeat-open coalescing, hide/close cleanup,
+fresh reopen, video rejection and unchanged source pixels/history. The `.empty.png`
+and `.task.png` sibling captures show the initial state and actual menu.
+
+Use `NKSHOT_TEST_COLOR_COMPACT=1` for 400×460 and `NKSHOT_TEST_DARK=1` for dark UI.
+The helper's `color_sample_test` covers profile conversion, external pixel memory,
+alpha formatting, premultiplied inputs, DPR, bounds and edge neighborhoods. These
+are software-window tests with synthetic content, not desktop capture, global
+color picking, GPU rendering or native monitor-profile validation.

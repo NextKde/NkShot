@@ -44,6 +44,7 @@ public:
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
     Q_INVOKABLE QQuickWindow *openQuickNote();
+    Q_INVOKABLE QQuickWindow *openColorPicker();
     Q_INVOKABLE void scanImageCode();
     bool scanningCode() const { return m_scanningCode; }
     Q_INVOKABLE QSize imageSnapshotSize() const;
@@ -72,6 +73,7 @@ private:
 
     void setBackgroundColorRole(QPalette::ColorRole role);
 
+    QPointer<QQuickWindow> m_colorPicker;
     QPointer<QQuickWindow> m_quickNote;
     QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
