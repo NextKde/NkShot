@@ -204,3 +204,9 @@ pixels plus untouched source document/undo depth. The dialog is captured alongsi
 the output with `.dialog.png`; run DARK and UI_SIZE=640x420 variants. Widget file
 dialogs are used, not native portals. Core image_transforms_test covers alpha,
 DPR/profile, ownership, invalid widths and pixel/height caps.
+
+`NKSHOT_TEST_SOLID_COVER=1 NKSHOT_TEST_EDITING=1` selects a seeded rectangle, clicks
+the Solid cover preset and verifies no selected-mark mutation. A real drag then
+checks opaque black interior, unchanged pixels beyond a boundary margin and exact
+undo/redo. Use a textured fixture and optionally COPY_SAVE with a fresh explicit
+nkshot-ui-test-* output path to verify clipboard and exported PNG pixels.

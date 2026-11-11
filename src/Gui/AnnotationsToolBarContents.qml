@@ -350,6 +350,24 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.EllipseTool
             }
             ExtraMenuItem {
+                objectName: "nkshotSolidCoverPreset"
+                text: i18nc("@action", "Solid cover preset")
+                icon.name: "security-high"
+                icon.color: palette.buttonText
+                onTriggered: {
+                    // A preset for the existing rectangle tool, not a destructive
+                    // erase. Deselect first so configuring it cannot alter a mark.
+                    root.editorDocument.deselectItem()
+                    root.tool.type = AnnotationTool.RectangleTool
+                    root.tool.strokeWidth = 0
+                    root.tool.strokeColor = "#000000"
+                    root.tool.fillColor = "#000000"
+                    root.tool.shadow = false
+                    InlineMessageModel.push(InlineMessageModel.InformationalType,
+                        i18nc("@info", "Draw beyond the sensitive content, then export a copy to share. The editable original still retains undo history."))
+                }
+            }
+            ExtraMenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
 

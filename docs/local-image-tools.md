@@ -67,3 +67,17 @@ The pure ImageTransforms helper is independent of capture/UI. It preserves image
 alpha, color-space metadata and device-pixel ratio, rounds height to the nearest
 row and rejects output beyond 8192×32000 bounds or 40 megapixels. This is ordinary
 smooth scaling, not detail reconstruction or AI upscaling.
+
+### Solid cover preset
+
+Editor More tools → Solid cover preset configures the existing rectangle tool
+with an opaque black fill, no stroke and no shadow. It deselects existing marks
+first, so choosing the preset does not recolor a selected annotation. This is a
+style preset, not a separate destructive erase or automatic sensitive-data finder.
+
+Draw past every edge of the content you want covered, then inspect and export a
+flattened copy before sharing. Antialiased boundaries need a safety margin. The
+editable document and original files still retain the original pixels/undo history;
+this does not erase originals, backups, metadata or copies elsewhere. Changing
+the rectangle's fill later can make it translucent again. Pixelation/blur remain
+available but should not be assumed to make all sensitive content unrecoverable.

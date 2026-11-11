@@ -1014,3 +1014,28 @@ scenarios pass. Reviewed [light dialog](screenshots/051-resize-dialog-light.png)
 This produces an immutable flattened sharing copy, not a new editable annotation
 document. Native portals, overwrite confirmation, large-image memory pressure
 and GPU presentation remain unverified. Enlargement cannot recover lost detail.
+
+## 052 — Opaque cover preset for safer screenshot sharing
+
+Add More tools → Solid cover preset using the existing rectangle implementation:
+opaque black fill, zero stroke, no shadow. Deselect before configuration so a
+selected existing annotation is not accidentally recolored. The inline guidance
+asks for a margin and an exported sharing copy, explicitly noting that the
+editable original retains undo history. Existing pixelate/blur tools remain.
+
+Build, CTest 6/6 and static checks 16/16 pass. The actual menu test starts with a
+selected red rectangle, verifies the preset changes neither its pixels nor undo
+depth, then drags a cover. All tested interior pixels are fully opaque black;
+pixels outside the boundary margin stay unchanged. Undo/redo exactly restores
+before/after images. Real Copy/Save action regressions verify clipboard and saved
+PNG pixels equal the rendered covered image, in both themes. Existing secondary
+tool clicks still pass. Reviewed [menu](screenshots/052-solid-cover-menu.png),
+[guidance](screenshots/052-solid-cover-guidance.png),
+[light export](screenshots/052-solid-cover-light.png) and
+[dark export](screenshots/052-solid-cover-dark.png).
+
+This is a rectangle style preset, not permanent erasure of source files, undo
+history, metadata or other copies. The test checks opaque interior pixels rather
+than certifying arbitrary sensitive data at antialiased edges. Users must leave
+a margin and inspect the flattened exported file. Native desktop/GPU acceptance
+remains separate.

@@ -1052,6 +1052,56 @@ void installUiCaptureHook(QApplication &application)
                 QMetaObject::invokeMethod(popup, "open");
                 qInfo() << "NkShot actual QML property-change/close/undo/redo regression passed";
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_SOLID_COVER")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                document->tool()->setType(AnnotationTool::RectangleTool);
+                document->tool()->setStrokeWidth(4); document->tool()->setStrokeColor(Qt::red);
+                document->tool()->setFillColor(Qt::transparent); document->tool()->setShadow(false);
+                document->beginItem({80, 80}); document->continueItem({220, 160}); document->finishItem();
+                document->selectItem({75, 75, 150, 90});
+                auto selected = document->property("selectedItem").value<QObject *>();
+                if (!selected || !selected->property("hasSelection").toBool()) { application.exit(151); return; }
+                const auto before = document->renderToImage(); const auto depth = document->undoStackDepth();
+                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotExtraToolsMenu"));
+                if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(152); return; }
+                QTest::qWait(200);
+                auto preset = visualItem(viewer->contentItem(), QStringLiteral("nkshotSolidCoverPreset"));
+                if (!preset) { application.exit(153); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                    preset->mapToScene(QPointF(preset->width()/2, preset->height()/2)).toPoint());
+                QTest::qWait(150);
+                if (!samePixels(before, document->renderToImage()) || document->undoStackDepth() != depth
+                    || selected->property("hasSelection").toBool() || document->tool()->fillColor() != QColor(Qt::black)
+                    || document->tool()->hasShadow()) { application.exit(154); return; }
+                auto viewport = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnnotationViewport"));
+                if (!viewport) { application.exit(155); return; }
+                const auto start = viewport->mapToScene(QPointF(viewport->width()*0.15, viewport->height()*0.25)).toPoint();
+                const auto end = viewport->mapToScene(QPointF(viewport->width()*0.65, viewport->height()*0.65)).toPoint();
+                QTest::mousePress(viewer, Qt::LeftButton, Qt::NoModifier, start);
+                QTest::mouseMove(viewer, end);
+                QTest::mouseRelease(viewer, Qt::LeftButton, Qt::NoModifier, end);
+                if (!QTest::qWaitFor([&] { return document->undoStackDepth() == depth + 1; }, 1000)) { application.exit(156); return; }
+                const auto covered = document->renderToImage();
+                QRect blackBounds; int count = 0;
+                for (int y=0; y<covered.height(); ++y) for (int x=0; x<covered.width(); ++x) {
+                    if (covered.pixelColor(x,y) == QColor(Qt::black) && before.pixelColor(x,y) != QColor(Qt::black)) {
+                        blackBounds |= QRect(x,y,1,1); ++count;
+                    }
+                }
+                if (count < 1000 || blackBounds.width() < 20 || blackBounds.height() < 20) { application.exit(157); return; }
+                const auto inside = blackBounds.adjusted(3,3,-3,-3);
+                for (int y=inside.top(); y<=inside.bottom(); ++y) for (int x=inside.left(); x<=inside.right(); ++x)
+                    if (covered.pixelColor(x,y) != QColor(Qt::black)) { application.exit(158); return; }
+                const auto margin = blackBounds.adjusted(-3,-3,3,3);
+                for (int y=0; y<covered.height(); ++y) for (int x=0; x<covered.width(); ++x)
+                    if (!margin.contains(x,y) && covered.pixelColor(x,y) != before.pixelColor(x,y)) { application.exit(159); return; }
+                document->undo();
+                if (!samePixels(document->renderToImage(), before)) { application.exit(160); return; }
+                document->redo();
+                if (!samePixels(document->renderToImage(), covered)) { application.exit(161); return; }
+                QTest::qWait(400); // Let the guidance notification finish its layout transition before capture.
+                qInfo() << "NkShot solid-cover preset preserves selected mark; actual drag opaque interior, outside pixels, undo/redo passed" << blackBounds;
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_COPY_SAVE")) {
                 const auto output = SpectacleCore::instance()->outputUrl();
                 if (!output.isLocalFile() || !QFileInfo(output.toLocalFile()).fileName().startsWith(QStringLiteral("nkshot-ui-test-"))) {
