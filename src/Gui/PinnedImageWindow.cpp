@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#include "RecentMediaModel.h"
 #include "PinnedImageWindow.h"
 #include "ImageCopyEditor.h"
 #include "OcrTextWindow.h"
@@ -125,6 +126,7 @@ void PinnedImageWindow::saveAs()
         } else if (!file.commit()) {
             Q_EMIT saveFinished(i18nc("@info", "Could not save image: %1", file.errorString()), false);
         } else {
+            NkShot::RecentMediaModel::instance()->remember(QUrl::fromLocalFile(paths.first()));
             Q_EMIT saveFinished(i18nc("@info", "Image saved"), true);
         }
     });

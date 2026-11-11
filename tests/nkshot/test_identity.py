@@ -120,6 +120,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('signal positionRequested', overlay)
         self.assertIn('signal centerRequested', overlay)
 
+    def test_recent_files_reuse_validated_open(self):
+        impl = read('src/Gui/ViewerWindow.cpp')
+        self.assertIn('void ViewerWindow::loadOpenedMedia(const QUrl &url)', impl)
+        self.assertGreaterEqual(impl.count('loadOpenedMedia(url)'), 2)
+        self.assertIn('m_mediaLoader->validatedSourceUnchanged()', impl)
+        self.assertIn('if(core->commitOpenedMedia(source, image, video))', impl)
+        popup = read('src/Gui/RecentMediaPopup.qml')
+        self.assertIn('Text.PlainText', popup)
+        self.assertIn('Remove from list, not from disk', popup)
+        for page in ('ViewerPage.qml', 'DialogPage.qml'):
+            self.assertIn('nkshotRecentMediaAction', read('src/Gui/' + page))
+
     def test_capture_actions_still_present(self):
         overlay = read('src/Gui/CaptureOverlay.qml')
         for action in ['AcceptAction', 'CancelAction', 'SaveAction', 'SaveAsAction',

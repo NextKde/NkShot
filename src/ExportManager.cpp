@@ -36,6 +36,7 @@
 #include <KIO/ListJob>
 #include <KIO/MkpathJob>
 #include <KIO/StatJob>
+#include "RecentMediaModel.h"
 #include <KRecentDocument>
 #include <KSharedConfig>
 #include <KSystemClipboard>
@@ -52,11 +53,15 @@ ExportManager::ExportManager(QObject *parent)
 {
     connect(this, &ExportManager::imageExported, this, [](Actions actions, const QUrl &url) {
         if (actions & AnySave) {
+            NkShot::RecentMediaModel::instance()->remember(url);
             Settings::setLastImageSaveLocation(url);
             if (actions & SaveAs) {
                 Settings::setLastImageSaveAsLocation(url);
             }
         }
+    });
+    connect(this, &ExportManager::videoExported, this, [](Actions actions, const QUrl &url) {
+        if(actions & AnySave) NkShot::RecentMediaModel::instance()->remember(url);
     });
 }
 

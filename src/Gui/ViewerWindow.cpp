@@ -7,6 +7,7 @@
 
 #include "ViewerWindow.h"
 #include "LocalMediaLoader.h"
+#include "RecentMediaModel.h"
 #include "RecordingPreparation.h"
 #include <QMessageBox>
 #include <QProgressDialog>
@@ -61,6 +62,7 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
     s_viewerWindowInstance = this;
     s_isAnnotating = false;
     m_clipJob = new VideoClipJob(this);
+    connect(m_clipJob, &VideoClipJob::exported, this, [](const QUrl &url) { NkShot::RecentMediaModel::instance()->remember(url); });
     m_mediaLoader = new NkShot::LocalMediaLoader(this);
     connect(m_mediaLoader, &NkShot::LocalMediaLoader::imageReady, this,
         [this](const QImage &image, const QUrl &source) { offerOpenedMedia(source, image, false); });
@@ -412,24 +414,38 @@ void ViewerWindow::openMedia()
         if (result != QDialog::Accepted) { finishOpeningMedia(); return; }
         if (!SpectacleCore::instance()->canOpenMedia()
             || m_openEpoch != SpectacleCore::instance()->mediaOpenEpoch()) { finishOpeningMedia(); return; }
-        auto progress = new QProgressDialog(i18nc("@info", "Checking local file…"),
-            i18nc("@action", "Cancel"), 0, 0);
-        progress->setObjectName(QStringLiteral("nkshotOpenMediaProgress"));
-        progress->winId();
-        progress->windowHandle()->setTransientParent(this);
-        progress->setWindowModality(Qt::ApplicationModal);
-        progress->setMinimumDuration(0);
-        m_openDialog = progress;
-        connect(this, &QObject::destroyed, progress, &QObject::deleteLater);
-        connect(progress, &QProgressDialog::canceled, this, [this] {
-            m_mediaLoader->cancel();
-            finishOpeningMedia();
-        });
-        progress->show();
-        m_mediaLoader->load(url);
+        loadOpenedMedia(url);
     });
     Q_EMIT openingMediaChanged();
     dialog->open();
+}
+
+QObject *ViewerWindow::recentMediaObject() const { return NkShot::RecentMediaModel::instance(); }
+void ViewerWindow::openRecentMedia(const QUrl &url)
+{
+    if(!canOpenMedia())return;
+    m_openingMedia=true;
+    m_openEpoch=SpectacleCore::instance()->mediaOpenEpoch();
+    Q_EMIT openingMediaChanged();
+    loadOpenedMedia(url);
+}
+void ViewerWindow::loadOpenedMedia(const QUrl &url)
+{
+    auto progress = new QProgressDialog(i18nc("@info", "Checking local file…"),
+        i18nc("@action", "Cancel"), 0, 0);
+    progress->setObjectName(QStringLiteral("nkshotOpenMediaProgress"));
+    progress->winId();
+    progress->windowHandle()->setTransientParent(this);
+    progress->setWindowModality(Qt::ApplicationModal);
+    progress->setMinimumDuration(0);
+    m_openDialog = progress;
+    connect(this, &QObject::destroyed, progress, &QObject::deleteLater);
+    connect(progress, &QProgressDialog::canceled, this, [this] {
+        m_mediaLoader->cancel();
+        finishOpeningMedia();
+    });
+    progress->show();
+    m_mediaLoader->load(url);
 }
 
 void ViewerWindow::offerOpenedMedia(const QUrl &source, const QImage &image, bool video)
@@ -453,7 +469,7 @@ void ViewerWindow::offerOpenedMedia(const QUrl &source, const QImage &image, boo
         if (core->canOpenMedia() && m_openEpoch == core->mediaOpenEpoch()
             && !m_clipJob->busy() && !choosingClipOutput()) {
             finishOpeningMedia();
-            core->commitOpenedMedia(source, image, video);
+            if(core->commitOpenedMedia(source, image, video)) NkShot::RecentMediaModel::instance()->remember(source);
         } else finishOpeningMedia();
     };
     if (core->annotationDocument()->baseImage().isNull() && core->currentVideo().isEmpty()) {

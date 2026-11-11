@@ -32,6 +32,7 @@ class ViewerWindow : public SpectacleWindow
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
     Q_PROPERTY(QObject *clipJob READ clipJobObject CONSTANT)
+    Q_PROPERTY(QObject *recentMedia READ recentMediaObject CONSTANT)
     Q_PROPERTY(bool choosingClipOutput READ choosingClipOutput NOTIFY choosingClipOutputChanged)
 public:
     enum Mode {
@@ -47,6 +48,8 @@ public:
     static ViewerWindow *instance();
 
     Q_INVOKABLE void openMedia();
+    Q_INVOKABLE void openRecentMedia(const QUrl &url);
+    QObject *recentMediaObject() const;
     Q_INVOKABLE QQuickWindow *editClipboardImage();
     bool openingMedia() const { return m_openingMedia; }
     bool canOpenMedia() const;
@@ -86,6 +89,7 @@ private:
     explicit ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent = nullptr);
     ~ViewerWindow();
 
+    void loadOpenedMedia(const QUrl &url);
     void createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure);
     void setMode(ViewerWindow::Mode mode);
     Q_SLOT void updateColor();

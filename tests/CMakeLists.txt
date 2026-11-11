@@ -4,6 +4,8 @@ SET(FILENAME_TEST_SRCS
     FilenameTest.cpp
     ../src/ShortcutActions.cpp
     ../src/ExportManager.cpp
+    ../src/RecentMediaModel.cpp
+    ../src/RecentMediaModel.h
     ../src/Platforms/ImagePlatform.cpp
     ../src/RecordingPreparation.cpp
     ../src/RecordingPreparation.h
@@ -178,3 +180,8 @@ ecm_add_test(LocalMediaLoaderTest.cpp ../src/LocalMediaLoader.cpp ../src/LocalMe
     TEST_NAME local_media_loader_test LINK_LIBRARIES Qt::Test Qt::Core Qt::Gui KF6::I18n)
 target_include_directories(local_media_loader_test PRIVATE ../src)
 set_tests_properties(local_media_loader_test PROPERTIES TIMEOUT 60)
+
+# 096: bounded local-only recent-file metadata, without deleting media files.
+ecm_add_test(RecentMediaModelTest.cpp ../src/RecentMediaModel.cpp ../src/RecentMediaModel.h
+    TEST_NAME recent_media_model_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(recent_media_model_test PROPERTIES TIMEOUT 30)

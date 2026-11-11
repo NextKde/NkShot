@@ -74,6 +74,13 @@ EmptyPage {
                     onTriggered: contextWindow.openMedia()
                 }
                 QQC.MenuItem {
+                    objectName: "nkshotRecentMediaAction"
+                    text: i18nc("@action", "Recent files…")
+                    icon.name: "document-open-recent"
+                    enabled: contextWindow.canOpenMedia
+                    onTriggered: recentPopup.open()
+                }
+                QQC.MenuItem {
                     objectName: "nkshotClipboardImageAction"
                     text: i18nc("@action", "Edit clipboard image…")
                     icon.name: "edit-paste"
@@ -141,4 +148,6 @@ EmptyPage {
         sequences: [StandardKey.Preferences]
         onActivated: contextWindow.showPreferencesDialog()
     }
+    RecentMediaPopup { id: recentPopup; parent: QQC.Overlay.overlay }
+
 }

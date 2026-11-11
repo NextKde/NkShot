@@ -34,6 +34,8 @@ target_sources(spectacle PRIVATE
     CommandLineOptions.cpp
     ExportManager.cpp
     Geometry.cpp
+    RecentMediaModel.cpp
+    RecentMediaModel.h
     LocalMediaLoader.cpp
     LocalMediaLoader.h
     OcrManager.cpp
@@ -242,6 +244,7 @@ qt_target_qml_sources(spectacle
     Gui/ResizeImagePopup.qml
     Gui/RecordingView.qml
     Gui/CropPreviewOverlay.qml
+    Gui/RecentMediaPopup.qml
     Gui/VideoClipPopup.qml
     Gui/RecordOptions.qml
     Gui/SaveAction.qml

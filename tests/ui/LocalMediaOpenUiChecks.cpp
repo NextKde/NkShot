@@ -2,6 +2,7 @@
 // Actual local-file dialogs and decoders, using generated nonpersonal fixtures.
 #include "LocalMediaOpenUiChecks.h"
 #include "SpectacleCore.h"
+#include "RecentMediaModel.h"
 #include "Platforms/ImagePlatform.h"
 #include "CaptureModeModel.h"
 #include "Gui/ViewerWindow.h"
@@ -872,6 +873,53 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
             return fail(QStringLiteral("Clipboard workflow changed active media/history"));
         clip->setText(clipboard);
+    }
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_RECENT_MEDIA")) {
+        auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+        if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))return fail(QStringLiteral("Recent test could not dismiss clip panel"));
+        auto history=NkShot::RecentMediaModel::instance();
+        const auto findRecent=[&](const QString &path) {
+            const auto canonical=QUrl::fromLocalFile(QFileInfo(path).canonicalFilePath());
+            for(int i=0;i<history->count();++i)if(history->data(history->index(i),NkShot::RecentMediaModel::UrlRole).toUrl()==canonical)return i;
+            return -1;
+        };
+        if(findRecent(saved)<0||findRecent(movie)<0||findRecent(clip)!=0)
+            return fail(QStringLiteral("Successful image/video open/save/clip hooks did not populate recent files"));
+        const auto mainImage=core->annotationDocument()->renderToImage();
+        const auto mainDepth=core->annotationDocument()->undoStackDepth();
+        const auto openHistory=[&] {
+            viewer()->requestActivate();QTest::qWait(80);
+            return click(QStringLiteral("nkshotViewerMore"))&&click(QStringLiteral("nkshotRecentMediaAction"))
+                &&QTest::qWaitFor([&]{return visual(viewer()->contentItem(),QStringLiteral("nkshotRecentFiles"));},1000);
+        };
+        if(!openHistory()||!capture(QStringLiteral(".recent.png"))||!click(QStringLiteral("nkshotRecentOpen_0"))
+            ||!QTest::qWaitFor([&]{return replaceDialog();},15000)||!confirm(QMessageBox::Cancel)||!settled()
+            ||core->currentVideo()!=QUrl::fromLocalFile(movie)||core->annotationDocument()->renderToImage()!=mainImage
+            ||core->annotationDocument()->undoStackDepth()!=mainDepth||findRecent(clip)!=0)
+            return fail(QStringLiteral("Recent replacement cancel altered media/history/order"));
+        if(!openHistory()||!click(QStringLiteral("nkshotRecentOpen_0"))
+            ||!QTest::qWaitFor([&]{return replaceDialog();},15000)||!confirm(QMessageBox::Discard)||!settled()
+            ||core->currentVideo()!=QUrl::fromLocalFile(clip)||findRecent(clip)!=0)
+            return fail(QStringLiteral("Actual recent-list click did not reopen exported clip"));
+        viewer()->openRecentMedia(QUrl::fromLocalFile(saved));
+        if(!QTest::qWaitFor([&]{return replaceDialog();},10000)||!confirm(QMessageBox::Discard)||!settled()
+            ||core->videoMode()||!samePixels(core->annotationDocument()->baseImage(),QImage(saved))||findRecent(saved)!=0)
+            return fail(QStringLiteral("Recent image route did not share validated Open workflow"));
+        const auto savedBytes=bytes(saved);const auto beforeRemove=history->count();
+        if(!openHistory()||!click(QStringLiteral("nkshotRecentRemove_0"))||history->count()!=beforeRemove-1
+            ||bytes(saved)!=savedBytes||!click(QStringLiteral("nkshotRecentClose")))
+            return fail(QStringLiteral("Removing a recent row changed the media file"));
+        viewer()->openRecentMedia(QUrl::fromLocalFile(movie));
+        if(!QTest::qWaitFor([&]{return replaceDialog();},15000)||!confirm(QMessageBox::Discard)||!settled()
+            ||core->currentVideo()!=QUrl::fromLocalFile(movie))return fail(QStringLiteral("Recent recording restore failed"));
+        const auto clipIndex=findRecent(clip);const auto moved=clip+QStringLiteral(".moved");const auto clipBytes=bytes(clip);
+        if(clipIndex<0||clipIndex>2||!QFile::rename(clip,moved)||!openHistory())return fail(QStringLiteral("Missing-file fixture/history unavailable"));
+        auto unavailable=visual(viewer()->contentItem(),QStringLiteral("nkshotRecentOpen_%1").arg(clipIndex));
+        if(!unavailable||unavailable->isEnabled()||!click(QStringLiteral("nkshotRecentRemove_%1").arg(clipIndex))||bytes(moved)!=clipBytes
+            ||!QFile::rename(moved,clip)||!click(QStringLiteral("nkshotRecentClear"))||history->count()!=0
+            ||bytes(saved)!=savedBytes||bytes(movie)!=movieBytes||bytes(clip)!=clipBytes||!sourcesIntact()
+            ||!capture(QStringLiteral(".recent-empty.png"))||!click(QStringLiteral("nkshotRecentClose")))
+            return fail(QStringLiteral("Missing-row/Clear-list workflow deleted or changed actual media"));
     }
     if(!capture(QString()))return fail(QStringLiteral("Final imported media screenshot failed"));
     qInfo()<<"085 actual dialogs: PNG/JPEG/static WebP, edit replacement cancel/failure, new-copy Save, missing ffprobe recovery, real MP4 Qt playback and clip export passed";

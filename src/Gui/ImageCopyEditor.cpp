@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#include "RecentMediaModel.h"
 #include "ImageCopyEditor.h"
 #include "PinnedImageWindow.h"
 #include <KQuickImageEditor/AnnotationTool>
@@ -95,6 +96,7 @@ void ImageCopyEditor::saveAs()
             Q_EMIT saveFinished(i18nc("@info","Could not save image: %1",file.errorString()),false);return;
         }
         m_savedImage=snapshot;
+        NkShot::RecentMediaModel::instance()->remember(QUrl::fromLocalFile(paths.first()));
         Q_EMIT saveFinished(i18nc("@info","PNG saved. You can continue editing; further changes need another save."),true);
     });
     dialog->open();
