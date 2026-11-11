@@ -209,3 +209,12 @@ set_tests_properties(image_adjustments_test PROPERTIES TIMEOUT 30 ENVIRONMENT "Q
 ecm_add_test(ImageAdjustmentsPreviewTest.cpp ../src/Gui/ImageAdjustmentsPreview.cpp ../src/Gui/ImageAdjustmentsPreview.h ../src/Imaging/ImageAdjustments.cpp
     TEST_NAME image_adjustments_preview_test LINK_LIBRARIES Qt::Test Qt::Quick KF6::I18n)
 set_tests_properties(image_adjustments_preview_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Bounded, read-only local recent-file previews.
+ecm_add_test(MediaThumbnailTest.cpp ../src/Imaging/MediaThumbnail.cpp
+    TEST_NAME media_thumbnail_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(media_thumbnail_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+ecm_add_test(RecentThumbnailsTest.cpp ../src/Gui/RecentThumbnails.cpp ../src/Gui/RecentThumbnails.h ../src/Imaging/MediaThumbnail.cpp
+    TEST_NAME recent_thumbnails_test LINK_LIBRARIES Qt::Test Qt::Quick Qt::Concurrent)
+set_tests_properties(recent_thumbnails_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

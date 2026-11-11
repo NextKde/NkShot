@@ -18,6 +18,7 @@ class ViewerWindowPrivate;
 class VideoClipJob;
 class ImageCopyEditor;
 class PresentationPreview;
+class RecentThumbnails;
 class QVideoSink;
 namespace NkShot { class LocalMediaLoader; }
 
@@ -38,6 +39,7 @@ class ViewerWindow : public SpectacleWindow
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
     Q_PROPERTY(QObject *presentationPreview READ presentationPreviewObject CONSTANT)
     Q_PROPERTY(QObject *clipJob READ clipJobObject CONSTANT)
+    Q_PROPERTY(QObject *recentThumbnails READ recentThumbnailsObject CONSTANT)
     Q_PROPERTY(QObject *recentMedia READ recentMediaObject CONSTANT)
     Q_PROPERTY(bool choosingClipOutput READ choosingClipOutput NOTIFY choosingClipOutputChanged)
 public:
@@ -56,6 +58,9 @@ public:
     Q_INVOKABLE void openMedia();
     Q_INVOKABLE void openRecentMedia(const QUrl &url);
     QObject *recentMediaObject() const;
+    QObject *recentThumbnailsObject() const;
+    Q_INVOKABLE void beginRecentThumbnails();
+    Q_INVOKABLE void clearRecentThumbnails();
     Q_INVOKABLE QQuickWindow *editClipboardImage();
     bool openingMedia() const { return m_openingMedia; }
     bool canOpenMedia() const;
@@ -130,6 +135,7 @@ private:
     bool m_scanningCode = false;
     quint64 m_codeScanEpoch = 0;
     bool m_resizingImage = false;
+    RecentThumbnails *m_recentThumbnails = nullptr;
     PresentationPreview *m_presentationPreview = nullptr;
     bool m_pixmapExists = false;
     QPalette::ColorRole m_backgroundColorRole;

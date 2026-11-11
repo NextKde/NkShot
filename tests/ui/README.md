@@ -724,3 +724,17 @@ unchanged source/history/dirty status. `.adjustments.png` shows controls;
 `.adjustments-preview.png` scrolls compact bodies to the preview.
 `image_adjustments_test` and `image_adjustments_preview_test` separately cover
 pixel/profile/alpha/DPR, bounds, immutable snapshots and provider lifetime.
+
+## Visual recent files (110)
+
+`NKSHOT_TEST_RECENT_THUMBNAILS=1` exercises the actual More → Recent menu with
+synthetic local PNG/JPEG, video-placeholder and moved-file entries. Use a clean
+`XDG_CONFIG_HOME` test profile, never a personal recent list.
+`NKSHOT_TEST_DARK=1` and `NKSHOT_TEST_UI_SIZE=420x520` select visual variants.
+The helper checks real QML image-ready URLs, keyboard navigation, placeholders,
+Escape/cache expiry, reopened generations and metadata-only Remove/Clear while
+comparing source bytes and main document/history. `.recent-thumbnails.png` is a
+real software-window capture. Existing `NKSHOT_TEST_RECENT_MEDIA=1` inside the
+local-media workflow separately exercises normal recent-file reopening.
+The decoder and session targets cover source bounds/identity, formats, cache
+lifetime, serial-queue completion barriers and stale-result isolation.

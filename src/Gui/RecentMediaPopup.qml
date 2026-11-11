@@ -9,8 +9,8 @@ QQC.Popup {
     id: root
     objectName: "nkshotRecentMediaPopup"
     readonly property var history: contextWindow.recentMedia
-    width: Math.min(600, parent ? parent.width - 24 : 600)
-    height: Math.min(460, parent ? parent.height - 32 : 460)
+    width: Math.min(640, parent ? parent.width - 24 : 640)
+    height: Math.min(500, parent ? parent.height - 32 : 500)
     x: parent ? (parent.width-width)/2 : 0
     y: parent ? (parent.height-height)/2 : 0
     padding: 16
@@ -20,7 +20,8 @@ QQC.Popup {
     closePolicy: QQC.Popup.CloseOnEscape | QQC.Popup.CloseOnPressOutside
     background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 16; elevation: 1}
     function openUrl(url) { root.close(); contextWindow.openRecentMedia(url) }
-    onOpened: {history.refresh(); files.currentIndex = history.count ? 0 : -1; files.forceActiveFocus()}
+    onOpened: {history.refresh(); contextWindow.beginRecentThumbnails(); files.currentIndex = history.count ? 0 : -1; files.forceActiveFocus()}
+    onClosed: contextWindow.clearRecentThumbnails()
     contentItem: ColumnLayout {
         spacing: 12
         RowLayout {
@@ -42,10 +43,10 @@ QQC.Popup {
             Layout.fillHeight: true
             model: root.history
             clip: true
-            spacing: 4
+            spacing: 8
             keyNavigationEnabled: true
             highlightMoveDuration: 0
-            QQC.ScrollBar.vertical: QQC.ScrollBar {}
+            QQC.ScrollBar.vertical: QQC.ScrollBar { id: listBar }
             function openCurrent() {if(currentItem && currentItem.available && contextWindow.canOpenMedia) root.openUrl(currentItem.url)}
             Keys.onReturnPressed: openCurrent()
             Keys.onEnterPressed: openCurrent()
@@ -57,8 +58,12 @@ QQC.Popup {
                 required property string folder
                 required property string kind
                 required property bool available
-                width: files.width
-                height: 72
+                readonly property url thumbnail: {
+                    const revision = contextWindow.recentThumbnails.revision
+                    return contextWindow.recentThumbnails.urlFor(row.url)
+                }
+                width: files.width - (listBar.visible ? listBar.width + 4 : 0)
+                height: 96
                 QQC.ItemDelegate {
                     id: openButton
                     objectName: "nkshotRecentOpen_" + row.index
@@ -70,19 +75,62 @@ QQC.Popup {
                     onClicked: root.openUrl(row.url)
                     background: Rectangle {
                         color: openButton.hovered || (files.activeFocus && files.currentIndex === row.index)
-                            ? Kos.AppTheme.withAlpha(Kos.AppTheme.accent, 0.12) : "transparent"
-                        radius: 10
-                        border.width: openButton.visualFocus ? 1 : 0
-                        border.color: Kos.AppTheme.accent
+                            ? Kos.AppTheme.withAlpha(Kos.AppTheme.accent, 0.12) : Kos.AppTheme.contentSecondaryBackground
+                        radius: 12
+                        border.width: 1
+                        border.color: openButton.visualFocus || (files.activeFocus && files.currentIndex === row.index)
+                            ? Kos.AppTheme.accent : Kos.AppTheme.border
                     }
                     contentItem: RowLayout {
                         spacing: 12
-                        QQC.Label {text: row.kind === "video" ? i18nc("@label", "Video") : i18nc("@label", "Image"); color: Kos.AppTheme.mutedText; Layout.preferredWidth: 45}
+                        Rectangle {
+                            Layout.preferredWidth: root.width < 480 ? 80 : 104
+                            Layout.preferredHeight: root.width < 480 ? 64 : 72
+                            radius: 8
+                            color: Kos.AppTheme.controlBackground
+                            Image {
+                                id: thumbnailImage
+                                objectName: "nkshotRecentThumbnail_" + row.index
+                                anchors.fill: parent
+                                anchors.margins: 4
+                                source: row.available && row.kind !== "video" ? row.thumbnail : ""
+                                cache: false
+                                asynchronous: false
+                                fillMode: Image.PreserveAspectFit
+                                visible: status === Image.Ready
+                                Accessible.name: i18nc("@info", "Thumbnail of %1", row.name)
+                            }
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                width: parent.width - 8
+                                visible: !thumbnailImage.visible
+                                spacing: 2
+                                Kirigami.Icon {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 24
+                                    source: !row.available ? "edit-find" : row.kind === "video" ? "video-x-generic" : "image-x-generic"
+                                    color: Kos.AppTheme.mutedText
+                                }
+                                QQC.Label {
+                                    Layout.fillWidth: true
+                                    text: !row.available ? i18nc("@label", "Missing") : row.kind === "video" ? i18nc("@label", "Video") : i18nc("@label", "Image")
+                                    horizontalAlignment: Text.AlignHCenter
+                                    color: Kos.AppTheme.mutedText
+                                }
+                            }
+                        }
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 4
                             QQC.Label {text: row.name; textFormat: Text.PlainText; font.bold: true; color: Kos.AppTheme.paletteText; elide: Text.ElideMiddle; Layout.fillWidth: true}
-                            QQC.Label {text: row.available ? row.folder : i18nc("@info", "Moved or missing"); textFormat: Text.PlainText; color: Kos.AppTheme.mutedText; elide: Text.ElideMiddle; Layout.fillWidth: true}
+                            QQC.Label {text: row.folder; textFormat: Text.PlainText; color: Kos.AppTheme.mutedText; elide: Text.ElideMiddle; Layout.fillWidth: true}
+                            QQC.Label {
+                                Layout.fillWidth: true
+                                text: !row.available ? i18nc("@info", "Moved or missing") : row.kind === "video" ? i18nc("@label", "Video file") : i18nc("@label", "Image file")
+                                color: Kos.AppTheme.mutedText
+                                elide: Text.ElideRight
+                            }
                         }
                     }
                     opacity: enabled ? 1 : 0.5

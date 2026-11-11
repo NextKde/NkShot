@@ -9,6 +9,7 @@
 #include "LocalMediaLoader.h"
 #include "MediaDropPolicy.h"
 #include "RecentMediaModel.h"
+#include "RecentThumbnails.h"
 #include "RecordingPreparation.h"
 #include <QMessageBox>
 #include <QProgressDialog>
@@ -64,6 +65,13 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
     s_viewerWindowInstance = this;
     s_isAnnotating = false;
     m_presentationPreview = new PresentationPreview(engine, this);
+    m_recentThumbnails = new RecentThumbnails(engine, this);
+    connect(NkShot::RecentMediaModel::instance(), &NkShot::RecentMediaModel::changed, this, [this] {
+        if (m_recentThumbnails->active()) beginRecentThumbnails();
+    });
+    connect(this, &QWindow::visibleChanged, this, [this](bool visible) {
+        if (!visible) clearRecentThumbnails();
+    });
     m_clipJob = new VideoClipJob(this);
     connect(m_clipJob, &VideoClipJob::exported, this, [](const QUrl &url) { NkShot::RecentMediaModel::instance()->remember(url); });
     m_mediaLoader = new NkShot::LocalMediaLoader(this);
@@ -894,4 +902,19 @@ void ViewerWindow::cancelClipExport()
     }
     if (m_clipJob) m_clipJob->cancel();
     Q_EMIT clipUiCancelled();
+}
+
+QObject *ViewerWindow::recentThumbnailsObject() const { return m_recentThumbnails; }
+void ViewerWindow::clearRecentThumbnails() { m_recentThumbnails->clear(); }
+void ViewerWindow::beginRecentThumbnails()
+{
+    if (!isVisible()) return;
+    QList<QUrl> urls;
+    const auto model = NkShot::RecentMediaModel::instance();
+    for (int row = 0; row < model->count(); ++row) {
+        const auto index = model->index(row);
+        if (model->data(index, NkShot::RecentMediaModel::AvailableRole).toBool())
+            urls.append(model->data(index, NkShot::RecentMediaModel::UrlRole).toUrl());
+    }
+    m_recentThumbnails->begin(urls);
 }

@@ -23,6 +23,7 @@
 #include "ImageExportUiChecks.h"
 #include "ImageAdjustmentsUiChecks.h"
 #include "MediaDropUiChecks.h"
+#include "RecentThumbnailsUiChecks.h"
 #include "Gui/QuickNoteWindow.h"
 #include "Gui/ColorPickerWindow.h"
 #include "Imaging/ColorSample.h"
@@ -1850,6 +1851,12 @@ void installUiCaptureHook(QApplication &application)
                 viewer->grabWindow().save(destination);
                 qInfo() << "NkShot unavailable scroll backend refused requests without editor/history mutation; no live capture claim";
                 application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECENT_THUMBNAILS")) {
+                QString failure;
+                const bool passed = RecentThumbnailsUiChecks::run(application,viewer,destination,&failure);
+                qInfo() << "110 recent thumbnails UI" << passed << failure;
+                application.exit(passed ? 0 : 241); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_DROP_MEDIA")) {
                 QString failure;

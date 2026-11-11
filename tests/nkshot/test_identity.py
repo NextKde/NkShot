@@ -359,6 +359,20 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('root.updatePreview()', popup)
         self.assertIn('resetValues()', popup)
 
+    def test_recent_previews_are_explicit_bounded_and_volatile(self):
+        decoder = read('src/Imaging/MediaThumbnail.cpp')
+        cache = read('src/Gui/RecentThumbnails.cpp')
+        popup = read('src/Gui/RecentMediaPopup.qml')
+        self.assertIn('O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC', decoder)
+        self.assertIn('same(opened,after)', decoder)
+        self.assertIn('pool.setMaxThreadCount(1)', cache)
+        self.assertIn('epoch==m_epoch', cache)
+        self.assertIn('cancelled->load()', cache)
+        self.assertIn('contextWindow.beginRecentThumbnails()', popup)
+        self.assertIn('contextWindow.clearRecentThumbnails()', popup)
+        self.assertIn('contextWindow.recentThumbnails.urlFor(row.url)', popup)
+        self.assertNotIn('source: row.url', popup)
+
     def test_qml_returned_windows_keep_cpp_lifetime(self):
         for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow'):
             source = read('src/Gui/' + name + '.cpp')
