@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "RecentMediaModel.h"
 #include "ImageCopyEditor.h"
+#include "ImageAdjustmentsPreview.h"
+#include "Imaging/ImageAdjustments.h"
+#include <QFutureWatcher>
+#include <QtConcurrentRun>
 #include "PinnedImageWindow.h"
 #include "Imaging/ImageExport.h"
 #include <KQuickImageEditor/AnnotationTool>
@@ -26,6 +30,7 @@
 ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool annotationMode)
     : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this)), m_originalImage(image.copy()), m_annotationMode(annotationMode)
 {
+    m_adjustmentPreview = new ImageAdjustmentsPreview(engine, this);
     // C++ owns close/draft lifetime; QML return values must not become GC-owned.
     QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     connect(this, &QWindow::activeChanged, this, [this] { if (!isActive()) endComparison(); });
@@ -76,7 +81,7 @@ ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool a
 ImageCopyEditor::~ImageCopyEditor() { delete m_optionsDialog; delete m_closeDialog; delete m_saveDialog; }
 void ImageCopyEditor::beginComparison()
 {
-    if (m_comparing || !compareAvailable() || !isVisible() || !isActive()
+    if (adjustmentBlocked() || m_comparing || !compareAvailable() || !isVisible() || !isActive()
         || m_optionsDialog || m_closeDialog || m_saveDialog) return;
     m_comparing = true;
     Q_EMIT comparingChanged();
@@ -99,6 +104,7 @@ void ImageCopyEditor::prepareDialog(QWidget *dialog)
 }
 void ImageCopyEditor::copyImage()
 {
+    if (adjustmentBlocked()) return;
     endComparison();
     if (m_annotationMode) return;
     const auto image=m_document->renderToImage();
@@ -112,6 +118,7 @@ bool ImageCopyEditor::hasUnsavedChanges() const
 }
 void ImageCopyEditor::saveAs()
 {
+    if (adjustmentBlocked()) return;
     endComparison();
     if (m_annotationMode) return;
     if(m_saveDialog){m_saveDialog->raise();m_saveDialog->activateWindow();return;}
@@ -164,6 +171,7 @@ bool ImageCopyEditor::webpAvailable() const
 }
 bool ImageCopyEditor::exportAs(int format, int quality)
 {
+    if (adjustmentBlocked()) return false;
     endComparison();
     if (m_annotationMode) return false;
     if (m_saveDialog) { m_saveDialog->raise(); m_saveDialog->activateWindow(); return false; }
@@ -211,6 +219,7 @@ bool ImageCopyEditor::exportAs(int format, int quality)
 }
 QQuickWindow *ImageCopyEditor::finishCopy()
 {
+    if (adjustmentBlocked()) return nullptr;
     endComparison();
     if (m_annotationMode) { commitAnnotations(); return nullptr; }
     const auto image=m_document->renderToImage();
@@ -262,6 +271,7 @@ bool ImageCopyEditor::commitAnnotations()
 }
 void ImageCopyEditor::showColorDialog(int option)
 {
+    if (adjustmentBlocked()) return;
     endComparison();
     if(m_optionsDialog){m_optionsDialog->raise();return;}
     auto tool=m_document->tool();auto selected=m_document->selectedItemWrapper();
@@ -286,6 +296,7 @@ void ImageCopyEditor::showColorDialog(int option)
 }
 void ImageCopyEditor::showFontDialog()
 {
+    if (adjustmentBlocked()) return;
     endComparison();
     if(m_optionsDialog){m_optionsDialog->raise();return;}
     auto tool=m_document->tool();auto selected=m_document->selectedItemWrapper();
@@ -324,6 +335,10 @@ bool ImageCopyEditor::event(QEvent *event)
     if (event->type() == QEvent::Close || event->type() == QEvent::Hide
         || event->type() == QEvent::FocusOut || event->type() == QEvent::WindowDeactivate)
         endComparison();
+    if (event->type() == QEvent::Close && adjustmentBlocked()) {
+        static_cast<QCloseEvent *>(event)->ignore();
+        return true;
+    }
     if (event->type() == QEvent::Close && m_annotationMode) {
         static_cast<QCloseEvent *>(event)->ignore();
         commitAnnotations();
@@ -346,4 +361,58 @@ bool ImageCopyEditor::event(QEvent *event)
     const bool result=QQuickView::event(event);
     if(event->type()==QEvent::Close&&event->isAccepted())deleteLater();
     return result;
+}
+
+QObject *ImageCopyEditor::adjustmentPreviewObject() const { return m_adjustmentPreview; }
+bool ImageCopyEditor::beginAdjustments()
+{
+    if (m_annotationMode || adjustmentBlocked() || !isVisible() || m_optionsDialog || m_saveDialog || m_closeDialog) return false;
+    endComparison();
+    if (rootObject()) QMetaObject::invokeMethod(rootObject(), "commitOptions");
+    m_document->selectedItemWrapper()->commitChanges();
+    if (!m_adjustmentPreview->begin(m_document->renderToImage())) {
+        Q_EMIT saveFinished(i18nc("@info", "This image cannot be adjusted. Use a smaller image."), false);
+        return false;
+    }
+    m_adjustmentActive = true;
+    Q_EMIT adjustmentStateChanged();
+    return true;
+}
+void ImageCopyEditor::cancelAdjustments()
+{
+    m_adjustmentPreview->clear();
+    m_adjustmentActive = false;
+    Q_EMIT adjustmentStateChanged();
+}
+bool ImageCopyEditor::createAdjustedCopy()
+{
+    if (!m_adjustmentActive || m_adjustmentBusy || m_annotationMode || !m_adjustmentPreview->ready()) return false;
+    const auto snapshot = m_adjustmentPreview->source();
+    const auto options = m_adjustmentPreview->options();
+    m_adjustmentBusy = true;
+    Q_EMIT adjustmentStateChanged();
+    auto watcher = new QFutureWatcher<QImage>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
+        const auto image = watcher->result();
+        watcher->deleteLater();
+        m_adjustmentBusy = false;
+        Q_EMIT adjustmentStateChanged();
+        if (image.isNull()) {
+            Q_EMIT saveFinished(i18nc("@info", "The adjusted copy could not be created. Your edits are unchanged."), false);
+            return;
+        }
+        auto pin = new PinnedImageWindow(image, engine());
+        if (pin->status() != QQuickView::Ready) {
+            delete pin;
+            Q_EMIT saveFinished(i18nc("@info", "The adjusted image could not be opened. Your edits are unchanged."), false);
+            return;
+        }
+        pin->setObjectName(QStringLiteral("nkshotAdjustedCopyPin"));
+        pin->setTitle(i18nc("@title:window", "Adjusted copy — NkShot"));
+        pin->setScreen(screen());
+        pin->show();
+        Q_EMIT saveFinished(i18nc("@info", "Adjusted copy created. Your original edit session is unchanged."), true);
+    });
+    watcher->setFuture(QtConcurrent::run([snapshot, options] { return NkShot::Imaging::adjustedCopy(snapshot, options); }));
+    return true;
 }

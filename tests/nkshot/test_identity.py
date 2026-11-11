@@ -345,6 +345,20 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('const auto options = m_presentationPreview->options()', viewer)
         self.assertIn('sourceSnapshot.isNull() ?', viewer)
 
+    def test_adjustments_are_isolated_and_reusable(self):
+        helper = read('src/Imaging/ImageAdjustments.cpp')
+        editor = read('src/Gui/ImageCopyEditor.cpp')
+        popup = read('src/Gui/ImageAdjustmentsPopup.qml')
+        self.assertNotIn('applyColorAdjustment', helper)
+        self.assertNotIn('SpectacleCore', helper)
+        self.assertIn('return source.copy()', helper)
+        self.assertIn('const auto snapshot = m_adjustmentPreview->source()', editor)
+        self.assertIn('const auto options = m_adjustmentPreview->options()', editor)
+        self.assertIn('QtConcurrent::run([snapshot, options]', editor)
+        self.assertIn('if (adjustmentBlocked()) return', editor)
+        self.assertIn('root.updatePreview()', popup)
+        self.assertIn('resetValues()', popup)
+
     def test_qml_returned_windows_keep_cpp_lifetime(self):
         for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow'):
             source = read('src/Gui/' + name + '.cpp')

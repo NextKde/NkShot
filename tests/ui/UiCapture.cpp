@@ -21,6 +21,7 @@
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/ImageCopyEditor.h"
 #include "ImageExportUiChecks.h"
+#include "ImageAdjustmentsUiChecks.h"
 #include "MediaDropUiChecks.h"
 #include "Gui/QuickNoteWindow.h"
 #include "Gui/ColorPickerWindow.h"
@@ -1856,7 +1857,7 @@ void installUiCaptureHook(QApplication &application)
                 qInfo() << "108 local media drop UI" << passed << failure;
                 application.exit(passed ? 0 : 240); return;
             }
-            if (qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_EXPORT_DEMO")) {
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_EXPORT_DEMO") || qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_ADJUSTMENTS")) {
                 const auto input = SpectacleCore::instance()->annotationDocument()->renderToImage();
                 auto editor = new ImageCopyEditor(input, viewer->engine());
                 if (editor->status() != QQuickView::Ready) { delete editor; application.exit(239); return; }
@@ -1868,8 +1869,10 @@ void installUiCaptureHook(QApplication &application)
                 document->tool()->setStrokeWidth(3); document->tool()->setFillColor(Qt::transparent); document->tool()->setShadow(false);
                 document->beginItem({75,75}); document->continueItem({285,165}); document->finishItem();
                 QString failure;
-                const bool passed = ImageExportUiChecks::run(application,editor,destination,&failure);
-                qInfo() << "107 image sharing standalone UI" << passed << failure;
+                const bool adjustments = qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_ADJUSTMENTS");
+                const bool passed = adjustments ? ImageAdjustmentsUiChecks::run(application,editor,destination,&failure)
+                    : ImageExportUiChecks::run(application,editor,destination,&failure);
+                qInfo() << "Image sharing/adjustments standalone UI" << passed << failure;
                 application.exit(passed ? 0 : 239); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY")) {

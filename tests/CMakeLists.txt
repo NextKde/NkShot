@@ -200,3 +200,12 @@ set_tests_properties(image_export_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA
 ecm_add_test(MediaDropPolicyTest.cpp ../src/MediaDropPolicy.cpp
     TEST_NAME media_drop_policy_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(media_drop_policy_test PROPERTIES TIMEOUT 10)
+
+# Reusable bounded local light/color adjustment; no upstream editor mutation.
+ecm_add_test(ImageAdjustmentsTest.cpp ../src/Imaging/ImageAdjustments.cpp
+    TEST_NAME image_adjustments_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(image_adjustments_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+ecm_add_test(ImageAdjustmentsPreviewTest.cpp ../src/Gui/ImageAdjustmentsPreview.cpp ../src/Gui/ImageAdjustmentsPreview.h ../src/Imaging/ImageAdjustments.cpp
+    TEST_NAME image_adjustments_preview_test LINK_LIBRARIES Qt::Test Qt::Quick KF6::I18n)
+set_tests_properties(image_adjustments_preview_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

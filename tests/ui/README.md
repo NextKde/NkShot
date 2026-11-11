@@ -711,3 +711,16 @@ Cancel/Discard, corrupt/missing input preservation and MP4 transition. Source
 bytes stay unchanged. Successful open rebuilds the viewer: the helper checks the
 old QPointer is cleared and reacquires ViewerWindow::instance(), never reuses a
 stale window pointer. This is not native compositor drag/drop acceptance.
+
+## Independent-editor light/color (109)
+
+`NKSHOT_TEST_IMAGE_ADJUSTMENTS=1` opens an independent editor with a synthetic
+image and unsaved annotation, then drives More → Adjust light and color with
+actual mouse/keyboard input. `NKSHOT_TEST_DARK=1` and
+`NKSHOT_TEST_COMPACT=1` cover the dark palette and 420×520 editor. The helper checks
+all three sliders, Reset, Cancel/Escape, zero-valued reopen, Copy/Save shortcut
+exclusion, busy duplicate rejection, exact full-size adjusted pin pixels and
+unchanged source/history/dirty status. `.adjustments.png` shows controls;
+`.adjustments-preview.png` scrolls compact bodies to the preview.
+`image_adjustments_test` and `image_adjustments_preview_test` separately cover
+pixel/profile/alpha/DPR, bounds, immutable snapshots and provider lifetime.

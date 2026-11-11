@@ -4,12 +4,16 @@
 #include <QPointer>
 #include <QImage>
 #include <KQuickImageEditor/AnnotationDocument>
+class ImageAdjustmentsPreview;
 class QMessageBox;
 class QFileDialog;
 class QWidget;
 // Standalone editing session. No dependency on SpectacleCore or its document.
 class ImageCopyEditor : public QQuickView {
     Q_OBJECT
+    Q_PROPERTY(QObject *adjustmentPreview READ adjustmentPreviewObject CONSTANT)
+    Q_PROPERTY(bool adjustingCopy READ adjustingCopy NOTIFY adjustmentStateChanged)
+    Q_PROPERTY(bool adjustmentBlocked READ adjustmentBlocked NOTIFY adjustmentStateChanged)
     Q_PROPERTY(AnnotationDocument *document READ document CONSTANT)
     Q_PROPERTY(bool jpegAvailable READ jpegAvailable CONSTANT)
     Q_PROPERTY(bool webpAvailable READ webpAvailable CONSTANT)
@@ -29,6 +33,12 @@ public:
     Q_INVOKABLE void endComparison();
     bool annotationMode() const { return m_annotationMode; }
     AnnotationDocument *document() { return m_document; }
+    QObject *adjustmentPreviewObject() const;
+    bool adjustingCopy() const { return m_adjustmentBusy; }
+    bool adjustmentBlocked() const { return m_adjustmentActive || m_adjustmentBusy; }
+    Q_INVOKABLE bool beginAdjustments();
+    Q_INVOKABLE void cancelAdjustments();
+    Q_INVOKABLE bool createAdjustedCopy();
     Q_INVOKABLE void copyImage();
     Q_INVOKABLE void saveAs();
     bool jpegAvailable() const;
@@ -40,6 +50,7 @@ public:
     Q_INVOKABLE void showFontDialog();
     Q_INVOKABLE qreal dprRound(qreal value) const { return qRound(value * devicePixelRatio()) / devicePixelRatio(); }
 Q_SIGNALS:
+    void adjustmentStateChanged();
     void comparingChanged();
     void imageCopied();
     void annotationsCommitted(const QImage &image);
@@ -50,6 +61,9 @@ private:
     void prepareDialog(QWidget *dialog);
     bool commitAnnotations();
     AnnotationDocument *m_document;
+    ImageAdjustmentsPreview *m_adjustmentPreview = nullptr;
+    bool m_adjustmentActive = false;
+    bool m_adjustmentBusy = false;
     QPointer<QWidget> m_optionsDialog;
     QPointer<QMessageBox> m_closeDialog;
     QPointer<QFileDialog> m_saveDialog;

@@ -34,18 +34,19 @@ QQC.Pane {
         }
     }
     ColumnLayout {
+        enabled: !copyEditor.adjustmentBlocked
         anchors.fill: parent
         spacing: 10
         RowLayout {
             Layout.fillWidth: true
             QQC.Label { visible: root.width >= 480; text: copyEditor.annotationMode ? i18nc("@title", "Video annotations") : i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
-            UndoRedoGroup { enabled: !copyEditor.comparing; editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
-            ActionButton { objectName: "nkshotCopyEditorCopy"; enabled: !copyEditor.comparing; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
+            UndoRedoGroup { enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
+            ActionButton { objectName: "nkshotCopyEditorCopy"; enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
             RowLayout {
                 spacing: 1
                 visible: !copyEditor.annotationMode
-                ActionButton { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+                ActionButton { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
                 ActionButton {
                     id: exportMenuButton
                     objectName: "nkshotCopyEditorSaveOptions"
@@ -72,7 +73,31 @@ QQC.Pane {
                     }
                 }
             }
-            ActionButton { objectName: "nkshotCopyEditorDone"; enabled: !copyEditor.comparing; primary: copyEditor.annotationMode; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
+            ActionButton { objectName: "nkshotCopyEditorDone"; enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; primary: copyEditor.annotationMode; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
+            ActionButton {
+                id: moreButton
+                objectName: "nkshotCopyEditorMore"
+                visible: !copyEditor.annotationMode
+                enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked
+                text: "⋯"
+                Layout.preferredWidth: 30
+                leftPadding: 4; rightPadding: 4
+                Accessible.name: i18nc("@action", "More image tools")
+                onClicked: imageTools.popup(moreButton, moreButton.width - imageTools.width, moreButton.height + 4)
+                QQC.Menu {
+                    id: imageTools
+                    width: Math.min(260, root.width - 32)
+                    padding: 6
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.windowText: Kos.AppTheme.paletteText
+                    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0.5 }
+                    QQC.MenuItem {
+                        objectName: "nkshotImageAdjustmentsAction"
+                        text: i18nc("@action", "Adjust light and color…")
+                        onTriggered: { root.commitOptions(); if (copyEditor.beginAdjustments()) adjustmentsPopup.open() }
+                    }
+                }
+            }
         }
         QQC.Label {
             id: feedback
@@ -179,8 +204,8 @@ QQC.Pane {
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
-            ActionButton { objectName: "nkshotCopyEditorFit"; enabled: !copyEditor.comparing; text: i18nc("@action", "Fit"); QQC.ToolTip.visible: hovered; QQC.ToolTip.text: i18nc("@info", "Fit canvas (Ctrl+0)"); onClicked: navigation.fit() }
-            ActionButton { objectName: "nkshotCopyEditorZoomOut"; enabled: !copyEditor.comparing; text: "−"; Accessible.name: i18nc("@action", "Zoom out"); onClicked: navigation.step(1 / 1.25) }
+            ActionButton { objectName: "nkshotCopyEditorFit"; enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; text: i18nc("@action", "Fit"); QQC.ToolTip.visible: hovered; QQC.ToolTip.text: i18nc("@info", "Fit canvas (Ctrl+0)"); onClicked: navigation.fit() }
+            ActionButton { objectName: "nkshotCopyEditorZoomOut"; enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; text: "−"; Accessible.name: i18nc("@action", "Zoom out"); onClicked: navigation.step(1 / 1.25) }
             ActionButton {
                 objectName: "nkshotCopyEditorActualSize"
                 enabled: !copyEditor.comparing
@@ -192,7 +217,7 @@ QQC.Pane {
                 QQC.ToolTip.text: i18nc("@info", "Reset zoom to 100% (Ctrl+1). Ctrl+wheel zooms; middle-drag pans.")
                 onClicked: navigation.zoomTo(1)
             }
-            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: navigation.step(1.25) }
+            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing && !copyEditor.adjustmentBlocked; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: navigation.step(1.25) }
             ActionButton {
                 id: compareButton
                 objectName: "nkshotCopyEditorCompare"
@@ -244,6 +269,19 @@ QQC.Pane {
             Layout.maximumWidth: root.availableWidth
         }
     }
+    QQC.BusyIndicator {
+        anchors.centerIn: parent
+        running: copyEditor.adjustingCopy
+        visible: running
+        Accessible.name: i18nc("@info", "Creating adjusted image copy")
+    }
+    ImageAdjustmentsPopup {
+        id: adjustmentsPopup
+        previewModel: copyEditor.adjustmentPreview
+        onAccepted: { if (copyEditor.createAdjustedCopy()) close() }
+        onCancelled: close()
+        onClosed: copyEditor.cancelAdjustments()
+    }
     ImageExportPopup {
         id: exportPopup
         jpegAvailable: copyEditor.jpegAvailable
@@ -270,7 +308,7 @@ QQC.Pane {
     }
     Shortcut { enabled: copyEditor.comparing; sequence: "Escape"; onActivated: copyEditor.endComparison() }
     Shortcut { enabled: copyEditor.annotationMode; sequence: "Escape"; onActivated: {root.commitOptions(); copyEditor.finishCopy()} }
-    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing; sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing; sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing; sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
+    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing && !copyEditor.adjustmentBlocked; sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing && !copyEditor.adjustmentBlocked; sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { enabled: !copyEditor.annotationMode && !copyEditor.comparing && !copyEditor.adjustmentBlocked; sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
 }
