@@ -36,7 +36,7 @@ public:
 
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
-    Q_INVOKABLE void combineImages();
+    Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);
     bool combiningImages() const { return m_combiningImages; }
 Q_SIGNALS:
     void combiningImagesChanged();

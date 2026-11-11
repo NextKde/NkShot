@@ -339,6 +339,7 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+                const bool stacking = qEnvironmentVariableIsSet("NKSHOT_TEST_STACK");
                 auto document = SpectacleCore::instance()->annotationDocument();
                 const auto original = document->renderToImage();
                 QTemporaryDir files;
@@ -368,11 +369,11 @@ void installUiCaptureHook(QApplication &application)
                     expected.setPixelColor(0, y, QColor(y % 256, y / 256, 240));
                 const auto top = files.filePath(QStringLiteral("frame2.png"));
                 const auto bottom = files.filePath(QStringLiteral("frame10.png"));
-                if (!files.isValid() || !expected.copy(0, 0, 320, 360).save(top)
-                    || !expected.copy(0, 240, 320, 360).save(bottom)) { application.exit(72); return; }
+                if (!files.isValid() || !expected.copy(0, 0, 320, stacking ? 300 : 360).save(top)
+                    || !expected.copy(0, stacking ? 300 : 240, 320, stacking ? 300 : 360).save(bottom)) { application.exit(72); return; }
                 auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
                 QMetaObject::invokeMethod(menu, "open"); QTest::qWait(200);
-                auto entry = visualItem(viewer->contentItem(), QStringLiteral("nkshotCombineImagesAction"));
+                auto entry = visualItem(viewer->contentItem(), stacking ? QStringLiteral("nkshotStackImagesAction") : QStringLiteral("nkshotCombineImagesAction"));
                 if (!entry) { application.exit(73); return; }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
                 QTest::qWait(200);
@@ -383,11 +384,11 @@ void installUiCaptureHook(QApplication &application)
                 };
                 QPointer<QFileDialog> dialog = currentDialog();
                 if (!dialog) { application.exit(74); return; }
-                viewer->combineImages();
+                viewer->combineImages(stacking);
                 if (currentDialog() != dialog) { application.exit(75); return; }
                 dialog->reject();
                 if (!QTest::qWaitFor([&] { return dialog.isNull(); }, 1000) || viewer->combiningImages()) { application.exit(76); return; }
-                viewer->combineImages(); QTest::qWait(200);
+                viewer->combineImages(stacking); QTest::qWait(200);
                 dialog = currentDialog();
                 auto filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
                 if (!filename) { application.exit(77); return; }
@@ -406,6 +407,10 @@ void installUiCaptureHook(QApplication &application)
                 if (!combined->grabWindow().save(destination)) { application.exit(80); return; }
                 combined->close();
                 if (!QTest::qWaitFor([&] { return combined.isNull(); }, 1000)) { application.exit(81); return; }
+                if (stacking) {
+                    qInfo() << "NkShot explicit stack exact pixels, sorted order, cancel/reopen/reuse and source isolation passed";
+                    application.exit(0); return;
+                }
                 // Duplicate frames must reject rather than fabricate a long image.
                 const auto duplicate = files.filePath(QStringLiteral("frame3.png"));
                 if (!expected.copy(0, 0, 320, 360).save(duplicate)) { application.exit(82); return; }

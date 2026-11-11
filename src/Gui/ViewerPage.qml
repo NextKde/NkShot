@@ -234,6 +234,14 @@ EmptyPage {
                         enabled: !contextWindow.combiningImages
                         onTriggered: contextWindow.combineImages()
                     }
+                    QQC.MenuItem {
+                        objectName: "nkshotStackImagesAction"
+                        text: i18nc("@action", "Stack images vertically…")
+                        icon.name: "view-sort-descending"
+                        icon.color: palette.buttonText
+                        enabled: !contextWindow.combiningImages
+                        onTriggered: contextWindow.combineImages(true)
+                    }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
                         opacity: enabled ? 1 : 0.38

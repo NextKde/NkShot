@@ -893,3 +893,25 @@ a flat-color input is not a useful visible-change assertion. Reviewed
 These are actual software-rendered editor interactions on synthetic images, not
 KDE desktop capture/recording verification, compositor shortcut-conflict testing
 or a guarantee that blurred/pixelated private information cannot be recovered.
+
+## 047 — Explicit vertical stacking without overlap
+
+Add More → Stack images vertically for local images that have no shared overlap.
+It retains every pixel rather than inferring cuts or silently falling back after
+an overlap failure. The reusable imaging function allocates one output, preserves
+alpha/DPR/color profile and accepts repeated content intentionally. The UI shares
+numeric filename sorting, asynchronous decoding, one-picker/busy guards, size
+limits and separate preview/Copy/Save As with overlap composition. Original files
+and the current editor remain untouched. No automatic scrolling is introduced.
+
+Build, CTest 5/5 and static checks 16/16 pass. Added unit cases verify exact frame
+boundaries, alpha, repeated-frame retention, independent output, DPR/profile,
+invalid input and pixel-limit boundaries. Actual UI tests click the new action,
+cancel/reopen, repeat requests, select frame10 before frame2 and verify exact
+non-overlapping reconstruction and editor isolation in both themes. Existing
+successful overlap and all specific UI rejection regressions also pass.
+Reviewed [entry](screenshots/047-stack-entry.png),
+[light](screenshots/047-stack-light.png) and [dark](screenshots/047-stack-dark.png).
+Inputs are synthetic local images; native portals, maximum-memory stress and
+real desktop scrolling/capture remain unverified. Mixed width/profile/scale
+images are rejected instead of being silently resized.

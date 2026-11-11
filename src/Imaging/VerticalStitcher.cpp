@@ -24,6 +24,34 @@ bool exactOverlap(const QImage &previous, const QImage &next, int rows)
 }
 StitchResult fail(StitchError error) { return {{}, {}, error}; }
 }
+StitchResult stackVertical(const QList<QImage> &frames, qint64 maximumPixels)
+{
+    if (frames.size() < 2 || frames.size() > 16 || maximumPixels < 1)
+        return fail(StitchError::InvalidInput);
+    const auto &first = frames.first();
+    qint64 height = 0;
+    for (const auto &frame : frames) {
+        if (frame.isNull()) return fail(StitchError::InvalidInput);
+        if (frame.width() != first.width() || frame.devicePixelRatio() != first.devicePixelRatio() || frame.colorSpace() != first.colorSpace())
+            return fail(StitchError::IncompatibleFrames);
+        height += frame.height();
+        if (frame.width() > 8192 || height > 32000 || height * frame.width() > maximumPixels)
+            return fail(StitchError::TooLarge);
+    }
+    QImage output(first.width(), int(height), QImage::Format_RGBA8888);
+    if (output.isNull()) return fail(StitchError::TooLarge);
+    output.setDevicePixelRatio(first.devicePixelRatio());
+    output.setColorSpace(first.colorSpace());
+    int offset = 0;
+    for (const auto &frame : frames) {
+        const auto converted = frame.convertToFormat(QImage::Format_RGBA8888);
+        if (converted.isNull()) return fail(StitchError::TooLarge);
+        for (int y = 0; y < converted.height(); ++y)
+            std::memcpy(output.scanLine(offset + y), converted.constScanLine(y), size_t(output.width()) * 4);
+        offset += converted.height();
+    }
+    return {output, QVector<int>(frames.size() - 1, 0), StitchError::None};
+}
 StitchResult stitchVertical(const QList<QImage> &frames, int minimumOverlap, qint64 maximumPixels)
 {
     if (frames.size() < 2 || frames.size() > 16 || minimumOverlap < 1 || maximumPixels < 1)

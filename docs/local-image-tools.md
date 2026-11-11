@@ -39,3 +39,18 @@ editor stays unchanged. A successful image opens in a separate pinned preview
 with Copy/Save As; no input file is modified and no image is uploaded. Ambiguous,
 duplicate, incompatible or insufficiently overlapping inputs are rejected.
 This is not automated scrolling or fuzzy/perspective photo stitching.
+
+### Vertical stacking without overlap
+
+Use More → Stack images vertically for 2–16 local pictures that should retain
+all their content. Number filenames in top-to-bottom order (for example 2.png,
+10.png); numeric filename order, not click order, determines placement. Images
+must share width, scale and color profile. No automatic scaling, cropping or
+removal of repeated regions occurs. Transparent pixels are preserved.
+
+This is an explicit alternative to Combine screenshots, which requires an exact,
+unambiguous unchanged overlap. Neither mode captures or scrolls another app.
+Both leave source files and the current editor untouched, opening a separate
+preview for Copy or Save As. Limits remain 40 megapixels total input/output,
+8192 pixels wide and 32000 pixels tall. Stacking can retain duplicated content;
+use overlap matching instead when duplicates should be removed.

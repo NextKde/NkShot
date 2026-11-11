@@ -159,3 +159,9 @@ actual Alt+1…7 events in dock order, checking tool identity, unchanged rendere
 pixels and undo depth. Run separately from TEXT_INPUT/REDACTION tests because
 those tests intentionally assert history starting from an unedited document.
 Redaction regressions require `make_fixture.py --texture`.
+
+Add `NKSHOT_TEST_STACK=1` to COMBINE for the explicit no-overlap action. The input
+fixture is split into two non-overlapping halves. The actual menu, picker reuse,
+cancel/reopen, reversed numeric filename selection, exact reconstructed pixels,
+preview close and unchanged editor are checked. Stack mode intentionally does
+not run overlap duplicate rejection; duplicate retention is covered by core tests.

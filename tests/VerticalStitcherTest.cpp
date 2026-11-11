@@ -12,6 +12,36 @@ class VerticalStitcherTest : public QObject {
         return image;
     }
 private Q_SLOTS:
+    void explicitStackPreservesEveryPixel() {
+        auto a = pattern(80, 50); auto b = pattern(80, 75, 7);
+        a.setPixelColor(3, 4, QColor(20, 30, 40, 60));
+        a.setDevicePixelRatio(1.5); b.setDevicePixelRatio(1.5);
+        a.setColorSpace(QColorSpace::SRgb); b.setColorSpace(QColorSpace::SRgb);
+        const auto result = stackVertical({a, b, a});
+        QCOMPARE(result.error, StitchError::None);
+        QCOMPARE(result.image.size(), QSize(80, 175));
+        QCOMPARE(result.overlaps, QVector<int>({0, 0}));
+        QCOMPARE(result.image.devicePixelRatio(), 1.5);
+        QCOMPARE(result.image.colorSpace(), a.colorSpace());
+        QCOMPARE(result.image.copy(0, 0, 80, 50), a);
+        QCOMPARE(result.image.copy(0, 50, 80, 75), b);
+        QCOMPARE(result.image.copy(0, 125, 80, 50), a);
+        a.fill(Qt::red);
+        QVERIFY(result.image.pixelColor(3, 4) == QColor(20, 30, 40, 60));
+    }
+    void explicitStackRejectsInvalidAndOversize() {
+        auto a = pattern(80, 50); auto b = pattern(81, 50);
+        QCOMPARE(stackVertical({a}).error, StitchError::InvalidInput);
+        QCOMPARE(stackVertical({a, QImage()}).error, StitchError::InvalidInput);
+        QCOMPARE(stackVertical({a, b}).error, StitchError::IncompatibleFrames);
+        QCOMPARE(stackVertical({a, a}, 7999).error, StitchError::TooLarge);
+        QCOMPARE(stackVertical({a, a}, 8000).error, StitchError::None);
+        b = a; b.setDevicePixelRatio(2);
+        QCOMPARE(stackVertical({a, b}).error, StitchError::IncompatibleFrames);
+        b = a; b.setColorSpace(QColorSpace::SRgb);
+        QCOMPARE(stackVertical({a, b}).error, StitchError::IncompatibleFrames);
+    }
+
     void exactThreeFramesAndOwnership() {
         auto original = pattern(240, 800);
         auto first = original.copy(0,0,240,300);
