@@ -37,3 +37,34 @@ orientation and explicit automatic scrolling only where an authorized backend
 actually supports input. Desktop permission denial and absent capabilities must
 have honest states. Unit-tested frame assembly alone is not acceptance of any
 of these milestones.
+
+## Isolated collector foundation (054, not a released capture workflow)
+
+`Imaging/ScrollCaptureSession` is an independently tested, single-owner-thread
+state machine. It has **no ImagePlatform connection, timer, capture button or
+input injection**. A future adapter must supply real accepted frames, not claim
+that the model itself captures the desktop.
+
+Contract:
+- `begin` fixes physical rect, stable output identity and DPR. Negative desktop
+  coordinates are valid. Starting over while collecting/pending is refused.
+- `requestFrame` allows exactly one pending capture and returns a monotonically
+  increasing ticket. The adapter carries that ticket through asynchronous work.
+- Matching capture failure consumes that request and allows retry. Stale tickets,
+  including callbacks after cancel/restart, cannot consume a newer request.
+- Frame geometry/DPR and profile changes, invalid images, duplicates, ambiguous
+  overlap, no overlap and output overflow reject only that candidate. Accepted
+  pixels/count remain intact. Bounds are 16 accepted frames and existing output
+  width/height/pixel limits. The model retains only the cumulative result, not a
+  growing full-resolution frame list.
+- Captured buffers are detached; backend reuse cannot mutate accepted pixels.
+- `finish` requires two accepted frames and no pending capture. It returns an
+  isolated value image, releases session storage, and prevents another request.
+  `cancel` releases only the collector. Neither touches the editor/export model.
+
+Test fixtures cover exact assembly, single pending request, failed/repeated/stale
+callbacks, cancel/restart, mismatched region/output/DPR/profile, no-progress and
+ambiguous overlaps, bounds, frame cap, high DPI, buffer ownership and result
+lifetime. These tests establish a collector contract only. Real capture routing,
+permission/UI states, repaint exclusion, native output geometry and user-scrolled
+frame acceptance remain unimplemented and require the desktop milestone above.

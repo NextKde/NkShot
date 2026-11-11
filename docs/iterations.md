@@ -1087,3 +1087,27 @@ roadmap/preservation document accordingly. Fixed-region rolling capture was
 investigated but not faked: shared capture callbacks replace the active document,
 so a safe implementation needs an isolated session collector and a live KWin
 capture/input/DPI acceptance environment (see [plan](scroll-capture-plan.md)).
+
+## 054 — Isolated scroll-frame collector foundation (not a capture feature)
+
+Added a backend-independent collector for a future manual-scroll workflow. It
+fixes the physical region/output/DPR, permits one pending capture, and uses
+monotonic tickets so late callbacks after cancellation/restart cannot consume a
+new request. Candidate failures preserve accepted pixels and allow retry. Buffer
+ownership is detached from the backend. Only the cumulative image is retained,
+with frame/output bounds; finish requires two frames and releases session storage.
+No editor, export, backend signal or UI route is connected to this class yet.
+It is currently compiled through its test target, not a live capture entry point.
+
+Build and CTest 7/7 pass; static checks 16/16 pass. New tests cover exact pixels,
+negative desktop coordinates, DPR/profile consistency, stale/failure/repeated
+requests, cancel/restart, no overlap/ambiguous/duplicate frames, size/frame caps,
+immutable source buffers and finished-result lifetime. These are synthetic frame
+contract tests, not desktop capture or user-scrolling acceptance.
+
+Re-ran actual sharing menu/cancel/options/preview/clipboard/PNG interactions and
+reviewed the [existing UI regression screenshot](screenshots/054-existing-sharing-regression.png).
+This screenshot shows the existing sharing workflow, **not rolling capture**.
+There is deliberately no new button, placeholder or claimed scrolling demo.
+The adapter contract and remaining live KWin/repaint/permission/DPI milestones are
+recorded in [the plan](scroll-capture-plan.md) and capability matrix.

@@ -46,3 +46,10 @@ See [iterations](iterations.md), [building](building.md) and
 
 Do not replace pending gates with synthetic screenshots, encoder initialization
 or a count of commits/iterations. Never weaken compositor permission checks.
+
+### Collector foundation
+
+054 adds an isolated, bounded frame-session core with request tickets and retry/
+cancel safety. This is not a desktop scrolling feature. Connect it only through
+the accepted-frame adapter described in [the plan](scroll-capture-plan.md), and
+validate real KWin output identity, DPR and permission failures before exposing UI.

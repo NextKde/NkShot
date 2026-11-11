@@ -72,3 +72,8 @@ set_tests_properties(vertical_stitcher_test PROPERTIES TIMEOUT 20)
 ecm_add_test(ImageTransformsTest.cpp ../src/Imaging/ImageTransforms.cpp
     TEST_NAME image_transforms_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(image_transforms_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Isolated frame-session core; no live desktop capture acceptance claim.
+ecm_add_test(ScrollCaptureSessionTest.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/VerticalStitcher.cpp
+    TEST_NAME scroll_capture_session_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(scroll_capture_session_test PROPERTIES TIMEOUT 20)
