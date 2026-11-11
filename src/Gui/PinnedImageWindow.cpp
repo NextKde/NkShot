@@ -5,6 +5,8 @@
 #include "settings.h"
 #include <QtConcurrentRun>
 #include <QApplication>
+#include <QMap>
+#include <limits>
 #include <QClipboard>
 #include <QFileDialog>
 #include <QImageWriter>
@@ -299,16 +301,53 @@ void PinnedImageWindow::selectTextOnImage()
 void PinnedImageWindow::setWordSelection(int index, bool extend)
 {
     if (!m_textSelectionActive || index < 0 || index >= m_words.size()) return;
-    if (!extend || m_anchorWord < 0) m_anchorWord = index;
+    const int anchor = (!extend || m_anchorWord < 0) ? index : m_anchorWord;
+    if (m_anchorWord == anchor && m_activeWord == index) return;
+    m_anchorWord = anchor;
     m_activeWord = index;
     Q_EMIT textSelectionChanged();
 }
 
-void PinnedImageWindow::selectWordAt(qreal x, qreal y, bool extend)
+void PinnedImageWindow::selectWordAt(qreal x, qreal y, bool extend, bool nearest)
 {
     if (!std::isfinite(x) || !std::isfinite(y) || !m_textSelectionActive) return;
     for (int i = 0; i < m_words.size(); ++i) {
         if (QRectF(m_words[i].bounds).contains(QPointF(x, y))) { setWordSelection(i, extend); return; }
+    }
+    // Drag endpoints snap to the vertically nearest OCR line, then the nearest
+    // horizontal word on that line. A distant adjacent line must not win merely
+    // because its word happens to be closer horizontally. Initial clicks stay exact.
+    if (nearest && extend && m_anchorWord >= 0 && !m_words.isEmpty()) {
+        QMap<int, QRect> lines;
+        for (const auto &word : m_words) lines[word.lineIndex] |= word.bounds;
+        int line = m_words[m_activeWord].lineIndex;
+        qreal best = std::numeric_limits<qreal>::max();
+        for (auto it = lines.cbegin(); it != lines.cend(); ++it) {
+            const qreal distance = qMax(qreal(0), qMax(it->top() - y, y - it->bottom()));
+            if (distance < best) { best = distance; line = it.key(); }
+        }
+        // Separate OCR blocks on the same visual row can differ by a few ink
+        // pixels (for example capitals with/without a descender). Allow a small
+        // height-relative vertical tolerance, then resolve horizontally. This
+        // must not prefer a distant row merely because it is nearer in x.
+        const qreal tolerance = qBound(qreal(2), lines[line].height() * 0.2, qreal(8));
+        qreal bestHorizontal = std::numeric_limits<qreal>::max();
+        for (auto it = lines.cbegin(); it != lines.cend(); ++it) {
+            const qreal distance = qMax(qreal(0), qMax(it->top() - y, y - it->bottom()));
+            if (distance > best + tolerance) continue;
+            const qreal horizontal = qMax(qreal(0), qMax(it->left() - x, x - it->right()));
+            if (horizontal < bestHorizontal) { bestHorizontal = horizontal; line = it.key(); }
+        }
+        int index = -1;
+        best = std::numeric_limits<qreal>::max();
+        for (int i = 0; i < m_words.size(); ++i) {
+            if (m_words[i].lineIndex != line) continue;
+            const auto box = m_words[i].bounds;
+            const qreal distance = qMax(qreal(0), qMax(box.left() - x, x - box.right()));
+            if (distance < best) { best = distance; index = i; }
+        }
+        if (index >= 0) setWordSelection(index, true);
+        return;
     }
     if (!extend) { m_anchorWord = m_activeWord = -1; Q_EMIT textSelectionChanged(); }
 }

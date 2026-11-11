@@ -1652,3 +1652,47 @@ Reviewed final software-window captures:
 [all dark words](screenshots/070-words-dark.png.all.png),
 [all compact words](screenshots/070-words-compact.png.all.png) and
 [all Chinese words](screenshots/070-words-chinese.png.all.png).
+
+## 071 — Cross-viewport word selection
+
+Pinned-image word selection now scrolls its viewport while the primary mouse
+button is held near an edge. This is selection navigation, not scrolling capture.
+There are no new toolbar controls. The fixed viewport pointer drives a shrinking
+edge band and bounded two-axis velocity using elapsed time; endpoints clamp to
+the visible viewport before mapping through zoom to physical image pixels.
+Returning to the center or reaching the scroll boundary stops the timer. Release,
+Cancel/Escape, hide, minimize and close stop the gesture. Recognition and selection
+still never write the clipboard without an explicit Copy action.
+
+Dragging preserves its anchor and logical OCR order. Gaps snap to the vertically
+nearest OCR line and then a horizontally nearest word; equal-height OCR blocks
+are resolved horizontally rather than arbitrarily by block order, allowing a
+small 2–8 physical-pixel height-relative tolerance for different ink extents. Blank initial
+clicks remain exact hits only. Pointer-driven selection does not fight keyboard
+reveal; navigation keys are ignored during an active mouse drag and resume after
+release. Source images, exports and editor history are unchanged.
+
+Real KDE/GPU/high-DPI desktop behavior, recording and scrolling-capture acceptance
+remain unverified. Character-level selection and full OS Live Text parity are
+still outside this stage.
+
+Final sequential build passes. All nine final UI scenarios pass: held-edge
+selection in light/dark/260×180 layouts, plus the six 070 inline OCR regressions.
+The held-edge probes cover four stationary edges over multiple frames, both-axis
+movement, boundary clamping, neutral-center and outside-release stops, sub-100%
+zoom with DPR=2, same-gesture reversal across an offscreen anchor, logical order,
+far-outside pointer clamping, and Cancel/Escape/hide/minimize/close cleanup.
+CTest passes 15/15; static checks pass 18/18; whitespace checks pass. Independent
+whole-image/area OCR, zoom, PNG export and color-sampling baselines pass 12/12.
+Final UI logs contain no QML binding/type/reference or dynamic Tab-focus warning.
+
+Reviewed software-window captures:
+[light](screenshots/071-scroll-light.png),
+[dark](screenshots/071-scroll-dark.png), and
+[260×180](screenshots/071-scroll-compact.png).
+They show a live held-diagonal selection viewport; clipping of source words at
+viewport edges is deliberate. The minimum-window capture samples a moving image,
+not a fit-to-window overview. Grid OCR happens to read columns, so its repeated
+words in the preview retain the engine's logical order rather than claiming
+arbitrary multi-column reading-order accuracy. Reproduction commands and flags
+are in [UI test notes](../tests/ui/README.md#held-edge-word-selection-scrolling-071).

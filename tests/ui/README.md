@@ -364,3 +364,41 @@ reading order, literal markup serialization and complete-metadata limits. Metada
 must reconstruct the full OCR text; incomplete/oversized lists are cleared instead
 of presented as successful partial selection. These are synthetic software-window
 checks, not general OCR accuracy, native desktop or GPU acceptance.
+
+### Held-edge word-selection scrolling (071)
+
+`NKSHOT_TEST_PIN_WORD_SCROLL=1` creates a 1600×1600 DPR=2 English word grid and
+opens the real pin window. Add `NKSHOT_TEST_WORDS_COMPACT=1` for 260×180 or
+`NKSHOT_TEST_DARK=1` for the dark palette. At 100% zoom the harness presses a
+recognized word, moves once to an edge, then waits across multiple frames. It
+requires further pan and selection changes without additional pointer moves.
+
+Checks include all four directions and clamped content boundaries, neutral-center
+stop while still pressed, release inside and outside the viewport, diagonal pan,
+reverse logical selection order, same-gesture reversal across an anchor that has
+scrolled out of view, no blank-start drag, and active-drag cancellation
+through Cancel/Escape/hide/minimize/close. Source pixels, editor undo depth and
+clipboard sentinel must remain unchanged. A far-outside pointer cannot jump the
+endpoint across multiple screens; navigation keys cannot reset a held-drag anchor.
+The main capture shows an actual
+cross-viewport selected range during the held diagonal drag. These tests use
+software-rendered synthetic windows, not native compositor/GPU acceptance.
+
+The 071 timer test also repeats stationary-edge extension and release-stop after
+Ctrl+- changes the image scale below 100%, then restores 100% for remaining tests.
+
+Reproduce the focused probe with the existing UI-capture binary and a local input:
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+NKSHOT_TEST_UI_CAPTURE=/tmp/071-scroll-light.png \
+NKSHOT_TEST_PIN_WORD_SCROLL=1 \
+./build/bin/nkshot --new-instance --edit-existing /path/to/local-fixture.png
+```
+
+Repeat with `NKSHOT_TEST_DARK=1` or `NKSHOT_TEST_WORDS_COMPACT=1`. The local input
+opens the editor; the probe creates its own immutable 1600×1600 DPR=2 OCR fixture.
+Use an isolated `XDG_CONFIG_HOME` per invocation. Existing 070 six-variant probes,
+`ctest --output-on-failure`, and `python3 tests/nkshot/test_identity.py -v` remain
+the regression checks. These probes preserve OCR logical order, not a guarantee
+of human reading order for arbitrary multi-column layouts.

@@ -141,6 +141,7 @@ QQC.Pane {
             Accessible.description: !pinnedWindow.textSelectionActive ? i18nc("@info", "Use zoom shortcuts or scroll to read the image.") : pinnedWindow.selectedText.length ? pinnedWindow.selectedText : i18nc("@info", "Use arrow keys to select a word, Shift to extend, and Ctrl+C to copy text.")
             Keys.onPressed: event => {
                 if (!pinnedWindow.textSelectionActive || pinnedWindow.extractingText) return
+                if (wordSurface.dragActive) return
                 const extend = (event.modifiers & Qt.ShiftModifier) !== 0
                 if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) pinnedWindow.moveTextSelection(-1, extend)
                 else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) pinnedWindow.moveTextSelection(1, extend)
@@ -170,7 +171,7 @@ QQC.Pane {
             Connections {
                 target: pinnedWindow
                 function onTextWordsChanged() { if (pinnedWindow.textSelectionActive && pinnedWindow.textWords.length) viewport.forceActiveFocus() }
-                function onTextSelectionChanged() { viewport.revealActiveWord() }
+                function onTextSelectionChanged() { if (!wordSurface.dragActive) viewport.revealActiveWord() }
             }
             boundsBehavior: Flickable.StopAtBounds
             property bool fitMode: true
@@ -231,16 +232,6 @@ QQC.Pane {
                         Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Kos.AppTheme.accent; opacity: 0.45; visible: !parent.selectedWord }
                     }
                 }
-                MouseArea {
-                    objectName: "nkshotPinWordSurface"
-                    anchors.fill: parent
-                    enabled: pinnedWindow.textSelectionActive && !pinnedWindow.extractingText
-                    cursorShape: Qt.IBeamCursor
-                    preventStealing: true
-                    onPressed: mouse => { viewport.forceActiveFocus(); pinnedWindow.selectWordAt(mouse.x / viewport.imageScale, mouse.y / viewport.imageScale, (mouse.modifiers & Qt.ShiftModifier) !== 0) }
-                    onPositionChanged: mouse => { if (pressed) pinnedWindow.selectWordAt(mouse.x / viewport.imageScale, mouse.y / viewport.imageScale, true) }
-                    onReleased: mouse => pinnedWindow.selectWordAt(mouse.x / viewport.imageScale, mouse.y / viewport.imageScale, true)
-                }
                 Rectangle {
                     visible: root.selectingArea && root.selectedArea.width > 0
                     x: root.selectedArea.x * viewport.imageScale
@@ -268,6 +259,73 @@ QQC.Pane {
                     onPressed: mouse => { origin = pixel(mouse.x, mouse.y); update(mouse.x, mouse.y) }
                     onPositionChanged: mouse => { if (pressed) update(mouse.x, mouse.y) }
                     onReleased: mouse => update(mouse.x, mouse.y)
+                }
+            }
+            // Fixed-viewport pointer coordinates remain valid while the image scrolls.
+            MouseArea {
+                id: wordSurface
+                objectName: "nkshotPinWordSurface"
+                parent: viewport
+                anchors.fill: parent
+                enabled: pinnedWindow.textSelectionActive && !pinnedWindow.extractingText
+                cursorShape: Qt.IBeamCursor
+                preventStealing: true
+                property bool dragActive: false
+                property point pointer: Qt.point(0, 0)
+                readonly property real velocityX: edgeSpeed(pointer.x, viewport.width)
+                readonly property real velocityY: edgeSpeed(pointer.y, viewport.height)
+                readonly property bool canScroll: (velocityX < 0 && viewport.contentX > 0)
+                    || (velocityX > 0 && viewport.contentX < viewport.contentWidth - viewport.width)
+                    || (velocityY < 0 && viewport.contentY > 0)
+                    || (velocityY > 0 && viewport.contentY < viewport.contentHeight - viewport.height)
+                function stop() { dragActive = false }
+                function updateEndpoint(nearest) {
+                    pinnedWindow.selectWordAt((viewport.contentX + Math.max(0, Math.min(viewport.width, pointer.x)) - snapshot.x) / viewport.imageScale,
+                                              (viewport.contentY + Math.max(0, Math.min(viewport.height, pointer.y)) - snapshot.y) / viewport.imageScale,
+                                              true, nearest)
+                }
+                function edgeSpeed(position, extent) {
+                    const band = Math.min(36, extent / 3)
+                    if (position < band) return -480 * Math.min(1, (band - position) / band)
+                    if (position > extent - band) return 480 * Math.min(1, (position - extent + band) / band)
+                    return 0
+                }
+                onPressed: mouse => {
+                    viewport.forceActiveFocus()
+                    pointer = Qt.point(mouse.x, mouse.y)
+                    // Suppress keyboard-style reveal for the pointer's exact initial hit.
+                    dragActive = true
+                    pinnedWindow.selectWordAt((viewport.contentX + mouse.x - snapshot.x) / viewport.imageScale,
+                                              (viewport.contentY + mouse.y - snapshot.y) / viewport.imageScale,
+                                              (mouse.modifiers & Qt.ShiftModifier) !== 0)
+                    dragActive = pinnedWindow.activeWord >= 0
+                }
+                onPositionChanged: mouse => {
+                    pointer = Qt.point(mouse.x, mouse.y)
+                    if (pressed && dragActive) updateEndpoint(true)
+                }
+                onReleased: mouse => {
+                    pointer = Qt.point(mouse.x, mouse.y)
+                    if (dragActive) updateEndpoint(true)
+                    stop()
+                }
+                onCanceled: stop()
+                onEnabledChanged: if (!enabled) stop()
+                Timer {
+                    interval: 16
+                    repeat: true
+                    running: wordSurface.dragActive && wordSurface.pressed && wordSurface.enabled && wordSurface.canScroll
+                    property double lastTick: 0
+                    onRunningChanged: lastTick = Date.now()
+                    onTriggered: {
+                        const now = Date.now()
+                        const elapsed = Math.max(0, Math.min(50, now - lastTick)) / 1000
+                        lastTick = now
+                        viewport.contentX += wordSurface.velocityX * elapsed
+                        viewport.contentY += wordSurface.velocityY * elapsed
+                        viewport.clampPosition()
+                        wordSurface.updateEndpoint(true)
+                    }
                 }
             }
             QQC.ScrollBar.vertical: QQC.ScrollBar {policy: viewport.contentHeight > viewport.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff}

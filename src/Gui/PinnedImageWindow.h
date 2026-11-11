@@ -41,7 +41,7 @@ public:
     int activeWord() const { return m_activeWord; }
     Q_INVOKABLE void selectTextOnImage();
     Q_INVOKABLE void cancelTextSelection();
-    Q_INVOKABLE void selectWordAt(qreal x, qreal y, bool extend = false);
+    Q_INVOKABLE void selectWordAt(qreal x, qreal y, bool extend = false, bool nearest = false);
     Q_INVOKABLE void moveTextSelection(int direction, bool extend = false);
     Q_INVOKABLE void selectAllText();
     Q_INVOKABLE void copySelectedText();

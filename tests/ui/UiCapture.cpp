@@ -16,6 +16,7 @@
 #include "Gui/Selection.h"
 #include <QScreen>
 #include <memory>
+#include <limits>
 #include "Gui/TextContextMenu.h"
 #include <QtTest/QTest>
 #include <QtTest/QSignalSpy>
@@ -26,6 +27,7 @@
 #include <QApplication>
 #include <QDebug>
 #include <QImage>
+#include <QLineF>
 #include <QInputMethodEvent>
 #include <QClipboard>
 #include <QScopeGuard>
@@ -86,6 +88,204 @@ static bool samePixels(const QImage &a, const QImage &b)
 }
 
 
+
+static void runWordScrollChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
+{
+    const auto fail = [&](const char *step) { qCritical() << "Word autoscroll failure:" << step; application.exit(251); };
+    const auto configured = Settings::ocrLanguages();
+    const auto restore = qScopeGuard([configured] { Settings::setOcrLanguages(configured); });
+    Settings::setOcrLanguages({QStringLiteral("eng")});
+    auto document = SpectacleCore::instance()->annotationDocument();
+    const auto original = document->renderToImage();
+    const auto depth = document->undoStackDepth();
+    QImage fixture(1600, 1600, QImage::Format_ARGB32); fixture.fill(Qt::white); fixture.setDevicePixelRatio(2);
+    {
+        QPainter painter(&fixture); painter.scale(0.5, 0.5);
+        QFont font(QStringLiteral("DejaVu Sans")); font.setPixelSize(40); painter.setFont(font); painter.setPen(Qt::black);
+        const QStringList labels{QStringLiteral("ALPHA"), QStringLiteral("BRAVO"), QStringLiteral("CHARLIE"), QStringLiteral("DELTA"), QStringLiteral("ECHO"), QStringLiteral("FOXTROT")};
+        for (int row = 0; row < 12; ++row)
+            for (int col = 0; col < 6; ++col)
+                painter.drawText(QRect(40 + col * 250, 30 + row * 130, 220, 80), Qt::AlignCenter, labels[col]);
+    }
+    QPointer<PinnedImageWindow> pin = new PinnedImageWindow(fixture, viewer->engine());
+    pin->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_WORDS_COMPACT") ? QSize(260, 180) : QSize(620, 420));
+    pin->show(); pin->requestActivate(); QTest::qWait(150);
+    auto viewport = visualItem(pin->contentItem(), QStringLiteral("nkshotPinViewport"));
+    auto snapshot = visualItem(pin->contentItem(), QStringLiteral("nkshotPinSnapshot"));
+    if (!viewport || !snapshot) { fail("items"); return; }
+    QApplication::clipboard()->setText(QStringLiteral("autoscroll untouched"));
+    const auto recognize = [&] {
+        pin->selectTextOnImage();
+        return QTest::qWaitFor([&] { return !pin->extractingText(); }, 15000) && pin->textSelectionActive() && pin->textWords().size() == 72;
+    };
+    if (!recognize()) { qWarning() << pin->textWords().size(); fail("fixture recognition"); return; }
+    const auto words = pin->textWords();
+    // Tesseract may group the grid into columns/blocks. Directional drag anchors
+    // are spatial corners, while selection serialization remains logical OCR order.
+    const auto nearestWord = [&](const QPointF &target) {
+        int result=0; qreal distance=std::numeric_limits<qreal>::max();
+        for (int i=0;i<words.size();++i) {
+            const qreal candidate=QLineF(target,words[i].toMap().value(QStringLiteral("bounds")).toRect().center()).length();
+            if(candidate<distance) { distance=candidate; result=i; }
+        }
+        return result;
+    };
+    const int topLeft=nearestWord(QPointF(0,0));
+    const int topRight=nearestWord(QPointF(fixture.width(),0));
+    const int bottomLeft=nearestWord(QPointF(0,fixture.height()));
+    const auto offset = [&] { return QPointF(viewport->property("contentX").toReal(), viewport->property("contentY").toReal()); };
+    const auto bounds = [&] { return QPointF(viewport->property("contentWidth").toReal()-viewport->width(), viewport->property("contentHeight").toReal()-viewport->height()); };
+    const auto localPoint = [&](qreal x, qreal y) { return viewport->mapToScene(QPointF(x,y)).toPoint(); };
+    const auto center = [&] { return localPoint(viewport->width()/2, viewport->height()/2); };
+    const auto wordPoint = [&](int i) {
+        return snapshot->mapToScene(QPointF(words[i].toMap().value(QStringLiteral("bounds")).toRect().center()) * viewport->property("imageScale").toReal()).toPoint();
+    };
+    const auto begin = [&](int index) {
+        const auto box = words[index].toMap().value(QStringLiteral("bounds")).toRect();
+        pin->selectWordAt(box.center().x(), box.center().y()); QTest::qWait(30);
+        const auto point = wordPoint(index);
+        if (!viewport->mapRectToScene(QRectF(0,0,viewport->width(),viewport->height())).contains(point)) return false;
+        QTest::mousePress(pin, Qt::LeftButton, Qt::NoModifier, point);
+        return pin->selectionFirst()==index && pin->selectionLast()==index;
+    };
+    const auto stable = [&] {
+        const auto before = offset(); QTest::qWait(180);
+        return QLineF(before, offset()).length() < 0.1;
+    };
+    const auto release = [&] { QTest::mouseRelease(pin, Qt::LeftButton, Qt::NoModifier, center()); };
+    QTest::keyClick(pin, Qt::Key_1, Qt::ControlModifier); QTest::qWait(80);
+    // A blank press does not establish an anchor, even when subsequently held at an edge.
+    viewport->setProperty("contentX",0); viewport->setProperty("contentY",0);
+    QTest::mousePress(pin, Qt::LeftButton, Qt::NoModifier, localPoint(2,2));
+    QTest::mouseMove(pin, localPoint(viewport->width()-2, viewport->height()-2));
+    if (!stable() || pin->selectionFirst()!=-1) { release(); fail("blank press starts no drag"); return; }
+    release();
+    // Hold an unmoving pointer at each edge for multiple timer frames. No repeated move events.
+    for (int direction=0; direction<4; ++direction) {
+        const bool horizontal = direction < 2;
+        const bool forward = direction % 2 == 0;
+        const int anchor = horizontal ? (forward ? topLeft : topRight) : (forward ? topLeft : bottomLeft);
+        if (!begin(anchor)) { fail("visible drag anchor"); return; }
+        const QPoint edge = horizontal
+            ? localPoint(forward ? viewport->width()-2 : 2, viewport->height()/2)
+            : localPoint(viewport->width()/2, forward ? viewport->height()-2 : 2);
+        QTest::mouseMove(pin, edge, 20);
+        const auto before = offset(); const int firstActive = pin->activeWord();
+        QTest::qWait(220); const auto middle = offset();
+        QTest::qWait(350); const auto after = offset();
+        const qreal a = horizontal ? before.x() : before.y();
+        const qreal b = horizontal ? middle.x() : middle.y();
+        const qreal c = horizontal ? after.x() : after.y();
+        if ((forward ? !(b>a && c>b) : !(b<a && c<b)) || pin->activeWord()==firstActive
+            || pin->selectionFirst()>anchor || pin->selectionLast()<anchor) {
+            qWarning() << direction << before << middle << after << firstActive << pin->activeWord();
+            for (int i=0;i<words.size();++i) qWarning() << "OCR word" << i << words[i];
+            release(); fail("stationary edge scroll and extension"); return;
+        }
+        // Move to the neutral center without releasing: scrolling must stop.
+        QTest::mouseMove(pin, center(), 20);
+        if (!stable()) { release(); fail("center stop"); return; }
+        const int heldFirst=pin->selectionFirst(), heldLast=pin->selectionLast(), heldActive=pin->activeWord();
+        QTest::keyClick(pin,Qt::Key_End);
+        if (pin->selectionFirst()!=heldFirst || pin->selectionLast()!=heldLast || pin->activeWord()!=heldActive) {
+            release(); fail("held drag ignores navigation without resetting anchor"); return;
+        }
+        // Boundary clamping while still dragging, including reverse left/up movement.
+        const auto maximum = bounds();
+        viewport->setProperty(horizontal ? "contentX" : "contentY", forward ? (horizontal ? maximum.x() : maximum.y()) - 5 : 5);
+        QTest::mouseMove(pin, edge, 20); QTest::qWait(180);
+        const auto end = offset(); const qreal actual = horizontal ? end.x() : end.y();
+        const qreal expected = forward ? (horizontal ? maximum.x() : maximum.y()) : 0;
+        if (qAbs(actual-expected)>0.1 || !stable()) { release(); fail("edge clamp"); return; }
+        QTest::mouseRelease(pin, Qt::LeftButton, Qt::NoModifier, edge);
+        if (!stable()) { fail("release stop"); return; }
+        QStringList selected;
+        for(int i=pin->selectionFirst(); i<=pin->selectionLast(); ++i) selected << words[i].toMap().value(QStringLiteral("text")).toString();
+        if (pin->selectedText().simplified()!=selected.join(u' ')) { fail("logical order"); return; }
+    }
+    // Reverse across the original anchor without releasing the button. Use one
+    // physical column so both spatial and OCR logical direction are unambiguous.
+    const int reverseAnchor=nearestWord(QPointF(150,800));
+    const auto anchorBox=words[reverseAnchor].toMap().value(QStringLiteral("bounds")).toRect();
+    if (!begin(reverseAnchor)) { fail("cross-anchor start"); return; }
+    const auto anchorX=viewport->mapFromScene(wordPoint(reverseAnchor)).x();
+    QTest::mouseMove(pin,localPoint(anchorX,viewport->height()-2),20);
+    if (!QTest::qWaitFor([&] {
+            return pin->activeWord()>reverseAnchor && pin->selectionFirst()==reverseAnchor
+                && words[pin->activeWord()].toMap().value(QStringLiteral("bounds")).toRect().center().y()>anchorBox.center().y();
+        },3000)) { release(); fail("forward half of cross-anchor gesture"); return; }
+    // Continue until the original anchor has scrolled above the viewport; the
+    // return gesture must genuinely scroll back, not merely cross a visible word.
+    QTest::qWait(int(viewport->height()*1000/350)+200);
+    const qreal reverseStartY=offset().y();
+    if(reverseStartY<=anchorBox.bottom()) { release(); fail("anchor scrolls out before reverse"); return; }
+    QTest::mouseMove(pin,localPoint(anchorX,2),20);
+    if (!QTest::qWaitFor([&] {
+            return offset().y()<reverseStartY && pin->activeWord()<reverseAnchor && pin->selectionLast()==reverseAnchor
+                && words[pin->activeWord()].toMap().value(QStringLiteral("bounds")).toRect().center().y()<anchorBox.center().y();
+        },3000)) { release(); fail("same-gesture reverse crosses preserved anchor"); return; }
+    QTest::mouseRelease(pin,Qt::LeftButton,Qt::NoModifier,localPoint(anchorX,2));
+    if (!stable()) { fail("reverse release stop"); return; }
+    QStringList reversed;
+    for(int i=pin->selectionFirst();i<=pin->selectionLast();++i) reversed << words[i].toMap().value(QStringLiteral("text")).toString();
+    if(pin->selectedText().simplified()!=reversed.join(u' ')) { fail("cross-anchor logical order"); return; }
+    // Timer endpoint mapping also runs at a non-unit scale, not only 100%.
+    QTest::keyClick(pin, Qt::Key_Minus, Qt::ControlModifier); QTest::qWait(60);
+    const qreal reducedScale = viewport->property("imageScale").toReal();
+    if (!(reducedScale > 0 && reducedScale < 1) || !begin(topLeft)) { fail("scaled drag start"); return; }
+    QTest::mouseMove(pin, localPoint(viewport->width()/2, viewport->height()-2), 20);
+    const auto scaledStart = offset(); const int scaledActive = pin->activeWord();
+    QTest::qWait(400);
+    if (offset().y() <= scaledStart.y() || pin->activeWord() == scaledActive
+        || pin->selectionFirst() > topLeft || pin->selectionLast() < topLeft) {
+        release(); fail("scaled stationary-edge extension"); return;
+    }
+    release();
+    if (!stable()) { fail("scaled release stop"); return; }
+    QTest::keyClick(pin, Qt::Key_1, Qt::ControlModifier); QTest::qWait(60);
+    // Diagonal edge movement must advance both axes from the same fixed viewport pointer.
+    if (!begin(topLeft)) { fail("diagonal anchor"); return; }
+    QTest::mouseMove(pin, localPoint(viewport->width()-2,viewport->height()-2),20);
+    const auto diagonalStart=offset(); const int diagonalActive=pin->activeWord(); QTest::qWait(350);
+    if (offset().x()<=diagonalStart.x() || offset().y()<=diagonalStart.y() || pin->activeWord()==diagonalActive
+        || pin->selectionFirst()>topLeft || pin->selectionLast()<topLeft) { release(); fail("two axis drag"); return; }
+    if (!pin->grabWindow().save(destination)) { release(); fail("capture"); return; }
+    // A pointer far outside must not jump the endpoint many screens ahead.
+    // Its clamped endpoint remains near the currently visible physical image edge.
+    const auto beforeOutside = offset();
+    const QPoint farOutside(pin->width()+10000,pin->height()+10000);
+    QTest::mouseMove(pin, farOutside, 1);
+    const auto afterOutside = offset();
+    const auto activeBox = words[pin->activeWord()].toMap().value(QStringLiteral("bounds")).toRect();
+    const qreal scale = viewport->property("imageScale").toReal();
+    if (QLineF(beforeOutside,afterOutside).length()>40
+        || activeBox.top() > (afterOutside.y()+viewport->height())/scale+130
+        || activeBox.left() > (afterOutside.x()+viewport->width())/scale+250) {
+        release(); fail("outside endpoint remains at viewport edge"); return;
+    }
+    // Release outside the viewport remains an unconditional stop.
+    QTest::mouseRelease(pin, Qt::LeftButton, Qt::NoModifier, farOutside);
+    if (!stable()) { fail("outside release stop"); return; }
+    // Cancellation and lifecycle changes terminate an active edge drag, not just recognition.
+    for (int operation=0; operation<5; ++operation) {
+        if (!pin->textSelectionActive() && !recognize()) { fail("reopen"); return; }
+        if (!begin(topLeft)) { fail("lifecycle anchor"); return; }
+        QTest::mouseMove(pin,localPoint(viewport->width()-2,viewport->height()-2),20); QTest::qWait(100);
+        if (operation==0) pin->cancelTextSelection();
+        else if (operation==1) QTest::keyClick(pin,Qt::Key_Escape);
+        else if (operation==2) { pin->hide(); pin->show(); }
+        else if (operation==3) { pin->setWindowStates(Qt::WindowMinimized); QTest::qWait(30); pin->setWindowStates(Qt::WindowNoState); pin->show(); }
+        else { pin->close(); QTest::qWait(200); if(pin) { fail("close"); return; } break; }
+        QTest::qWait(30);
+        if (pin->textSelectionActive() || !stable()) { release(); fail("lifecycle stop"); return; }
+        release(); pin->requestActivate();
+        if (!samePixels(fixture,pin->snapshot()) || pin->textWords().size()!=0) { fail("immutable pin / mode cleanup"); return; }
+    }
+    if (QApplication::clipboard()->text()!=QStringLiteral("autoscroll untouched")
+        || !samePixels(original,document->renderToImage()) || depth!=document->undoStackDepth()) { fail("clipboard/source/history untouched"); return; }
+    qInfo() << "Word autoscroll: four stationary edges, boundaries, center/outside release, scaled mapping, cross-anchor reversal, diagonal, logical order and five lifecycle stops passed";
+    application.exit(0);
+}
 
 static void runInlineTextChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
 {
@@ -389,6 +589,7 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORD_SCROLL")) { runWordScrollChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS")) { runInlineTextChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU")) {
                 if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU_VIDEO")) SpectacleCore::instance()->setVideoMode(true);

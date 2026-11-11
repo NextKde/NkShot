@@ -248,9 +248,15 @@ restores Ctrl+C image copy. Another Escape closes the pin.
 Zoom shortcuts and Ctrl+wheel remain available. Ordinary mouse-wheel or trackpad
 scrolling moves the image while word dragging selects text. Keyboard navigation
 reveals the active word; oversized boxes are centered in the viewport. Word boxes
-stay attached to physical source pixels across zoom, pan and image DPR. Drag-edge
-autoscroll, character-level selection and geometric up/down-line navigation are
-not implemented. Chinese selection follows Tesseract token boundaries, not an
+stay attached to physical source pixels across zoom, pan and image DPR. Since 071,
+keep the primary mouse button held near a viewport edge to scroll and extend the
+same anchored range across the image. The edge band shrinks in small windows;
+scrolling accelerates with proximity to the edge, capped at 480 logical pixels
+per second on each axis. Returning to the middle, releasing (also outside the
+viewport), leaving the mode, hiding/minimizing or closing stops scrolling.
+A drag endpoint in whitespace chooses the vertically nearest OCR line and then
+the nearest word horizontally; an initial blank click does not start a range.
+Character-level selection and geometric up/down-line navigation are not implemented. Chinese selection follows Tesseract token boundaries, not an
 assumption that every character is a separate word.
 
 Recognition retains Tesseract's logical word order and its exact line spacing.
