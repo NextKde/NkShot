@@ -50,6 +50,8 @@ ColorPickerWindow::ColorPickerWindow(const QImage &image, QQmlEngine *engine)
     , m_provider(new ColorImageProvider(m_image))
     , m_providerId(QStringLiteral("nkshotcolor%1").arg(++colorPickerId))
 {
+    // C++ owns close/draft lifetime; QML return values must not become GC-owned.
+    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     m_screenPicker = new ScreenColorPicker(this);
     m_screenMode = m_image.isNull();
     connect(m_screenPicker, &ScreenColorPicker::changed, this, [this] {

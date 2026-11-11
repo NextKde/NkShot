@@ -650,3 +650,21 @@ workflow with real hold/release, keyboard Space, drag-out, focus-loss, hide/reop
 copy output, immutable full-input pixels, crop/aspect ratio, history and viewport
 preservation. `.compare.before.png`/`.compare.after.png` and cropped variants are
 actual software-window evidence, not native compositor acceptance.
+
+### Shared editor navigation (105)
+
+`NKSHOT_TEST_COPY_EDITOR=1 NKSHOT_TEST_COMPARE_EDITOR=1
+NKSHOT_TEST_NAVIGATION_EDITOR=1` checks real wheel bursts and pointer anchoring,
+middle-button pan with unchanged drawing tool/history, Fit/100%, focused SpinBox
+shortcut guard, cropped DPR2 image, focus cancellation and resized bounds. Evidence
+suffixes include `.navigation-detail.png` and `.navigation-fit.png`.
+
+### Explicit QML garbage collection (105)
+
+Add `NKSHOT_TEST_GC_WINDOWS=1` to local-media/copy-editor checks. Before video
+import, the helper calls the real Quick Note, Color Picker and Scroll Preview
+invokables through JS, drops their wrappers, then performs two GC/deferred-delete
+cycles. It verifies C++ ownership, Quick Note visible/hidden/reopened draft and
+normal Color Picker/Scroll Preview close destruction. Actual frame-pin Edit and
+Done flows also check GC survival and edited-pin close destruction. This caught
+a real pre-existing visible-window collection bug before the ownership fix.

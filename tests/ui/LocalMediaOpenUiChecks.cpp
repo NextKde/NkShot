@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Actual local-file dialogs and decoders, using generated nonpersonal fixtures.
 #include "LocalMediaOpenUiChecks.h"
+#include "WindowOwnershipUiChecks.h"
 #include "VideoAnnotationsUiChecks.h"
 #include "SpectacleCore.h"
 #include "RecentMediaModel.h"
@@ -376,6 +377,10 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_Plus,Qt::ControlModifier);
         if(!capture(QStringLiteral(".long.png")))return fail(QStringLiteral("Long image zoomed evidence failed"));
     }
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_GC_WINDOWS")) {
+        QString ownershipFailure;
+        if(!WindowOwnershipUiChecks::run(viewer(), &ownershipFailure))return fail(ownershipFailure);
+    }
     const auto movie=qEnvironmentVariable("NKSHOT_TEST_LOCAL_MEDIA_VIDEO",QStringLiteral("/logs/playback062.mp4"));
     const bool webm=QFileInfo(movie).suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     const auto movieBytes=bytes(movie);
@@ -408,7 +413,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!select(movie)||!core->videoMode()||core->currentVideo()!=QUrl::fromLocalFile(movie))
             return fail(QStringLiteral("Original video reopen after Save As failed"));
     }
-    sizeViewer();QQuickItem *recording=nullptr;QObject *player=nullptr;
+    sizeViewer();QPointer<QQuickItem> recording;QPointer<QObject> player;
     if(!QTest::qWaitFor([&]{recording=visual(viewer()->contentItem(),QStringLiteral("nkshotRecordingView"));
         player=recording?recording->findChild<QObject *>(QStringLiteral("nkshotMediaPlayer")):nullptr;
         return player&&recording->property("hasContent").toBool();},15000))return fail(QStringLiteral("Imported MP4 did not really decode in Qt"));
@@ -448,7 +453,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     if(!click(QStringLiteral("nkshotPlaybackSettings"))||!capture(QStringLiteral(".frame-menu.png"))
         ||!click(QStringLiteral("nkshotExtractVideoFrame")))
         return fail(QStringLiteral("Frame extraction entry unavailable"));
-    PinnedImageWindow *framePin=nullptr;
+    QPointer<PinnedImageWindow> framePin;
     if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows()) {
         if(w->objectName()==QStringLiteral("nkshotVideoFramePin"))framePin=qobject_cast<PinnedImageWindow *>(w);
     }return framePin&&framePin->isVisible();},2000))return fail(QStringLiteral("Decoded frame pin not shown"));
@@ -456,6 +461,11 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     auto sink=software?software->property("sink").value<QVideoSink *>():nullptr;
     if(!sink||player->property("playing").toBool()||framePin->snapshot()!=sink->videoFrame().toImage())
         return fail(QStringLiteral("Extracted frame differs from paused decoded pixels"));
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_GC_WINDOWS")) {
+        if(QQmlEngine::objectOwnership(framePin)!=QQmlEngine::CppOwnership)return fail(QStringLiteral("Frame pin is not C++ owned"));
+        viewer()->engine()->collectGarbage();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);QTest::qWait(100);
+        if(!framePin)return fail(QStringLiteral("Visible frame pin collected after QML returned it"));
+    }
     const auto extracted=framePin->snapshot();
     framePin->copyImage();
     if(application.clipboard()->image()!=extracted||core->currentVideo()!=QUrl::fromLocalFile(movie)
@@ -551,6 +561,11 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QPointer<ImageCopyEditor> editor;
         if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows())if(auto e=qobject_cast<ImageCopyEditor *>(w))editor=e;
             return editor&&editor->isVisible()&&editor->status()==QQuickView::Ready;},2000))return fail(QStringLiteral("Independent editor did not load"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_GC_WINDOWS")) {
+            if(QQmlEngine::objectOwnership(editor)!=QQmlEngine::CppOwnership)return fail(QStringLiteral("Copy editor is not C++ owned"));
+            viewer()->engine()->collectGarbage();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);QTest::qWait(100);
+            if(!framePin||!editor)return fail(QStringLiteral("Visible pin/editor collected after QML returned them"));
+        }
         editor->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(900,640));QTest::qWait(150);
         if(editor->document()==core->annotationDocument()||!samePixels(editor->document()->renderToImage(),extracted)
             ||framePin->editCopy()!=editor)return fail(QStringLiteral("Editor did not isolate/reuse its own document"));
@@ -661,7 +676,15 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||core->annotationDocument()->renderToImage()!=mainImage||core->annotationDocument()->undoStackDepth()!=mainDepth
             ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
             return fail(QStringLiteral("Independent result altered original pin/main media/history"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_GC_WINDOWS")) {
+            if(QQmlEngine::objectOwnership(result)!=QQmlEngine::CppOwnership)return fail(QStringLiteral("Edited pin is not C++ owned"));
+            for(int round=0;round<2;++round) {
+                viewer()->engine()->collectGarbage();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);QTest::qWait(50);
+            }
+            if(!result||!framePin||!samePixels(result->snapshot(),edited))return fail(QStringLiteral("GC destroyed a visible edited/source pin"));
+        }
         result->close();
+        if(!QTest::qWaitFor([&]{return result.isNull();},1000))return fail(QStringLiteral("Edited pin did not release after close"));
         auto fresh=qobject_cast<ImageCopyEditor *>(framePin->editCopy());
         if(!fresh||fresh->document()->undoStackDepth()!=0||!samePixels(fresh->document()->renderToImage(),extracted))
             return fail(QStringLiteral("New edit session reused an old edited copy"));
@@ -698,7 +721,79 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             qInfo()<<"104 actual comparison hold/Space/cancel/focus/hide/copy, crop/alpha/DPR2 and source/history preservation passed";
         }
 
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_NAVIGATION_EDITOR")) {
+            QImage large(1600,2400,QImage::Format_RGB32);large.fill(Qt::white);
+            {QPainter paint(&large);paint.setPen(QColor("#182432"));QFont font;font.setPixelSize(48);paint.setFont(font);
+                for(int row=0;row<12;++row){paint.fillRect(40,row*200+20,1520,160,row%2?QColor("#edf2fb"):QColor("#e1eaf8"));paint.drawText(QRect(60,row*200+20,1480,160),Qt::AlignCenter,QStringLiteral("SECTION %1 · Capture details").arg(row+1));}}
+            large.setDevicePixelRatio(2);
+            QPointer<ImageCopyEditor> navEditor=new ImageCopyEditor(large,viewer()->engine());
+            navEditor->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(820,640));navEditor->show();navEditor->requestActivate();
+            if(!QTest::qWaitFor([&]{return QGuiApplication::focusWindow()==navEditor;},1500))return fail(QStringLiteral("Navigation window focus unavailable"));
+            navEditor->document()->cropCanvas(QRectF(30,40,650,900));navEditor->document()->tool()->setType(AnnotationTool::FreehandTool);QTest::qWait(150);
+            auto nav=visual(navEditor->contentItem(),QStringLiteral("nkshotCopyEditorNavigation"));
+            auto view=visual(navEditor->contentItem(),QStringLiteral("nkshotCopyEditorViewport"));
+            auto target=nav?qobject_cast<QQuickItem *>(nav->property("targetItem").value<QObject *>()):nullptr;
+            const auto navHit=[&](const QString &name){auto item=visual(navEditor->contentItem(),name);if(!item||!item->isVisible()||!item->isEnabled())return false;
+                QTest::mouseClick(navEditor,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());QTest::qWait(80);return true;};
+            if(!nav||!view||!target||!navHit(QStringLiteral("nkshotCopyEditorActualSize"))||qAbs(nav->property("currentZoom").toReal()-1)>.001)
+                return fail(QStringLiteral("100 percent document zoom unavailable"));
+            const auto pixels=navEditor->document()->renderToImage();const auto depth=navEditor->document()->undoStackDepth();
+            const auto tool=navEditor->document()->tool()->type();
+            const QPointF anchor=view->mapToScene(QPointF(view->width()*.52,view->height()*.55));
+            const auto wheel=[&](int angle,Qt::KeyboardModifiers mods){QWheelEvent event(anchor,navEditor->mapToGlobal(anchor.toPoint()),QPoint(),QPoint(0,angle),Qt::NoButton,mods,Qt::NoScrollPhase,false);QCoreApplication::sendEvent(navEditor,&event);};
+            for(int i=0;i<4;++i){wheel(120,Qt::ControlModifier);QTest::qWait(80);}
+            if(nav->property("currentZoom").toReal()<2)return fail(QStringLiteral("Actual Ctrl wheel did not zoom"));
+            wheel(-120,Qt::NoModifier);wheel(-120,Qt::ShiftModifier);QTest::qWait(100);
+            const auto anchored=target->mapFromScene(anchor);
+            wheel(120,Qt::ControlModifier);wheel(120,Qt::ControlModifier);QTest::qWait(150);
+            if(QLineF(anchored,target->mapFromScene(anchor)).length()>1.2)return fail(QStringLiteral("Rapid wheel zoom lost pointer anchor"));
+            const auto panStart=QPointF(view->property("contentX").toReal(),view->property("contentY").toReal());
+            const auto start=anchor.toPoint();QTest::mousePress(navEditor,Qt::MiddleButton,Qt::NoModifier,start);
+            for(int i=1;i<=5;++i)QTest::mouseMove(navEditor,start-QPoint(i*10,i*8),15);
+            if(!nav->property("panActive").toBool())return fail(QStringLiteral("Middle button pan did not activate"));
+            QTest::mouseRelease(navEditor,Qt::MiddleButton,Qt::NoModifier,start-QPoint(50,40));QTest::qWait(80);
+            if(nav->property("panActive").toBool()||qAbs(view->property("contentX").toReal()-panStart.x()-50)>1||qAbs(view->property("contentY").toReal()-panStart.y()-40)>1
+                ||navEditor->document()->undoStackDepth()!=depth||navEditor->document()->tool()->type()!=tool||!samePixels(navEditor->document()->renderToImage(),pixels))
+                return fail(QStringLiteral("Temporary pan changed pixels, tool, history or distance"));
+            if(!navHit(QStringLiteral("nkshotCopyEditorActualSize"))||!navEditor->grabWindow().save(screenshot+QStringLiteral(".navigation-detail.png")))return false;
+            auto stroke=visual(navEditor->contentItem(),QStringLiteral("nkshotStrokeWidth"));
+            auto text=stroke?qobject_cast<QQuickItem *>(stroke->property("contentItem").value<QObject *>()):nullptr;
+            if(!text)return fail(QStringLiteral("Actual text input unavailable for zoom shortcut guard"));
+            text->forceActiveFocus();QTest::qWait(50);const auto zoom=nav->property("currentZoom").toReal();
+            QTest::keyClick(navEditor,Qt::Key_0,Qt::ControlModifier);QTest::keyClick(navEditor,Qt::Key_1,Qt::ControlModifier);QTest::qWait(80);
+            if(nav->property("currentZoom").toReal()!=zoom)return fail(QStringLiteral("Zoom shortcut stole text-input focus"));
+            if(!navHit(QStringLiteral("nkshotCopyEditorZoomOut")))return fail(QStringLiteral("Zoom action inaccessible after text entry"));
+            QTest::keyClick(navEditor,Qt::Key_1,Qt::ControlModifier);QTest::qWait(80);
+            if(qAbs(nav->property("currentZoom").toReal()-1)>.001){qWarning()<<"Zoom shortcut focus"<<navEditor->activeFocusItem()<<nav->property("textInputFocused")<<nav->property("currentZoom");return fail(QStringLiteral("Ctrl+1 did not restore document zoom"));}
+            QTest::keyClick(navEditor,Qt::Key_0,Qt::ControlModifier);QTest::qWait(80);
+            if(view->property("contentWidth").toReal()>view->width()+1||view->property("contentHeight").toReal()>view->height()+1)
+                return fail(QStringLiteral("Fit did not contain cropped long image"));
+            wheel(12000,Qt::ControlModifier);QTest::qWait(100);
+            if(qAbs(nav->property("currentZoom").toReal()-4)>.001)return fail(QStringLiteral("Zoom upper bound failed"));
+            wheel(-12000,Qt::ControlModifier);QTest::qWait(100);
+            if(qAbs(nav->property("currentZoom").toReal()-nav->property("fitZoom").toReal())>.001)return fail(QStringLiteral("Zoom lower bound failed"));
+            navEditor->grabWindow().save(screenshot+QStringLiteral(".navigation-fit.png"));
+            if(!compareEditor(navEditor,large,QStringLiteral(".navigation-compare")))return fail(QStringLiteral("Navigation comparison state regression"));
+            navHit(QStringLiteral("nkshotCopyEditorZoomIn"));QTest::mousePress(navEditor,Qt::MiddleButton,Qt::NoModifier,start);viewer()->requestActivate();
+            if(!QTest::qWaitFor([&]{return !nav->property("panActive").toBool();},1500))return fail(QStringLiteral("Pan stuck after focus loss"));
+            QTest::mouseRelease(navEditor,Qt::MiddleButton,Qt::NoModifier,start);navEditor->requestActivate();QTest::qWait(80);
+            navEditor->resize(400,400);QTest::qWait(100);
+            if(view->property("contentX").toReal()<0||view->property("contentY").toReal()<0||view->property("contentX").toReal()>qMax(0.,view->property("contentWidth").toReal()-view->width())+1
+                ||view->property("contentY").toReal()>qMax(0.,view->property("contentHeight").toReal()-view->height())+1)return fail(QStringLiteral("Resized view escaped content bounds"));
+            navEditor->document()->undo();navEditor->close();if(!QTest::qWaitFor([&]{return navEditor.isNull();},1500))return fail(QStringLiteral("Navigation marked document modified"));
+            QImage veryLong(128,32000,QImage::Format_RGB32);veryLong.fill(QColor("#d8e7f8"));
+            navEditor=new ImageCopyEditor(veryLong,viewer()->engine());navEditor->resize(400,400);navEditor->show();QTest::qWait(150);
+            auto tiny=visual(navEditor->contentItem(),QStringLiteral("nkshotCopyEditorViewport"));auto tinyNav=visual(navEditor->contentItem(),QStringLiteral("nkshotCopyEditorNavigation"));
+            if(!tiny||!tinyNav||tinyNav->property("currentZoom").toReal()>=.01||tinyNav->property("currentZoom").toReal()<=0
+                ||tiny->property("contentHeight").toReal()>tiny->height()+1){qWarning()<<"Long Fit"<<(tinyNav?tinyNav->property("currentZoom"):QVariant())<<(tinyNav?tinyNav->property("fitZoom"):QVariant())<<(tiny?tiny->size():QSizeF())<<(tiny?tiny->property("contentHeight"):QVariant())<<navEditor->document()->canvasRect();return fail(QStringLiteral("32000-pixel image cannot truly Fit below one percent"));}
+            auto tinyLabel=visual(navEditor->contentItem(),QStringLiteral("nkshotCopyEditorActualSize"));
+            if(!tinyLabel||tinyLabel->property("text").toString()==QStringLiteral("0%"))return fail(QStringLiteral("Fractional Fit zoom misleadingly displays zero"));
+            navEditor->grabWindow().save(screenshot+QStringLiteral(".navigation-long-fit.png"));
+            navEditor->close();if(!QTest::qWaitFor([&]{return navEditor.isNull();},1000))return fail(QStringLiteral("Unedited long image navigation did not close"));
+            qInfo()<<"105 actual anchored wheel, rapid zoom, middle pan, Fit/100%, text guard, crop/DPR2, focus cancellation and comparison passed";
+        }
     }
+    if(!framePin||!recording||!player)return fail(QStringLiteral("Media UI object retired before cleanup"));
     framePin->close();
     QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
     if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip")))return fail(QStringLiteral("Imported MP4 clip entry unavailable"));

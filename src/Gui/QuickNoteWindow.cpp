@@ -22,6 +22,8 @@ private: QMutex mutex;QImage value;
 static quint64 noteId=0;
 QuickNoteWindow::QuickNoteWindow(QQmlEngine *engine):QQuickView(engine,nullptr),m_engine(engine),m_provider(new NoteImageProvider),m_providerId(QStringLiteral("nkshotnote%1").arg(++noteId))
 {
+    // C++ owns close/draft lifetime; QML return values must not become GC-owned.
+    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     setObjectName(QStringLiteral("nkshotQuickNoteWindow"));setTitle(i18nc("@title:window","Quick Note — NkShot"));
     setMinimumSize({400,480});setResizeMode(SizeRootObjectToView);
     engine->addImageProvider(m_providerId,m_provider);

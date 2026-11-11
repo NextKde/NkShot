@@ -25,6 +25,8 @@
 ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool annotationMode)
     : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this)), m_originalImage(image.copy()), m_annotationMode(annotationMode)
 {
+    // C++ owns close/draft lifetime; QML return values must not become GC-owned.
+    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     connect(this, &QWindow::activeChanged, this, [this] { if (!isActive()) endComparison(); });
     connect(this, &QWindow::visibleChanged, this, [this](bool visible) { if (!visible) endComparison(); });
     setObjectName(QStringLiteral("nkshotImageCopyEditor"));

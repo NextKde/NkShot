@@ -51,6 +51,8 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
     : QQuickView(engine,nullptr),m_engine(engine),m_backend(new ScrollFrameKWin(this)),
       m_controller(new ScrollCaptureController(m_backend,[this](quint64 ticket,QRect rect){return m_backend->request(ticket,m_screen,rect);},[this]{m_backend->cancel();},this))
 {
+    // C++ owns close/draft lifetime; QML return values must not become GC-owned.
+    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     setObjectName(QStringLiteral("nkshotScrollPreview"));
     setTitle(i18nc("@title:window","Manual scrolling capture • Technical preview"));
     setFlags(Qt::Window|Qt::WindowStaysOnTopHint);

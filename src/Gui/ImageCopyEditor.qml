@@ -11,7 +11,9 @@ QQC.Pane {
     padding: 12
     property real zoom: 0
     readonly property var document: copyEditor.document
-    readonly property real fitZoom: Math.min(1, Math.max(0.01, Math.min((canvas.width-24)/document.canvasRect.width, (canvas.height-24)/document.canvasRect.height)))
+    readonly property real fitZoom: document.canvasRect.width > 0 && document.canvasRect.height > 0
+        && canvas.width > 24 && canvas.height > 24
+        ? Math.min(1, (canvas.width - 24) / document.canvasRect.width, (canvas.height - 24) / document.canvasRect.height) : 1
     readonly property real viewZoom: zoom > 0 ? zoom : fitZoom
     palette.text: Kos.AppTheme.paletteText
     palette.buttonText: Kos.AppTheme.paletteText
@@ -91,6 +93,19 @@ QQC.Pane {
                     active: !copyEditor.annotationMode && root.document.tool.type === AnnotationTool.CropTool
                 }
             }
+            ImageViewportNavigation {
+                id: navigation
+                objectName: "nkshotCopyEditorNavigation"
+                anchors.fill: parent
+                viewport: view
+                imageItem: editor
+                zoom: root.viewZoom
+                fitZoom: root.fitZoom
+                fitMode: root.zoom <= 0
+                enabled: !copyEditor.comparing
+                onZoomRequested: value => root.zoom = value
+                onFitRequested: root.zoom = 0
+            }
             Rectangle {
                 id: comparisonLayer
                 objectName: "nkshotCopyEditorBeforeLayer"
@@ -135,10 +150,20 @@ QQC.Pane {
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
-            ActionButton { enabled: !copyEditor.comparing; text: i18nc("@action", "Fit"); onClicked: root.zoom = 0 }
-            ActionButton { objectName: "nkshotCopyEditorZoomOut"; enabled: !copyEditor.comparing; text: "−"; Accessible.name: i18nc("@action", "Zoom out"); onClicked: root.zoom = Math.max(root.fitZoom, root.viewZoom / 1.25) }
-            QQC.Label { Layout.preferredWidth: 45; horizontalAlignment: Text.AlignHCenter; text: copyEditor.comparing ? i18nc("@info", "Fit") : Math.round(root.viewZoom*100)+"%"; color: Kos.AppTheme.mutedText }
-            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: root.zoom = Math.min(4, root.viewZoom * 1.25) }
+            ActionButton { objectName: "nkshotCopyEditorFit"; enabled: !copyEditor.comparing; text: i18nc("@action", "Fit"); QQC.ToolTip.visible: hovered; QQC.ToolTip.text: i18nc("@info", "Fit canvas (Ctrl+0)"); onClicked: navigation.fit() }
+            ActionButton { objectName: "nkshotCopyEditorZoomOut"; enabled: !copyEditor.comparing; text: "−"; Accessible.name: i18nc("@action", "Zoom out"); onClicked: navigation.step(1 / 1.25) }
+            ActionButton {
+                objectName: "nkshotCopyEditorActualSize"
+                enabled: !copyEditor.comparing
+                Layout.preferredWidth: 62
+                leftPadding: 4; rightPadding: 4
+                text: copyEditor.comparing ? i18nc("@info", "Fit") : (root.viewZoom < 0.01 ? (root.viewZoom * 100).toPrecision(2) : Math.round(root.viewZoom * 100)) + "%"
+                Accessible.name: i18nc("@action", "Reset zoom to 100 percent")
+                QQC.ToolTip.visible: hovered
+                QQC.ToolTip.text: i18nc("@info", "Reset zoom to 100% (Ctrl+1). Ctrl+wheel zooms; middle-drag pans.")
+                onClicked: navigation.zoomTo(1)
+            }
+            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: navigation.step(1.25) }
             ActionButton {
                 id: compareButton
                 objectName: "nkshotCopyEditorCompare"

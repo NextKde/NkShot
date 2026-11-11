@@ -42,6 +42,8 @@ PinnedImageWindow::PinnedImageWindow(const QImage &image, QQmlEngine *engine)
     : QQuickView(engine, nullptr), m_image(image),
       m_providerId(QStringLiteral("nkshotpin%1").arg(++nextPin)), m_sharedEngine(engine)
 {
+    // C++ owns close/draft lifetime; QML return values must not become GC-owned.
+    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     setObjectName(QStringLiteral("nkshotPinnedImage"));
     setTitle(i18nc("@title:window", "Pinned Image - NkShot"));
     setFlags(Qt::Window | Qt::WindowStaysOnTopHint);

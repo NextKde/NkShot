@@ -16,6 +16,19 @@ def read(path):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_shared_editor_navigation_is_view_only(self):
+        nav = read('src/Gui/ImageViewportNavigation.qml')
+        editor = read('src/Gui/ImageCopyEditor.qml')
+        self.assertIn('acceptedButtons: Qt.MiddleButton', nav)
+        self.assertIn('textInputFocused', nav)
+        self.assertIn('mapFromItem', nav)
+        self.assertIn('cancelPan', nav)
+        self.assertNotIn('SpectacleCore', nav)
+        self.assertNotIn('AnnotationDocument', nav)
+        self.assertIn('nkshotCopyEditorActualSize', editor)
+        self.assertIn('enabled: !copyEditor.comparing', editor)
+        self.assertIn('Gui/ImageViewportNavigation.qml', read('src/CMakeLists.txt'))
+
     def test_before_preview_is_immutable_and_output_safe(self):
         h = read('src/Gui/ImageCopyEditor.h')
         cpp = read('src/Gui/ImageCopyEditor.cpp')
@@ -294,6 +307,11 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('QIODevice::WriteOnly|QIODevice::NewOnly', start)
         self.assertIn('m_ownedPreparedOutput->identityMatches()', start)
         self.assertIn('if (!stream)', start)
+
+    def test_qml_returned_windows_keep_cpp_lifetime(self):
+        for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow'):
+            source = read('src/Gui/' + name + '.cpp')
+            self.assertIn('QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership)', source)
 
     def test_recording_callbacks_are_scoped_and_connected_once(self):
         source = read('src/Platforms/VideoPlatformWayland.cpp')
