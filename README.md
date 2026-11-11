@@ -3,6 +3,9 @@
 A macOS-inspired QML interface fork of KDE Spectacle for the KDE Plasma desktop.
 This is an early compiled prototype, not a release-tested product or an Apple product.
 
+See the [capability matrix](docs/capability-matrix.md) for the 1Capture comparison
+and separate implementation, automated-test and real-KDE acceptance status.
+
 ## Current scope
 
 - Canonical NextKde Kos.Ui floating liquid panels with same-window image sampling,
@@ -13,6 +16,7 @@ This is an early compiled prototype, not a release-tested product or an Apple pr
 - Existing Spectacle capture, recording, annotations, exports and shortcuts retained.
 - Local English/Chinese OCR results, text selection/copy and UTF-8 saving.
 - Separate-image pinning, conservative overlap composition and explicit vertical stacking.
+- Non-destructive sharing copies: proportional resizing, backgrounds and text watermark.
 - Local video/animation playback with software-frame fallback and failure/retry UI.
 
 These changes do not add compositor blur, replace

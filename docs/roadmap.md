@@ -1,46 +1,48 @@
-# NkShot delivery plan
+# NkShot product delivery plan
 
-## 1. Screenshot and image-editing MVP (current scope)
+The goal extends beyond a Spectacle reskin: retain reliable capture/editing and
+add useful 1Capture-style workflows with the shared NextKde visual language.
+Use the [capability matrix](capability-matrix.md) as the single status source;
+code, automated checks and real KDE acceptance are separate columns.
 
-Retain Spectacle's existing capture and KQuickImageEditor pipeline. The first
-release should let a user capture a region, window or screen, enter Edit, crop,
-add arrows/shapes/text, obscure a region, undo/redo, then save or copy the result.
-The visual changes are presentation, not a rewrite of image processing.
+## Working development baseline
 
-### Release gates
+The project builds with Qt 6.11+, KF6 6.30+ and matching Plasma/KPipeWire 6.8
+components. Synthetic-fixture interaction tests cover core editing/export, local
+eng/chi_sim OCR, pins, conservative image composition/stacking, sharing-copy
+transforms and actual local media playback. This is not a release-tested product.
+See [iterations](iterations.md), [building](building.md) and
+[recording boundaries](recording-verification.md) for exact evidence/limits.
 
-1. Configure/build with Qt >= 6.11, KF >= 6.30 and matching Plasma 6.8 libraries.
-2. Run upstream CTest and generated-import QML lint, plus our static identity tests.
-3. Stage installation into an empty directory and compare its manifest against
-   the installed Spectacle package: no overlapping files outside shared dirs.
-4. In KWin Wayland, launch both applications and verify separate D-Bus services,
-   configurations, desktop entries and notifications, with normal permissions.
-5. Capture a known test image; add text/arrow, crop, undo, redo, save PNG and copy.
-   Reopen both outputs and check dimensions, annotation appearance and clipboard.
-6. Cancel capture/edit, repeat capture, then test dark/light themes, keyboard-only
-   navigation, mixed-DPI multi-screen selection and narrow viewport layout.
+## Next substantive workflows
 
-Static checks are useful but **do not satisfy these runtime gates**. A development binary has now compiled and passed the filename test. Capture,
-editing interaction and visual gates remain pending; this is not a release build.
+1. **Rolling capture:** verify a fixed-region, manually scrolled capture session
+   first in a real authorized KDE environment. Require stable coordinates/DPI,
+   accepted-frame progress, cancellation and conservative alignment. Only then
+   assess automatic and horizontal scrolling. File composition is not scrolling.
+2. **Non-destructive sharing:** background/watermark copies and reusable image
+   processing must preserve original documents/history and verify exported pixels.
+3. **Local text workflows:** pin Live Text and practical OCR usability. Translation
+   is requested separately and is not yet implemented. Prefer local processing;
+   any external provider requires explicit opt-in identifying data/destination.
+4. **Recording beyond capture:** actual KWin/PipeWire recording/A/V acceptance,
+   then recording annotation, click effects and camera overlays where feasible.
+5. **Other verified reference gaps:** quick notes, dedicated color picking,
+   spotlight/magnifier and AI erase/background removal. Do not label ordinary
+   editor tools as these workflows or add fake placeholders.
 
-## 2. Recording
+## Release gates
 
-The existing KPipeWire/Wayland recording backend and controls remain in source.
-After the screenshot MVP is verified, validate region/screen/window recording,
-audio availability, stop/save, interruption handling and repeated sessions.
-Confirm exported video playback and that floating UI is not included in output.
-Do not imply a video editor exists: this phase is recording, not video editing.
+- Build, all CTest tests, generated-import lint where available and static checks.
+- Stage-install manifest isolation from Spectacle; real side-by-side D-Bus,
+  settings, shortcuts, notifications and application identity checks.
+- Actual region/window/screen captures with normal KWin permissions, repeated
+  capture/cancel, mixed-DPI monitors and saved/clipboard pixel verification.
+- Full edit interaction and native save/overwrite/portal behavior.
+- Real region/window/screen recording, stop/save, audio/device/permission failures,
+  A/V synchronization, output decode and accidental floating-UI capture checks.
+- Real GPU liquid-material screenshots plus reduced-transparency/software fallback,
+  dark/light/narrow layouts and keyboard accessibility.
 
-## 3. OCR and translation
-
-The selected upstream revision already contains a Tesseract OCR integration.
-It is retained but **not validated or delivered as a working NkShot feature**.
-Validate missing-language-data behavior, Simplified Chinese/English recognition,
-long images, timeouts, cancellation and repeated requests before advertising it.
-Use local OCR by default and show recognized text for correction/copying.
-
-Translation is not implemented. Prefer a local provider where practical. If an
-online provider is added, require explicit opt-in identifying the provider and
-text being sent; never upload screenshots or recognized private text silently.
-Keep credentials outside the repository. Translation errors must not lose the
-recognized text or interrupt basic capture/edit/save.
+Do not replace pending gates with synthetic screenshots, encoder initialization
+or a count of commits/iterations. Never weaken compositor permission checks.

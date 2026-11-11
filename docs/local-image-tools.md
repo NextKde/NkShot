@@ -81,3 +81,26 @@ editable document and original files still retain the original pixels/undo histo
 this does not erase originals, backups, metadata or copies elsewhere. Changing
 the rectangle's fill later can make it translucent again. Pixelation/blur remain
 available but should not be assumed to make all sensitive content unrecoverable.
+
+### Background styling and text watermark
+
+More → Share a copy → Background & watermark opens three local presets (Light, Dark, Aurora),
+padding in physical pixels, optional single-line watermark and rounded-corner
+choice. Create copy produces an independent preview with Copy/Save As. The
+current annotated image is flattened into that copy; originals/history are not
+replaced. A subtle shadow is included when padding permits. Rounded corners can
+hide pixels at the image corners, so disable that option when every corner matters.
+
+The reusable Qt ImageTransforms compositor outputs an opaque sRGB canvas,
+converting tagged input to sRGB and treating untagged input as sRGB. Transparent
+input is composited onto the chosen background. Output retains source DPR metadata
+while geometry is painted in physical pixels. Watermark input is limited to 120
+UTF-16 units, whitespace is normalized and text is elided if it cannot fit.
+This is basic local styling/text attribution, not an AI edit, logo watermark,
+custom uploaded background or a promise of complete 1Capture parity. No input is
+sent to an external service. Existing output-size limits still apply.
+
+The dialog shows output dimensions and disables Create when canvas limits would
+be exceeded. Reduce padding to recover without losing entered options. More is
+grouped by task: sharing, extracting text and combining images; recording mode
+only exposes recording-file actions rather than irrelevant image tools.

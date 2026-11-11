@@ -20,6 +20,13 @@ import org.kde.kquickimageeditor
  */
 EmptyPage {
     id: root
+    component TaskMenu: QQC.Menu {
+        property bool imageOnly: true
+        width: Math.min(260, root.width - 32)
+        palette: moreMenu.palette
+        padding: 6
+        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5 }
+    }
     focus: true
     palette.windowText: Kos.AppTheme.paletteText
     palette.text: Kos.AppTheme.paletteText
@@ -143,7 +150,10 @@ EmptyPage {
                 onClicked: moreMenu.popup()
                 QQC.Menu {
                     id: moreMenu
+                    objectName: "nkshotMoreMenu"
                     width: Math.min(240, root.width - 32)
+                    padding: 6
+                    y: moreButton.height + 6
                     palette.windowText: Kos.AppTheme.paletteText
                     palette.text: Kos.AppTheme.paletteText
                     palette.buttonText: Kos.AppTheme.paletteText
@@ -151,121 +161,137 @@ EmptyPage {
                     palette.button: Kos.AppTheme.controlBackground
                     palette.light: Kos.AppTheme.border
                     palette.mid: Kos.AppTheme.border
-                    objectName: "nkshotMoreMenu"
-                    padding: 6
-                    background: Kos.KosSurface {
-                        fillColor: Kos.AppTheme.contentBackground
-                        radius: 14
-                        elevation: 0.5
-                    }
-                    y: moreButton.height + 6
-                    QQC.MenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
- action: SaveAsAction {} }
-                    QQC.MenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
-                        visible: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable
+                    delegate: QQC.MenuItem {
+                        objectName: subMenu ? "nkshotTask_" + subMenu.objectName : ""
+                        visible: !subMenu || !subMenu.imageOnly || !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
-                        action: OcrAction {}
+                        opacity: enabled ? 1 : 0.38
+                        icon.color: palette.buttonText
                     }
-                    QQC.Menu {
+                    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5 }
+                    TaskMenu {
+                        id: sharingMenu
+                        objectName: "nkshotSharingMenu"
+                        imageOnly: false
+                        title: SpectacleCore.videoMode ? i18nc("@action:menu", "Recording file") : i18nc("@action:menu", "Share a copy")
+                        icon.name: "document-share"
+                        QQC.MenuItem {
+                            action: SaveAsAction {}
+                            icon.color: palette.buttonText
+                        }
+                        QQC.MenuItem {
+                            visible: SpectacleCore.videoMode
+                            height: visible ? implicitHeight : 0
+                            action: CopyLocationAction {}
+                            icon.color: palette.buttonText
+                        }
+                        QQC.MenuItem {
+                            visible: !SpectacleCore.videoMode
+                            height: visible ? implicitHeight : 0
+                            text: i18nc("@action", "Export")
+                            icon.name: "document-share"
+                            icon.color: palette.buttonText
+                            onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
+                        }
+                        QQC.MenuSeparator { visible: !SpectacleCore.videoMode; height: visible ? implicitHeight : 0 }
+                        QQC.MenuItem {
+                            objectName: "nkshotBeautifyImageAction"
+                            visible: !SpectacleCore.videoMode
+                            height: visible ? implicitHeight : 0
+                            text: contextWindow.resizingImage ? i18nc("@info", "Preparing copy…") : i18nc("@action", "Background and watermark…")
+                            icon.name: "color-management"
+                            icon.color: palette.buttonText
+                            enabled: !contextWindow.resizingImage
+                            onTriggered: { beautifyPopup.sourceSize = contextWindow.imageSnapshotSize(); beautifyPopup.open() }
+                        }
+                        QQC.MenuItem {
+                            objectName: "nkshotResizeImageAction"
+                            visible: !SpectacleCore.videoMode
+                            height: visible ? implicitHeight : 0
+                            text: contextWindow.resizingImage ? i18nc("@info", "Preparing copy…") : i18nc("@action", "Resize a copy…")
+                            icon.name: "transform-scale"
+                            icon.color: palette.buttonText
+                            enabled: !contextWindow.resizingImage
+                            onTriggered: { resizePopup.sourceSize = contextWindow.imageSnapshotSize(); resizePopup.open() }
+                        }
+                    }
+                    TaskMenu {
                         id: ocrLanguageMenu
                         objectName: "nkshotOcrLanguageMenu"
-                        title: i18nc("@action:menu", "Extract text in…")
-                        enabled: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable && SpectacleCore.ocrStatus !== 1
-                        width: Math.min(240, root.width - 32)
-                        palette: moreMenu.palette
-                        padding: 6
+                        title: i18nc("@action:menu", "Extract text")
+                        icon.name: "document-scan"
                         property var languages: SpectacleCore.ocrAvailable ? SpectacleCore.ocrAvailableLanguages() : ({})
-                        background: Kos.KosSurface {
-                            fillColor: Kos.AppTheme.contentBackground
-                            radius: 14
-                            elevation: 0.5
+                        QQC.MenuItem {
+                            action: OcrAction {}
+                            text: i18nc("@action", "Use configured languages")
+                            icon.color: palette.buttonText
                         }
+                        QQC.MenuSeparator {}
                         Instantiator {
                             model: Object.keys(ocrLanguageMenu.languages).filter(function(code) { return code !== "osd" }).sort()
                             delegate: QQC.MenuItem {
                                 required property string modelData
                                 objectName: "nkshotOcrLanguage_" + modelData
                                 text: ocrLanguageMenu.languages[modelData]
-                                icon.name: "document-scan"
-                                icon.color: palette.buttonText
+                                enabled: SpectacleCore.ocrStatus !== 1
                                 onTriggered: SpectacleCore.startOcrExtraction(modelData)
                             }
-                            onObjectAdded: (index, object) => ocrLanguageMenu.insertItem(index, object)
+                            onObjectAdded: (index, object) => ocrLanguageMenu.insertItem(index + 2, object)
                             onObjectRemoved: (index, object) => ocrLanguageMenu.removeItem(object)
                         }
+                        QQC.Label {
+                            visible: !SpectacleCore.ocrAvailable
+                            width: 228
+                            height: visible ? implicitHeight : 0
+                            padding: visible ? 10 : 0
+                            text: i18nc("@info", "Local OCR is unavailable. Check that Tesseract and its language data are installed.")
+                            wrapMode: Text.Wrap
+                            color: Kos.AppTheme.mutedText
+                        }
                     }
-                    QQC.MenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
-                        visible: SpectacleCore.videoMode
-                        height: visible ? implicitHeight : 0
-                        action: CopyLocationAction {}
-                    }
-                    QQC.MenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
-                        visible: !SpectacleCore.videoMode
-                        height: visible ? implicitHeight : 0
-                        text: i18nc("@action", "Export")
-                        icon.name: "document-share"
-                        onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
+                    TaskMenu {
+                        objectName: "nkshotCombineMenu"
+                        title: i18nc("@action:menu", "Combine images")
+                        icon.name: "view-preview"
+                        QQC.MenuItem {
+                            objectName: "nkshotCombineImagesAction"
+                            text: contextWindow.combiningImages ? i18nc("@info", "Combining…") : i18nc("@action", "Match overlapping screenshots…")
+                            icon.name: "view-preview"
+                            icon.color: palette.buttonText
+                            enabled: !contextWindow.combiningImages
+                            onTriggered: contextWindow.combineImages()
+                        }
+                        QQC.MenuItem {
+                            objectName: "nkshotStackImagesAction"
+                            text: i18nc("@action", "Stack without overlap…")
+                            icon.name: "view-sort-descending"
+                            icon.color: palette.buttonText
+                            enabled: !contextWindow.combiningImages
+                            onTriggered: contextWindow.combineImages(true)
+                        }
                     }
                     QQC.MenuItem {
                         objectName: "nkshotPinImageAction"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
-                        text: i18nc("@action", "Pin Image")
+                        text: i18nc("@action", "Pin image")
                         icon.name: "window-pin"
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.pinImage()
                     }
-                    QQC.MenuItem {
-                        objectName: "nkshotResizeImageAction"
-                        text: contextWindow.resizingImage ? i18nc("@info", "Resizing…") : i18nc("@action", "Resize a copy…")
-                        icon.name: "transform-scale"
-                        icon.color: palette.buttonText
-                        enabled: !SpectacleCore.videoMode && !contextWindow.resizingImage
-                        onTriggered: { resizePopup.sourceSize = contextWindow.imageSnapshotSize(); resizePopup.open() }
-                    }
-                    QQC.MenuItem {
-                        objectName: "nkshotCombineImagesAction"
-                        text: contextWindow.combiningImages ? i18nc("@action", "Combining images…") : i18nc("@action", "Combine screenshots…")
-                        icon.name: "view-preview"
-                        icon.color: palette.buttonText
-                        enabled: !contextWindow.combiningImages
-                        onTriggered: contextWindow.combineImages()
-                    }
-                    QQC.MenuItem {
-                        objectName: "nkshotStackImagesAction"
-                        text: i18nc("@action", "Stack images vertically…")
-                        icon.name: "view-sort-descending"
-                        icon.color: palette.buttonText
-                        enabled: !contextWindow.combiningImages
-                        onTriggered: contextWindow.combineImages(true)
-                    }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                         enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
+                        opacity: enabled ? 1 : 0.38
                         text: i18nc("@action", "New Recording")
                         icon.name: "media-record"
+                        icon.color: palette.buttonText
                         onTriggered: Qt.callLater(function() { RecordingModeMenu.popup(moreButton) })
                     }
                     QQC.MenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                         text: i18nc("@action", "Options")
                         icon.name: "configure"
+                        icon.color: palette.buttonText
                         onTriggered: Qt.callLater(function() { OptionsMenu.popup(moreButton) })
                     }
                 }
@@ -562,6 +588,11 @@ EmptyPage {
 
             }
         }
+    }
+
+    BeautifyImagePopup {
+        id: beautifyPopup
+        onCreateCopy: (padding, style, watermark, rounded) => contextWindow.beautifyImageCopy(padding, style, watermark, rounded)
     }
 
     ResizeImagePopup {

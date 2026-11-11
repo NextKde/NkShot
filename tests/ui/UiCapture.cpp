@@ -4,6 +4,7 @@
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/OcrTextWindow.h"
 #include "Gui/InlineMessageModel.h"
+#include "Imaging/ImageTransforms.h"
 #include "Gui/CaptureWindow.h"
 #include "Gui/SelectionEditor.h"
 #include "Gui/Selection.h"
@@ -45,6 +46,23 @@ static QQuickItem *visualItem(QQuickItem *root, const QString &name)
     return nullptr;
 }
 
+static bool openTaskMenu(ViewerWindow *viewer, const QString &name)
+{
+    auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+    auto task = viewer->rootObject()->findChild<QObject *>(name);
+    if (!menu || !task || !QMetaObject::invokeMethod(menu, "open")) { qWarning() << "Task lookup" << menu << task; return false; }
+    QTest::qWait(200);
+    auto row = visualItem(viewer->contentItem(), QStringLiteral("nkshotTask_") + name);
+    if (!row || !row->isVisible()) { qWarning() << "Task row" << row; return false; }
+    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+        row->mapToScene(QPointF(row->width()/2, row->height()/2)).toPoint());
+    const bool opened = QTest::qWaitFor([&] { return task->property("opened").toBool(); }, 1000);
+    qInfo() << "Task opened" << name << opened;
+    QTest::qWait(200);
+    viewer->grabWindow().save(qEnvironmentVariable("NKSHOT_TEST_UI_CAPTURE") + QStringLiteral(".task.png"));
+    return opened;
+}
+
 static bool samePixels(const QImage &a, const QImage &b)
 {
     if (a.isNull() || a.size() != b.size()) return false;
@@ -64,7 +82,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -222,18 +240,38 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
-            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE")) {
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU")) {
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU_VIDEO")) SpectacleCore::instance()->setVideoMode(true);
+                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(164); return; }
+                QTest::qWait(400);
+                const bool video = SpectacleCore::instance()->videoMode();
+                const auto share = visualItem(viewer->contentItem(), QStringLiteral("nkshotTask_nkshotSharingMenu"));
+                const auto text = visualItem(viewer->contentItem(), QStringLiteral("nkshotTask_nkshotOcrLanguageMenu"));
+                const auto combine = visualItem(viewer->contentItem(), QStringLiteral("nkshotTask_nkshotCombineMenu"));
+                if (!share || !text || !combine || !share->isVisible() || text->isVisible() == video || combine->isVisible() == video) {
+                    application.exit(165); return;
+                }
+                if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
+                qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
+                application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY")) {
+                const bool beautify = qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY");
+                const int presentationStyle = qEnvironmentVariableIntValue("NKSHOT_TEST_PRESENTATION_STYLE");
+                const bool limitTest = qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY_LIMIT");
+                const int presentationPadding = limitTest ? 0 : 48;
                 auto document = SpectacleCore::instance()->annotationDocument();
                 document->tool()->setType(AnnotationTool::RectangleTool);
+                document->tool()->setStrokeColor(QColor(QStringLiteral("#007aff")));
+                document->tool()->setStrokeWidth(3); document->tool()->setFillColor(Qt::transparent); document->tool()->setShadow(false);
                 document->beginItem({80, 80}); document->continueItem({220, 160}); document->finishItem();
                 const auto original = document->renderToImage();
                 const auto depth = document->undoStackDepth();
-                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
-                auto popup = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotResizePopup"));
+                auto popup = viewer->rootObject()->findChild<QObject *>(beautify ? QStringLiteral("nkshotBeautifyPopup") : QStringLiteral("nkshotResizePopup"));
                 auto openResize = [&] {
-                    if (!menu || !popup || !QMetaObject::invokeMethod(menu, "open")) return false;
-                    QTest::qWait(200);
-                    auto entry = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeImageAction"));
+                    if (!popup || !openTaskMenu(viewer, QStringLiteral("nkshotSharingMenu"))) return false;
+                    auto entry = visualItem(viewer->contentItem(), beautify ? QStringLiteral("nkshotBeautifyImageAction") : QStringLiteral("nkshotResizeImageAction"));
                     if (!entry) return false;
                     QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
                         entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
@@ -246,15 +284,40 @@ void installUiCaptureHook(QApplication &application)
                     || !samePixels(document->renderToImage(), original) || document->undoStackDepth() != depth || !openResize()) {
                     application.exit(141); return;
                 }
-                auto widthInput = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeWidth"));
-                auto create = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeCreate"));
-                auto field = widthInput ? widthInput->property("contentItem").value<QQuickItem *>() : nullptr;
-                if (!field || !create) { application.exit(142); return; }
-                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, field->mapToScene(QPointF(field->width()/2, field->height()/2)).toPoint());
-                QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
-                for (char c : QByteArray("320")) QTest::keyClick(viewer, c);
-                QTest::keyClick(viewer, Qt::Key_Tab);
-                if (widthInput->property("value").toInt() != 320) { application.exit(143); return; }
+                auto create = visualItem(viewer->contentItem(), beautify ? QStringLiteral("nkshotBeautifyCreate") : QStringLiteral("nkshotResizeCreate"));
+                if (!create) { application.exit(142); return; }
+                if (beautify) {
+                    if (limitTest) {
+                        if (create->isEnabled()) { application.exit(164); return; }
+                        viewer->grabWindow().save(destination + QStringLiteral(".limit.png"));
+                        auto padding = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationPadding"));
+                        auto field = padding ? padding->property("contentItem").value<QQuickItem *>() : nullptr;
+                        if (!field) { application.exit(165); return; }
+                        QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, field->mapToScene(QPointF(field->width()/2, field->height()/2)).toPoint());
+                        QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
+                        QTest::keyClick(viewer, Qt::Key_0); QTest::keyClick(viewer, Qt::Key_Tab);
+                        if (!create->isEnabled() || padding->property("value").toInt() != 0) { application.exit(166); return; }
+                    }
+                    auto style = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationStyle") + QString::number(presentationStyle));
+                    auto watermark = visualItem(viewer->contentItem(), QStringLiteral("nkshotPresentationWatermark"));
+                    if (!style || !watermark) { application.exit(162); return; }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, style->mapToScene(QPointF(style->width()/2,style->height()/2)).toPoint());
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, watermark->mapToScene(QPointF(watermark->width()/2,watermark->height()/2)).toPoint());
+                    QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
+                    for (char c : QByteArray("NkShot demo")) QTest::keyClick(viewer, c);
+                    if (watermark->property("text").toString() != QStringLiteral("NkShot demo") || !style->property("checked").toBool()) { application.exit(163); return; }
+                    QTest::qWait(200);
+                    viewer->grabWindow().save(destination + QStringLiteral(".configured.png"));
+                } else {
+                    auto widthInput = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeWidth"));
+                    auto field = widthInput ? widthInput->property("contentItem").value<QQuickItem *>() : nullptr;
+                    if (!field) { application.exit(142); return; }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, field->mapToScene(QPointF(field->width()/2, field->height()/2)).toPoint());
+                    QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
+                    for (char c : QByteArray("320")) QTest::keyClick(viewer, c);
+                    QTest::keyClick(viewer, Qt::Key_Tab);
+                    if (widthInput->property("value").toInt() != 320) { application.exit(143); return; }
+                }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
                     create->mapToScene(QPointF(create->width()/2, create->height()/2)).toPoint());
                 QPointer<PinnedImageWindow> preview;
@@ -262,10 +325,11 @@ void installUiCaptureHook(QApplication &application)
                     for (auto window : QGuiApplication::allWindows()) if (auto pin = qobject_cast<PinnedImageWindow *>(window)) preview = pin;
                     return preview && !viewer->resizingImage();
                 }, 5000)) { application.exit(144); return; }
-                const auto expected = original.scaled(320, qMax(1, qRound(double(original.height()) * 320 / original.width())), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                const auto expected = beautify ? NkShot::Imaging::composePresentation(original,
+                    {presentationPadding, NkShot::Imaging::PresentationStyle(presentationStyle), QStringLiteral("NkShot demo"), true}) : original.scaled(320, qMax(1, qRound(double(original.height()) * 320 / original.width())), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
                 if (!samePixels(preview->snapshot(), expected) || !samePixels(document->renderToImage(), original)
                     || document->undoStackDepth() != depth) { application.exit(145); return; }
-                preview->resize(440, 340); QTest::qWait(200);
+                preview->resize(beautify ? QSize(720, 540) : QSize(440, 340)); QTest::qWait(200);
                 auto copy = visualItem(preview->contentItem(), QStringLiteral("nkshotPinCopy"));
                 auto save = visualItem(preview->contentItem(), QStringLiteral("nkshotPinSave"));
                 if (!copy || !save) { application.exit(146); return; }
@@ -285,7 +349,7 @@ void installUiCaptureHook(QApplication &application)
                     || !samePixels(QImage(output), expected)) { application.exit(149); return; }
                 QTest::qWait(200);
                 if (!preview->grabWindow().save(destination)) { application.exit(150); return; }
-                qInfo() << "NkShot resize actual menu/cancel/width entry/preview/copy/PNG save and source-history isolation passed";
+                qInfo() << "NkShot sharing-copy actual menu/cancel/options/preview/copy/PNG save and source-history isolation passed; styled:" << beautify;
                 application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK")) {
@@ -457,11 +521,8 @@ void installUiCaptureHook(QApplication &application)
                     application.exit(92); return;
                 }
                 if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_LANGUAGE")) {
-                    auto parentMenu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
-                    if (parentMenu) QMetaObject::invokeMethod(parentMenu, "open");
-                    QTest::qWait(200);
                     auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotOcrLanguageMenu"));
-                    if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(108); return; }
+                    if (!menu || !openTaskMenu(viewer, QStringLiteral("nkshotOcrLanguageMenu"))) { application.exit(108); return; }
                     QTest::qWait(300);
                     auto entry = visualItem(viewer->contentItem(), QStringLiteral("nkshotOcrLanguage_")
                         + (chinese ? QStringLiteral("chi_sim") : QStringLiteral("eng")));
@@ -588,8 +649,7 @@ void installUiCaptureHook(QApplication &application)
                 const auto bottom = files.filePath(QStringLiteral("frame10.png"));
                 if (!files.isValid() || !expected.copy(0, 0, 320, stacking ? 300 : 360).save(top)
                     || !expected.copy(0, stacking ? 300 : 240, 320, stacking ? 300 : 360).save(bottom)) { application.exit(72); return; }
-                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
-                QMetaObject::invokeMethod(menu, "open"); QTest::qWait(200);
+                if (!openTaskMenu(viewer, QStringLiteral("nkshotCombineMenu"))) { application.exit(73); return; }
                 auto entry = visualItem(viewer->contentItem(), stacking ? QStringLiteral("nkshotStackImagesAction") : QStringLiteral("nkshotCombineImagesAction"));
                 if (!entry) { application.exit(73); return; }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());

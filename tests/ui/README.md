@@ -198,7 +198,7 @@ actual Retry click. Assertions cover stale frame/error clearing, format isolatio
 animated frames and recovered video frames, and untouched original inputs.
 Transitions assign the view source property; they do not simulate desktop capture.
 
-`NKSHOT_TEST_RESIZE=1` seeds an annotation and drives More/Resize, Escape cancel,
+`NKSHOT_TEST_RESIZE=1` seeds an annotation and drives More/Share a copy/Resize, Escape cancel,
 reopen, typed width, Create copy, clipboard and PNG Save As. It checks exact scaled
 pixels plus untouched source document/undo depth. The dialog is captured alongside
 the output with `.dialog.png`; run DARK and UI_SIZE=640x420 variants. Widget file
@@ -210,3 +210,18 @@ the Solid cover preset and verifies no selected-mark mutation. A real drag then
 checks opaque black interior, unchanged pixels beyond a boundary margin and exact
 undo/redo. Use a textured fixture and optionally COPY_SAVE with a fresh explicit
 nkshot-ui-test-* output path to verify clipboard and exported PNG pixels.
+
+`NKSHOT_TEST_BEAUTIFY=1` reuses the sharing-copy transaction test, with actual
+style-button and watermark-field interaction. `NKSHOT_TEST_PRESENTATION_STYLE`
+is 0=Light, 1=Dark, 2=Aurora. It verifies preview/clipboard/saved PNG against the
+core composition and unchanged source/history, including cancel/reopen. Run dark
+and 460×400 variants. `make_presentation_fixture.py` creates a clearly labeled
+synthetic input (Pillow and a configurable font path); it is not a screenshot of
+another application. Core tests cover dimensions, corner clipping, transparency,
+DPR, tagged P3→sRGB conversion, watermark/footer and invalid/bounded inputs.
+
+`NKSHOT_TEST_TASK_MENU=1` validates grouped image-task rows; add
+`NKSHOT_TEST_TASK_MENU_VIDEO=1` for recording-context filtering. Sharing, OCR
+language and composition tests open their task submenu through an actual row
+click. `NKSHOT_TEST_BEAUTIFY_LIMIT=1` uses a real 8192×200 image: default padding
+disables Create, then typed zero padding recovers, preserving all other options.

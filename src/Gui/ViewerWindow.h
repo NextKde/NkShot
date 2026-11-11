@@ -9,6 +9,8 @@
 #include "Gui/SpectacleWindow.h"
 #include <QPalette>
 #include <QPointer>
+#include <QImage>
+#include <functional>
 
 class ViewerWindowPrivate;
 
@@ -39,6 +41,7 @@ public:
     Q_INVOKABLE QQuickWindow *pinImage();
     Q_INVOKABLE QSize imageSnapshotSize() const;
     Q_INVOKABLE void resizeImageCopy(int width);
+    Q_INVOKABLE void beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded);
     bool resizingImage() const { return m_resizingImage; }
     Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);
     bool combiningImages() const { return m_combiningImages; }
@@ -54,6 +57,7 @@ private:
     explicit ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent = nullptr);
     ~ViewerWindow();
 
+    void createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure);
     void setMode(ViewerWindow::Mode mode);
     Q_SLOT void updateColor();
     Q_SLOT void updateMinimumSize();

@@ -6,6 +6,58 @@ using namespace NkShot::Imaging;
 class ImageTransformsTest : public QObject {
     Q_OBJECT
 private Q_SLOTS:
+    void sharingCanvasAndWatermark() {
+        QImage source(100, 60, QImage::Format_RGBA8888); source.fill(QColor("#2868b0"));
+        source.setDevicePixelRatio(1.5); source.setColorSpace(QColorSpace::SRgb);
+        const auto original = source;
+        PresentationOptions options{25, PresentationStyle::Aurora, QStringLiteral("Demo"), false};
+        const auto output = composePresentation(source, options);
+        QCOMPARE(output.size(), QSize(150, 146));
+        QCOMPARE(output.devicePixelRatio(), 1.5);
+        QCOMPARE(output.colorSpace(), QColorSpace(QColorSpace::SRgb));
+        QCOMPARE(output.pixelColor(25,25), source.pixelColor(0,0));
+        QCOMPARE(output.pixelColor(124,84), source.pixelColor(99,59));
+        QCOMPARE(source, original);
+        for (int y=0; y<output.height(); ++y) for (int x=0; x<output.width(); ++x) QCOMPARE(output.pixelColor(x,y).alpha(), 255);
+        options.watermark.clear();
+        QCOMPARE(composePresentation(source, options).size(), QSize(150,110));
+        options.rounded = true;
+        const auto rounded = composePresentation(source, options);
+        QVERIFY(rounded.pixelColor(25,25) != source.pixelColor(0,0));
+        QCOMPARE(rounded.pixelColor(75,55), source.pixelColor(50,30));
+        options.style = PresentationStyle::Dark;
+        QVERIFY(composePresentation(source, options).pixelColor(0,0).lightness() < 80);
+        options.style = PresentationStyle::Light;
+        QVERIFY(composePresentation(source, options).pixelColor(0,0).lightness() > 200);
+    }
+    void sharingCanvasCompositesTransparency() {
+        QImage source(100,60,QImage::Format_RGBA8888); source.fill(Qt::transparent);
+        const auto result = composePresentation(source, {0, PresentationStyle::Light, {}, false});
+        QCOMPARE(result.pixelColor(50,30).alpha(), 255);
+        QVERIFY(result.pixelColor(50,30).lightness() > 200);
+        QCOMPARE(source.pixelColor(50,30).alpha(), 0);
+    }
+    void sharingCanvasConvertsTaggedInput() {
+        QImage source(40,30,QImage::Format_RGBA8888); source.fill(QColor(120,70,200));
+        source.setColorSpace(QColorSpace::DisplayP3);
+        const auto expected = source.convertedToColorSpace(QColorSpace::SRgb);
+        const auto result = composePresentation(source, {0, PresentationStyle::Light, {}, false});
+        QCOMPARE(result.pixelColor(20,15), expected.pixelColor(20,15));
+        QCOMPARE(source.colorSpace(), QColorSpace(QColorSpace::DisplayP3));
+    }
+    void sharingCanvasRejectsInvalid() {
+        QImage source(100,60,QImage::Format_RGB32); source.fill(Qt::white);
+        PresentationOptions options;
+        QVERIFY(composePresentation({}, options).isNull());
+        options.padding = -1; QVERIFY(composePresentation(source, options).isNull());
+        options.padding = 241; QVERIFY(composePresentation(source, options).isNull());
+        options.padding = 0; options.style = PresentationStyle(5); QVERIFY(composePresentation(source, options).isNull());
+        options.style = PresentationStyle::Light; options.watermark = QString(121, QLatin1Char('a'));
+        QVERIFY(composePresentation(source, options).isNull());
+        options.watermark.clear(); QVERIFY(composePresentation(source, options, 5999).isNull());
+        QVERIFY(!composePresentation(source, options, 6000).isNull());
+    }
+
     void dimensionsMetadataAndOwnership() {
         QImage source(120, 75, QImage::Format_RGBA8888);
         source.fill(QColor(20, 40, 80, 100));
@@ -32,5 +84,5 @@ private Q_SLOTS:
         QVERIFY(!resizedToWidth(tall, 320).isNull());
     }
 };
-QTEST_GUILESS_MAIN(ImageTransformsTest)
+QTEST_MAIN(ImageTransformsTest)
 #include "ImageTransformsTest.moc"

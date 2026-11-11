@@ -109,33 +109,46 @@ QSize ViewerWindow::imageSnapshotSize() const
 }
 void ViewerWindow::resizeImageCopy(int width)
 {
+    createImageCopy([width](const QImage &snapshot) { return NkShot::Imaging::resizedToWidth(snapshot, width); },
+        i18nc("@title:window", "Resized Copy — NkShot"),
+        i18nc("@info", "The resized copy could not be created. Choose a smaller valid width. Your original and edits are unchanged."));
+}
+void ViewerWindow::beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded)
+{
+    const NkShot::Imaging::PresentationOptions options{padding, NkShot::Imaging::PresentationStyle(style), watermark, rounded};
+    createImageCopy([options](const QImage &snapshot) { return NkShot::Imaging::composePresentation(snapshot, options); },
+        i18nc("@title:window", "Styled Copy — NkShot"),
+        i18nc("@info", "The styled copy could not be created. Use a smaller image or less padding. Your original and edits are unchanged."));
+}
+void ViewerWindow::createImageCopy(std::function<QImage(const QImage &)> transform, const QString &title, const QString &failure)
+{
     if (m_resizingImage || SpectacleCore::instance()->videoMode()) return;
     const auto snapshot = SpectacleCore::instance()->annotationDocument()->renderToImage();
     m_resizingImage = true;
     Q_EMIT resizingImageChanged();
     auto watcher = new QFutureWatcher<QImage>(this);
-    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, title, failure] {
         const auto image = watcher->result();
         watcher->deleteLater();
         m_resizingImage = false;
         Q_EMIT resizingImageChanged();
         if (image.isNull()) {
             InlineMessageModel::instance()->push(InlineMessageModel::Warning,
-                i18nc("@info", "The resized copy could not be created. Choose a smaller valid width. Your original and edits are unchanged."));
+                failure);
             return;
         }
         auto preview = new PinnedImageWindow(image, engine());
         if (preview->status() != QQuickView::Ready) {
             delete preview;
             InlineMessageModel::instance()->push(InlineMessageModel::Error,
-                i18nc("@info", "The resized preview could not be opened. Your original and edits are unchanged."));
+                i18nc("@info", "The image preview could not be opened. Your original and edits are unchanged."));
             return;
         }
-        preview->setTitle(i18nc("@title:window", "Resized Copy — NkShot"));
+        preview->setTitle(title);
         preview->setScreen(screen());
         preview->show();
     });
-    watcher->setFuture(QtConcurrent::run([snapshot, width] { return NkShot::Imaging::resizedToWidth(snapshot, width); }));
+    watcher->setFuture(QtConcurrent::run([snapshot, transform] { return transform(snapshot); }));
 }
 
 void ViewerWindow::combineImages(bool stackWithoutOverlap)
