@@ -308,6 +308,19 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('m_ownedPreparedOutput->identityMatches()', start)
         self.assertIn('if (!stream)', start)
 
+    def test_media_drop_reuses_guarded_open_and_copy_only(self):
+        source = read('src/Gui/ViewerWindow.cpp')
+        body = source[source.index('bool ViewerWindow::openDroppedMedia'):source.index('QQuickWindow *ViewerWindow::editClipboardImage')]
+        self.assertIn('canAcceptMediaDrop(urls)', body)
+        self.assertIn('openRecentMedia(urls.first())', body)
+        qml = read('src/Gui/MediaDropTarget.qml')
+        self.assertIn('drop.accept(Qt.CopyAction)', qml)
+        self.assertNotIn('Qt.MoveAction', qml)
+        policy = read('src/MediaDropPolicy.cpp')
+        self.assertNotIn('QFile', policy)
+        self.assertIn('urls.size() != 1', policy)
+        self.assertIn('!url.isLocalFile()', policy)
+
     def test_explicit_image_export_keeps_png_save_point(self):
         source = read('src/Gui/ImageCopyEditor.cpp')
         body = source[source.index('bool ImageCopyEditor::exportAs'):source.index('QQuickWindow *ImageCopyEditor::finishCopy')]

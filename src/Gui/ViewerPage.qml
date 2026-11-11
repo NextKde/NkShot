@@ -676,4 +676,24 @@ EmptyPage {
 
     RecentMediaPopup { id: recentPopup; parent: QQC.Overlay.overlay }
 
+    MediaDropTarget {
+        id: mediaDrop
+        anchors.fill: parent
+        z: 100
+        enabled: contextWindow.canDropMedia && !moreMenu.visible && !propertiesPopup.visible
+            && !beautifyPopup.visible && !resizePopup.visible
+            && !combinePopup.visible && !recentPopup.visible
+        canAcceptCallback: urls => contextWindow.canAcceptMediaDrop(urls)
+        openCallback: urls => contextWindow.openDroppedMedia(urls)
+        Connections {
+            target: SpectacleCore
+            function onCurrentVideoChanged() { mediaDrop.clear() }
+            function onVideoModeChanged() { mediaDrop.clear() }
+        }
+        Connections {
+            target: SpectacleCore.annotationDocument
+            function onRepaintNeeded(types) { mediaDrop.clear() }
+        }
+    }
+
 }

@@ -21,6 +21,7 @@
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/ImageCopyEditor.h"
 #include "ImageExportUiChecks.h"
+#include "MediaDropUiChecks.h"
 #include "Gui/QuickNoteWindow.h"
 #include "Gui/ColorPickerWindow.h"
 #include "Imaging/ColorSample.h"
@@ -1848,6 +1849,12 @@ void installUiCaptureHook(QApplication &application)
                 viewer->grabWindow().save(destination);
                 qInfo() << "NkShot unavailable scroll backend refused requests without editor/history mutation; no live capture claim";
                 application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_DROP_MEDIA")) {
+                QString failure;
+                const bool passed = MediaDropUiChecks::run(application,viewer,destination,&failure);
+                qInfo() << "108 local media drop UI" << passed << failure;
+                application.exit(passed ? 0 : 240); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_EXPORT_DEMO")) {
                 const auto input = SpectacleCore::instance()->annotationDocument()->renderToImage();

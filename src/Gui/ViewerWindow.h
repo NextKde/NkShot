@@ -10,6 +10,8 @@
 #include <QPalette>
 #include <QPointer>
 #include <QImage>
+#include <QList>
+#include <QUrl>
 #include <functional>
 
 class ViewerWindowPrivate;
@@ -30,6 +32,7 @@ class ViewerWindow : public SpectacleWindow
     Q_OBJECT
     Q_PROPERTY(bool openingMedia READ openingMedia NOTIFY openingMediaChanged)
     Q_PROPERTY(bool canOpenMedia READ canOpenMedia NOTIFY openingMediaChanged)
+    Q_PROPERTY(bool canDropMedia READ canDropMedia NOTIFY openingMediaChanged)
     Q_PROPERTY(bool scanningCode READ scanningCode NOTIFY scanningCodeChanged)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
@@ -56,6 +59,9 @@ public:
     Q_INVOKABLE QQuickWindow *editClipboardImage();
     bool openingMedia() const { return m_openingMedia; }
     bool canOpenMedia() const;
+    bool canDropMedia() const;
+    Q_INVOKABLE bool canAcceptMediaDrop(const QList<QUrl> &urls) const;
+    Q_INVOKABLE bool openDroppedMedia(const QList<QUrl> &urls);
     Q_INVOKABLE QQuickWindow *openScrollPreview();
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();

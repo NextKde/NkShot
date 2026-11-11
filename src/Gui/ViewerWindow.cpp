@@ -7,6 +7,7 @@
 
 #include "ViewerWindow.h"
 #include "LocalMediaLoader.h"
+#include "MediaDropPolicy.h"
 #include "RecentMediaModel.h"
 #include "RecordingPreparation.h"
 #include <QMessageBox>
@@ -82,6 +83,9 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
         this, &ViewerWindow::openingMediaChanged);
     connect(m_clipJob, &VideoClipJob::changed, this, &ViewerWindow::openingMediaChanged);
     connect(this, &ViewerWindow::choosingClipOutputChanged, this, &ViewerWindow::openingMediaChanged);
+    connect(this, &QWindow::visibleChanged, this, &ViewerWindow::openingMediaChanged);
+    connect(this, &ViewerWindow::resizingImageChanged, this, &ViewerWindow::openingMediaChanged);
+    connect(this, &ViewerWindow::combiningImagesChanged, this, &ViewerWindow::openingMediaChanged);
     new QShortcut(QKeySequence::Open, this, this, &ViewerWindow::openMedia);
     new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this, this, [this] { editClipboardImage(); });
     connect(SpectacleCore::instance(), &SpectacleCore::currentVideoChanged, this, &ViewerWindow::cancelClipExport);
@@ -374,6 +378,25 @@ bool ViewerWindow::canOpenMedia() const
     return !m_openingMedia && SpectacleCore::instance()->canOpenMedia()
         && !m_clipJob->busy() && !choosingClipOutput()
         && !m_combiningImages && !m_resizingImage;
+}
+
+bool ViewerWindow::canDropMedia() const
+{
+    // Drag admission must not interrupt a native modal dialog or an active clip
+    // editing session. Loading still uses the normal epoch and content checks.
+    return isVisible() && canOpenMedia() && !m_clipJob->ready() && !QGuiApplication::modalWindow();
+}
+bool ViewerWindow::canAcceptMediaDrop(const QList<QUrl> &urls) const
+{
+    return canDropMedia() && NkShot::isSupportedMediaDrop(urls);
+}
+bool ViewerWindow::openDroppedMedia(const QList<QUrl> &urls)
+{
+    if (!canAcceptMediaDrop(urls)) return false;
+    // Only the request is accepted here. Decode, source identity and replacement
+    // confirmation are exactly the same as explicit Open / Recent files.
+    openRecentMedia(urls.first());
+    return true;
 }
 
 QQuickWindow *ViewerWindow::editClipboardImage()

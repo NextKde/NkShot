@@ -699,3 +699,15 @@ atomic destination preservation. Native KDE portal/device acceptance is separate
 standalone editor, adds an unsaved test annotation and runs the same export
 acceptance helper. DARK/COMPACT select that editor's palette/420px size. It is
 used for reviewable screenshots instead of showing video codec color bars.
+
+## Local media drop (108)
+
+`NKSHOT_TEST_DROP_MEDIA=1` opens the actual viewer with the normal synthetic image
+and exercises platform-style Qt drag/drop events through its QML DropArea.
+`NKSHOT_TEST_DARK=1` and `NKSHOT_TEST_UI_SIZE=420x520` select the review variants.
+Checks cover Copy-only negotiation even with Shift, valid hover/leave, remote/
+multi-file/plain-text/Move-only rejection, busy native Open dialog, unsaved-edit
+Cancel/Discard, corrupt/missing input preservation and MP4 transition. Source
+bytes stay unchanged. Successful open rebuilds the viewer: the helper checks the
+old QPointer is cleared and reacquires ViewerWindow::instance(), never reuses a
+stale window pointer. This is not native compositor drag/drop acceptance.
