@@ -95,10 +95,11 @@ FocusScope {
     }
 
     CropPreviewOverlay {
+        id: cropOverlay
         objectName: "nkshotVideoCropOverlay"
         anchors.fill: videoOutput
         visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.cropAspect !== "original" && !root.captureActive
-        interactive: visible && !clipPopup.locked
+        interactive: visible && !clipPopup.locked && !clipPopup.editingPrivacy
         onPositionRequested: (x, y) => {clipPopup.stopPreview(); contextWindow.clipJob.setCropPosition(x, y)}
         onCenterRequested: {clipPopup.stopPreview(); contextWindow.clipJob.resetCropPosition()}
         sourceSize: contextWindow.clipJob.sourceSize
@@ -109,6 +110,19 @@ FocusScope {
             ? Qt.rect((width-sourceSize.width*fittedScale)/2, (height-sourceSize.height*fittedScale)/2,
                       sourceSize.width*fittedScale, sourceSize.height*fittedScale)
             : videoOutput.contentRect
+    }
+
+    PrivacyRegionOverlay {
+        objectName: "nkshotVideoPrivacyOverlay"
+        anchors.fill: videoOutput
+        visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.privacyEnabled && !root.captureActive
+        interactive: visible && clipPopup.editingPrivacy && !clipPopup.locked
+        sourceSize: contextWindow.clipJob.sourceSize
+        region: contextWindow.clipJob.privacyRect
+        displayRect: cropOverlay.displayRect
+        onRectRequested: (x, y, width, height) => {
+            clipPopup.stopPreview(); contextWindow.clipJob.setPrivacyRect(x, y, width, height)
+        }
     }
 
     AudioOutput {

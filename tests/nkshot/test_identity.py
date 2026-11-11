@@ -120,6 +120,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('signal positionRequested', overlay)
         self.assertIn('signal centerRequested', overlay)
 
+    def test_video_privacy_overlay_is_injected(self):
+        overlay = read('src/Gui/PrivacyRegionOverlay.qml')
+        self.assertNotIn('SpectacleCore', overlay)
+        self.assertNotIn('contextWindow', overlay)
+        for prop in ('sourceSize', 'region', 'displayRect'):
+            self.assertRegex(overlay, r'required property \w+ ' + prop)
+        self.assertIn('signal rectRequested', overlay)
+        self.assertIn('color: "black"', overlay)
+        impl = read('src/Gui/ViewerWindow.cpp')
+        self.assertIn('m_clipJob->privacyEnabled() != privacyEnabled', impl)
+        self.assertIn('m_clipJob->privacyRect() != privacyRect', impl)
+
     def test_recent_files_reuse_validated_open(self):
         impl = read('src/Gui/ViewerWindow.cpp')
         self.assertIn('void ViewerWindow::loadOpenedMedia(const QUrl &url)', impl)

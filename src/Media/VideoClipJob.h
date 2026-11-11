@@ -11,6 +11,9 @@
 class QProcess;
 class VideoClipJob : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool privacyEnabled READ privacyEnabled WRITE setPrivacyEnabled NOTIFY changed)
+    Q_PROPERTY(bool privacyAvailable READ privacyAvailable NOTIFY changed)
+    Q_PROPERTY(QRect privacyRect READ privacyRect NOTIFY changed)
     Q_PROPERTY(bool cropCentered READ cropCentered NOTIFY changed)
     Q_PROPERTY(bool cropAvailable READ cropAvailable NOTIFY changed)
     Q_PROPERTY(QString cropAspect READ cropAspect WRITE setCropAspect NOTIFY changed)
@@ -29,6 +32,11 @@ class VideoClipJob : public QObject {
 public:
     explicit VideoClipJob(QObject *parent = nullptr);
     ~VideoClipJob() override;
+    bool privacyEnabled() const { return m_privacyEnabled; }
+    bool privacyAvailable() const { return cropAvailable() && m_drawboxAvailable; }
+    QRect privacyRect() const { return m_privacyRect; }
+    Q_INVOKABLE void setPrivacyEnabled(bool enabled);
+    Q_INVOKABLE void setPrivacyRect(int x, int y, int width, int height);
     bool cropAvailable() const { return m_mediaValid && m_squarePixels; }
     QString cropAspect() const { return m_cropAspect; }
     Q_INVOKABLE void setCropAspect(const QString &aspect);
@@ -62,6 +70,7 @@ private:
     void launchGifPass(bool palette);
     QString gifFilter() const;
     QString cropFilter() const;
+    QString privacyFilter() const;
     QRect centeredCropRect() const;
     QString webmVideoFilter(int fps) const;
     void fail(const QString &message);
@@ -71,6 +80,8 @@ private:
     bool destinationUnchanged() const;
     QUrl m_source, m_output;
     QString m_ffmpeg, m_ffprobe, m_error, m_temp, m_target, m_palette;
+    bool m_privacyEnabled = false, m_drawboxAvailable = false;
+    QRect m_privacyRect;
     QPoint m_cropPosition = QPoint(-1, -1);
     QString m_cropAspect = QStringLiteral("original");
     QString m_format = QStringLiteral("mp4");

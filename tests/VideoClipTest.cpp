@@ -195,11 +195,67 @@ private Q_SLOTS:
         job.setCropPosition(0,60);job.resetCropPosition();QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());
         job.setCropAspect(QStringLiteral("wide"));QVERIFY(job.cropCentered());QCOMPARE(job.cropRect(),QRect(0,30,320,180));
     }
+    void opaquePrivacyCover_data() {
+        QTest::addColumn<bool>("webm");QTest::addColumn<bool>("cropped");
+        for(const bool webm:{false,true})for(const bool cropped:{false,true})
+            QTest::newRow(qPrintable(QStringLiteral("privacy-%1-%2").arg(webm?QStringLiteral("webm"):QStringLiteral("mp4")).arg(cropped?QStringLiteral("crop"):QStringLiteral("full"))))<<webm<<cropped;
+    }
+    void opaquePrivacyCover() {
+        QFETCH(bool,webm);QFETCH(bool,cropped);
+        const auto input=webm?cropWebm:cropMp4;const auto original=hash(input);VideoClipJob job;
+        QVERIFY2(ready(job,input),qPrintable(job.error()));QVERIFY(job.privacyAvailable());QVERIFY(!job.privacyEnabled());QVERIFY(job.privacyRect().isEmpty());
+        job.setPrivacyEnabled(true);QVERIFY(job.privacyEnabled());QCOMPARE(job.privacyRect(),QRect(106,80,106,80));
+        job.setPrivacyRect(60,60,80,60);QCOMPARE(job.privacyRect(),QRect(60,60,80,60));
+        if(cropped){job.setCropAspect(QStringLiteral("square"));job.setCropPosition(80,0);}
+        const auto crop=job.cropRect();
+        const auto sourceFrame=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),input,
+            QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-an"),QStringLiteral("-pix_fmt"),QStringLiteral("gray"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        QCOMPARE(sourceFrame.size(),320*240);
+        for(const auto &format:{QStringLiteral("mp4"),QStringLiteral("gif")}) {
+            job.setOutputFormat(format);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY2(job.ready(),qPrintable(job.error()));
+            QVERIFY(job.privacyEnabled());QCOMPARE(job.privacyRect(),QRect(60,60,80,60));QCOMPARE(job.cropRect(),crop);
+            const auto target=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+u'.'+format);
+            job.exportClip(QUrl::fromLocalFile(target),200,1200);QVERIFY(job.busy());
+            job.setPrivacyEnabled(false);job.setPrivacyRect(0,0,320,240);QVERIFY(job.privacyEnabled());QCOMPARE(job.privacyRect(),QRect(60,60,80,60));
+            QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+            QCOMPARE(hash(input),original);QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
+            QStringList decode{QStringLiteral("-v"),QStringLiteral("error")};if(format==QStringLiteral("gif"))decode<<QStringLiteral("-ignore_loop")<<QStringLiteral("1");
+            decode<<QStringLiteral("-i")<<target<<QStringLiteral("-an")<<QStringLiteral("-pix_fmt")<<QStringLiteral("gray")<<QStringLiteral("-f")<<QStringLiteral("rawvideo")<<QStringLiteral("pipe:1");
+            const auto frames=execute(ffmpeg,decode);const int frameBytes=crop.width()*crop.height();
+            QCOMPARE(frames.size(),frameBytes*(format==QStringLiteral("mp4")?30:10));
+            const auto inside=QPoint(100,90)-crop.topLeft(),outside=QPoint(210,90)-crop.topLeft();
+            const int expectedOutside=uchar(sourceFrame.at(90*320+210));
+            for(int frame=0;frame<frames.size()/frameBytes;++frame){
+                QVERIFY2(uchar(frames.at(frame*frameBytes+inside.y()*crop.width()+inside.x()))<=6,"Privacy cover must be opaque black throughout the selected duration");
+                QVERIFY(qAbs(int(uchar(frames.at(frame*frameBytes+outside.y()*crop.width()+outside.x())))-expectedOutside)<=6);
+            }
+            // A repeated/odd-snapped rectangle is not a new export revision.
+            QSignalSpy unchanged(&job,&VideoClipJob::changed);job.setPrivacyEnabled(true);job.setPrivacyRect(61,61,81,61);
+            QCOMPARE(unchanged.size(),0);QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));QCOMPARE(job.progress(),qreal(1));
+        }
+        job.setPrivacyEnabled(false);QVERIFY(!job.privacyEnabled());QVERIFY(job.outputUrl().isEmpty());QCOMPARE(job.progress(),qreal(0));
+        job.setPrivacyEnabled(true);QCOMPARE(job.privacyRect(),QRect(60,60,80,60));
+        job.inspect(QUrl::fromLocalFile(input));QVERIFY(!job.privacyEnabled());QVERIFY(job.privacyRect().isEmpty());
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());
+    }
+    void privacyRectangleBoundsAndNoOpErrors() {
+        VideoClipJob job;QSignalSpy changes(&job,&VideoClipJob::changed);job.setPrivacyEnabled(true);job.setPrivacyRect(0,0,2,2);QCOMPARE(changes.size(),0);
+        QVERIFY(ready(job,cropMp4));changes.clear();job.setPrivacyRect(0,0,2,2);QCOMPARE(changes.size(),0);QVERIFY(job.privacyRect().isEmpty());
+        job.setPrivacyEnabled(true);
+        job.setPrivacyRect(std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),std::numeric_limits<int>::min());QCOMPARE(job.privacyRect(),QRect(318,238,2,2));
+        job.setPrivacyRect(std::numeric_limits<int>::min(),std::numeric_limits<int>::min(),std::numeric_limits<int>::max(),std::numeric_limits<int>::max());QCOMPARE(job.privacyRect(),QRect(0,0,320,240));
+        job.setPrivacyRect(17,19,-8,-20);QCOMPARE(job.privacyRect(),QRect(16,18,2,2));
+        job.setPrivacyRect(317,237,31,31);QCOMPARE(job.privacyRect(),QRect(316,236,4,4));
+        job.exportClip(QUrl::fromLocalFile(folder.filePath(QStringLiteral("privacy-invalid.mp4"))),0,1);const auto previous=job.error();QVERIFY(!previous.isEmpty());
+        changes.clear();job.setPrivacyRect(317,237,5,5);job.setPrivacyEnabled(true);QCOMPARE(changes.size(),0);QCOMPARE(job.error(),previous);
+        job.setPrivacyRect(16,18,20,22);QVERIFY(job.error().isEmpty());QCOMPARE(job.progress(),qreal(0));
+        job.setPrivacyEnabled(false);changes.clear();job.setPrivacyEnabled(false);job.setPrivacyRect(0,0,320,240);QCOMPARE(changes.size(),0);QCOMPARE(job.privacyRect(),QRect(16,18,20,22));
+    }
     void cropNonSquareSarKeepsOriginal() {
         const auto input=folder.filePath(QStringLiteral("non-square-sar.mp4"));
         execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-i"),cropMp4,
             QStringLiteral("-vf"),QStringLiteral("setsar=4/3"),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-c:a"),QStringLiteral("copy"),input});
-        VideoClipJob job;QVERIFY2(ready(job,input),qPrintable(job.error()));QVERIFY(!job.cropAvailable());job.setCropAspect(QStringLiteral("square"));
+        VideoClipJob job;QVERIFY2(ready(job,input),qPrintable(job.error()));QVERIFY(!job.cropAvailable());QVERIFY(!job.privacyAvailable());job.setPrivacyEnabled(true);QVERIFY(!job.privacyEnabled());job.setCropAspect(QStringLiteral("square"));
         QSignalSpy unmoved(&job,&VideoClipJob::changed);job.setCropPosition(20,30);job.resetCropPosition();QCOMPARE(unmoved.size(),0);
         QCOMPARE(job.cropAspect(),QStringLiteral("original"));QCOMPARE(job.cropRect(),QRect(0,0,320,240));
         const auto target=folder.filePath(QStringLiteral("non-square-sar-copy.mp4"));job.exportClip(QUrl::fromLocalFile(target),200,1200);
@@ -395,6 +451,7 @@ private Q_SLOTS:
         script.write("#!/bin/sh\ncase \"$*\" in *-encoders*) printf ' V..... gif encoder\\n V..... png encoder\\n'; exit 0;; *-filters*) printf ' ... palettegen V->V\\n ... paletteuse VV->V\\n'; exit 0;; esac\nexec \"$NKSHOT_TEST_REAL_FFMPEG\" \"$@\"\n");script.close();QVERIFY(script.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
         QByteArray path=bin.toUtf8();path.append(':');path.append(oldPath);qputenv("PATH",path);qputenv("NKSHOT_TEST_REAL_FFMPEG",ffmpeg.toUtf8());
         VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY2(ready(job,source),qPrintable(job.error()));
+        QVERIFY(!job.privacyAvailable());job.setPrivacyEnabled(true);QVERIFY(!job.privacyEnabled());QVERIFY(job.error().contains(QStringLiteral("drawbox")));QVERIFY(job.ready());
         const auto target=folder.filePath(QStringLiteral("gif-only-tools.gif"));job.exportClip(QUrl::fromLocalFile(target),1350,3150);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QVERIFY(QFile::exists(target));
         job.setOutputFormat(QStringLiteral("mp4"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY(!job.ready());QVERIFY(job.error().contains(QStringLiteral("H.264")));
         const auto encoderError=job.error();job.setCropAspect(QStringLiteral("square"));
@@ -461,7 +518,7 @@ private Q_SLOTS:
         qputenv("PATH",QByteArray());VideoClipJob missing;missing.inspect(QUrl::fromLocalFile(source));QVERIFY(!missing.busy());QVERIFY(!missing.ready());QVERIFY(missing.error().contains(QStringLiteral("FFmpeg")));
         const auto bin=folder.filePath(QStringLiteral("test-bin"));QVERIFY(QDir().mkpath(bin));
         QFile script(bin+QStringLiteral("/ffmpeg"));QVERIFY(script.open(QIODevice::WriteOnly));
-        script.write("#!/bin/sh\ncase \"$*\" in *-encoders*) printf ' V..... libx264 encoder\\n A..... aac encoder\\n'; exit 0;; esac\nexit 23\n");script.close();QVERIFY(script.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
+        script.write("#!/bin/sh\ncase \"$*\" in *-encoders*) printf ' V..... libx264 encoder\\n A..... aac encoder\\n'; exit 0;; *-filters*) printf ' ... drawbox V->V\\n'; exit 0;; esac\nexit 23\n");script.close();QVERIFY(script.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
         QByteArray testPath=bin.toUtf8();testPath.append(':');testPath.append(oldPath);qputenv("PATH",testPath);VideoClipJob failed;QVERIFY2(ready(failed,source),qPrintable(failed.error()));
         const auto target=folder.filePath(QStringLiteral("failed.mp4"));failed.exportClip(QUrl::fromLocalFile(target),0,1000);
         QVERIFY(QTest::qWaitFor([&]{return !failed.busy();},20000));QVERIFY(!failed.error().isEmpty());QVERIFY(!QFile::exists(target));

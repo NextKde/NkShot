@@ -12,6 +12,7 @@ QQC.Popup {
     property url sourceUrl
     readonly property var job: contextWindow.clipJob
     property bool detailsVisible: false
+    property bool editingPrivacy: false
     property bool previewing: false
     property bool rangeInitialized: false
     property real previousPosition: 0
@@ -34,6 +35,7 @@ QQC.Popup {
     background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 16; elevation: 0}
     onOpened: {
         detailsVisible = false
+        editingPrivacy = false
         sessionSource = sourceUrl
         previousPosition = player.position
         player.pause()
@@ -260,6 +262,7 @@ QQC.Popup {
                 color: Kos.AppTheme.mutedText
                 text: (root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
                     : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds."))
+                    + (root.job.privacyEnabled ? i18nc("@info", " · Privacy cover") : "")
                     + (root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", " · Crop %1 × %2", root.job.cropRect.width, root.job.cropRect.height) : "")
                 wrapMode: Text.Wrap
             }
@@ -272,6 +275,20 @@ QQC.Popup {
                 onClicked: root.detailsVisible = !root.detailsVisible
             }
         }
+        QQC.ScrollView {
+            id: detailScroll
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(detailContents.implicitHeight, Math.max(80, contextWindow.height - 440))
+            visible: root.detailsVisible
+            clip: true
+            contentWidth: availableWidth
+            contentHeight: detailContents.implicitHeight
+            QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
+            QQC.ScrollBar.vertical.policy: detailContents.implicitHeight > height ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
+            ColumnLayout {
+                id: detailContents
+                width: detailScroll.availableWidth
+                spacing: 10
         RowLayout {
             Layout.fillWidth: true
             visible: root.detailsVisible
@@ -291,7 +308,7 @@ QQC.Popup {
                 palette.buttonText: Kos.AppTheme.paletteText
                 background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
                 Accessible.name: i18nc("@label", "Video export crop aspect")
-                onActivated: {root.stopPreview(); root.job.cropAspect = values[currentIndex]}
+                onActivated: {root.stopPreview(); root.editingPrivacy = false; root.job.cropAspect = values[currentIndex]}
             }
             SolidButton {
                 objectName: "nkshotClipCenterCrop"
@@ -299,6 +316,57 @@ QQC.Popup {
                 enabled: root.job.ready && !root.locked && root.job.cropAspect !== "original" && !root.job.cropCentered
                 onClicked: {root.stopPreview(); root.job.resetCropPosition()}
             }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.detailsVisible
+            QQC.CheckBox {
+                id: privacyCover
+                objectName: "nkshotClipPrivacyEnabled"
+                Layout.fillWidth: true
+                checked: root.job.privacyEnabled
+                enabled: root.job.ready && root.job.privacyAvailable && !root.locked
+                text: i18nc("@option:check", "Hide a private region")
+                font: root.font
+                palette.windowText: Kos.AppTheme.paletteText
+                onToggled: {
+                    root.stopPreview(); root.job.privacyEnabled = checked
+                    root.editingPrivacy = root.job.privacyEnabled
+                    if(root.editingPrivacy) root.detailsVisible = false
+                }
+                indicator: Rectangle {
+                    x: privacyCover.leftPadding; y: (privacyCover.height-height)/2
+                    width: 18; height: 18; radius: 5
+                    color: privacyCover.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
+                    border.color: privacyCover.checked ? Kos.AppTheme.accent : Kos.AppTheme.border
+                    opacity: privacyCover.enabled ? 1 : 0.5
+                    QQC.Label {anchors.centerIn: parent; text: "✓"; visible: privacyCover.checked; color: Kos.AppTheme.accentText}
+                }
+            }
+            SolidButton {
+                objectName: "nkshotClipAdjustPrivacy"
+                text: root.editingPrivacy ? i18nc("@action", "Finish adjusting") : i18nc("@action", "Adjust cover")
+                enabled: root.job.privacyEnabled && !root.locked
+                onClicked: {root.stopPreview(); root.editingPrivacy = !root.editingPrivacy; root.detailsVisible = false}
+            }
+        }
+        QQC.Label {
+            Layout.fillWidth: true
+            visible: root.detailsVisible && root.job.ready && !root.job.privacyAvailable
+            text: i18nc("@info", "Privacy cover needs square-pixel video and FFmpeg's drawbox filter.")
+            wrapMode: Text.Wrap
+            font: root.font
+            color: Kos.AppTheme.mutedText
+        }
+        QQC.Label {
+            Layout.fillWidth: true
+            visible: root.job.privacyEnabled && root.detailsVisible
+            text: !root.detailsVisible
+                ? i18nc("@info", "Fixed for entire clip · Drag to move, corners to resize · Arrows move · Ctrl+arrows resize")
+                : i18nc("@info", "Fixed whole-clip cover. No tracking or audio removal. Review before sharing.")
+            wrapMode: Text.Wrap
+            font: root.font
+            color: Kos.AppTheme.mutedText
         }
         QQC.CheckBox {
             id: includeAudio
@@ -323,10 +391,20 @@ QQC.Popup {
         }
         QQC.Label {
             Layout.fillWidth: true
-            visible: root.detailsVisible
+            visible: root.detailsVisible && !root.job.privacyEnabled
             text: root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", "Drag frame · Arrow keys adjust · Home centers")
                 : (root.job.ready && !root.job.cropAvailable ? i18nc("@info", "Crop requires square-pixel video. ") : "") + (root.gif ? i18nc("@info", "New GIF: silent, looping, 10 fps, up to 640 px and 20 MiB. The original stays unchanged.")
                 : i18nc("@info", "Re-encoded MP4: H.264, AAC when included. Original unchanged."))
+            wrapMode: Text.Wrap
+            font: root.font
+            color: Kos.AppTheme.mutedText
+        }
+            }
+        }
+        QQC.Label {
+            Layout.fillWidth: true
+            visible: root.job.privacyEnabled && root.editingPrivacy && !root.detailsVisible
+            text: i18nc("@info", "Fixed for entire clip · Drag to move, corners to resize · Arrows move · Ctrl+arrows resize")
             wrapMode: Text.Wrap
             font: root.font
             color: Kos.AppTheme.mutedText

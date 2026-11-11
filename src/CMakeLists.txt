@@ -243,6 +243,7 @@ qt_target_qml_sources(spectacle
     Gui/BeautifyImagePopup.qml
     Gui/ResizeImagePopup.qml
     Gui/RecordingView.qml
+    Gui/PrivacyRegionOverlay.qml
     Gui/CropPreviewOverlay.qml
     Gui/RecentMediaPopup.qml
     Gui/VideoClipPopup.qml

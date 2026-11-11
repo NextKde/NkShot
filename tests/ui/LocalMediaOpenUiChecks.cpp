@@ -625,6 +625,8 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     };
     const bool silentExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SILENT_CLIP");
     const bool cropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
+    const bool privacyExport=qEnvironmentVariableIsSet("NKSHOT_TEST_PRIVACY_CLIP");
+    QRect expectedPrivacy;
     QRect expectedCrop;
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
         return fail(QStringLiteral("Export details could not be opened"));
@@ -691,11 +693,72 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             return fail(QStringLiteral("Collapsed preview did not keep crop interaction"));
         expectedCrop=job->property("cropRect").toRect();
     }
+    if(privacyExport) {
+        if(job->property("privacyEnabled").toBool()||!job->property("privacyAvailable").toBool()
+            ||!click(QStringLiteral("nkshotClipDetails")))
+            return fail(QStringLiteral("Privacy cover option unavailable or not initially off"));
+        QTest::qWait(150);
+        if(!click(QStringLiteral("nkshotClipPrivacyEnabled")))return fail(QStringLiteral("Privacy checkbox unavailable after layout"));
+        auto overlay=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoPrivacyOverlay"));
+        auto frame=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoPrivacyFrame"));
+        if(!overlay||!frame||!QTest::qWaitFor([&]{return overlay->isVisible()&&frame->width()>12&&frame->height()>12;},1000))
+            return fail(QStringLiteral("Enabled privacy preview missing"));
+        const auto original=job->property("privacyRect").toRect();
+        auto point=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
+        QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,point);
+        for(int i=1;i<=5;++i)QTest::mouseMove(viewer(),point+QPoint(i*2,0),20);
+        QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,point+QPoint(10,0));
+        if(!QTest::qWaitFor([&]{return job->property("privacyRect").toRect().x()>original.x();},1000))
+            return fail(QStringLiteral("Actual privacy move gesture did not update source rectangle"));
+        auto moved=job->property("privacyRect").toRect();
+        QTest::keyClick(viewer(),Qt::Key_Left);
+        if(job->property("privacyRect").toRect().x()!=moved.x()-2)return fail(QStringLiteral("Privacy keyboard move failed"));
+        QTest::keyClick(viewer(),Qt::Key_Right,Qt::ControlModifier|Qt::ShiftModifier);
+        if(job->property("privacyRect").toRect().width()!=moved.width()+10)return fail(QStringLiteral("Privacy keyboard resize failed"));
+        auto handle=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoPrivacyHandle_3"));
+        if(!handle)return fail(QStringLiteral("Privacy corner missing"));
+        const auto beforeResize=job->property("privacyRect").toRect();
+        point=handle->mapToScene(QPointF(handle->width()/2,handle->height()/2)).toPoint();
+        QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,point);
+        for(int i=1;i<=4;++i)QTest::mouseMove(viewer(),point+QPoint(i*2,i*2),20);
+        QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,point+QPoint(8,8));
+        if(!QTest::qWaitFor([&]{auto r=job->property("privacyRect").toRect();return r.width()>beforeResize.width()&&r.height()>beforeResize.height();},1000))
+            return fail(QStringLiteral("Actual privacy corner resize failed"));
+        expectedPrivacy=job->property("privacyRect").toRect();
+        for(int i=0;i<80;++i){QTest::keyClick(viewer(),Qt::Key_Right,Qt::ShiftModifier);QTest::keyClick(viewer(),Qt::Key_Down,Qt::ShiftModifier);}
+        const auto edge=job->property("privacyRect").toRect();const auto source=job->property("sourceSize").toSize();
+        if(edge.size()!=expectedPrivacy.size()||edge.x()+edge.width()!=source.width()||edge.y()+edge.height()!=source.height())
+            return fail(QStringLiteral("Moving privacy cover to boundary shrank the protected region"));
+        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()),Q_ARG(int,expectedPrivacy.y()),
+            Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
+        if(!click(QStringLiteral("nkshotClipDetails")))return fail(QStringLiteral("Privacy details unavailable"));
+        QTest::qWait(150);
+        if(previewControl->height()<50||cancelControl->mapToScene(QPointF(0,cancelControl->height())).y()>viewer()->height())
+            return fail(QStringLiteral("Enabled privacy details hide preview or footer"));
+        if(!click(QStringLiteral("nkshotClipPrivacyEnabled"))
+            ||job->property("privacyEnabled").toBool()||overlay->isVisible()
+            ||!click(QStringLiteral("nkshotClipPrivacyEnabled"))||!job->property("privacyEnabled").toBool()
+            ||job->property("privacyRect").toRect()!=expectedPrivacy||!capture(QStringLiteral(".privacy.png")))
+            return fail(QStringLiteral("Privacy toggle lost region or failed to hide preview"));
+    }
     if(!editRange(QStringLiteral("nkshotClipEnd"),QStringLiteral("3.15"),315)
         ||!editRange(QStringLiteral("nkshotClipStart"),QStringLiteral("1.35"),135)
         ||!capture(QStringLiteral(".clip.png"))||!click(QStringLiteral("nkshotClipExport"))
         ||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
         return fail(QStringLiteral("Imported MP4 clip time inputs/Save dialog failed"));
+    if(privacyExport) {
+        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()+2),Q_ARG(int,expectedPrivacy.y()),
+            Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
+        const auto stale=fixtures.filePath(QStringLiteral("stale-privacy.mp4"));
+        if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
+            ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500)
+            ||QFileInfo::exists(stale)||job->property("busy").toBool())
+            return fail(QStringLiteral("Changed privacy region leaked through stale Save dialog"));
+        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()),Q_ARG(int,expectedPrivacy.y()),
+            Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
+        if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
+            return fail(QStringLiteral("Privacy export did not recover after stale dialog"));
+    }
     if(cropExport) {
         // An asynchronous dialog must not export a different crop than requested.
         if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
@@ -729,6 +792,17 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             QStringLiteral("-show_entries"),QStringLiteral("stream=width,height"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
         if(!probe.waitForFinished(10000)||probe.exitCode()!=0||QString::fromUtf8(probe.readAllStandardOutput()).trimmed()!=QStringLiteral("%1,%2").arg(expectedCrop.width()).arg(expectedCrop.height()))
             return fail(QStringLiteral("Actual cropped MP4 dimensions do not match preview"));
+    }
+    if(privacyExport) {
+        const auto decoded=fixtures.filePath(QStringLiteral("privacy-decoded.png"));
+        QProcess decode;decode.start(QStringLiteral("ffmpeg"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),clip,
+            QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-threads"),QStringLiteral("1"),decoded});
+        if(!decode.waitForFinished(10000)||decode.exitCode()!=0)return fail(QStringLiteral("Privacy output decode failed"));
+        QImage image(decoded);auto protectedArea=expectedPrivacy;
+        if(cropExport){protectedArea=protectedArea.intersected(expectedCrop);protectedArea.translate(-expectedCrop.topLeft());}
+        if(image.isNull()||protectedArea.width()<8||protectedArea.height()<8)return fail(QStringLiteral("Privacy output region missing"));
+        const auto color=image.pixelColor(protectedArea.center());
+        if(color.red()>20||color.green()>20||color.blue()>20)return fail(QStringLiteral("Actual UI export did not bake opaque black privacy cover"));
     }
     const auto evidenceClip=screenshot+QStringLiteral(".export-")+QString::number(QDateTime::currentMSecsSinceEpoch())+QStringLiteral(".mp4");
     if(!QFile::copy(clip,evidenceClip))return fail(QStringLiteral("Unable to retain actual export evidence"));
@@ -873,6 +947,16 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
             return fail(QStringLiteral("Clipboard workflow changed active media/history"));
         clip->setText(clipboard);
+    }
+    if(privacyExport) {
+        auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+        if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))return fail(QStringLiteral("Privacy panel close failed"));
+        QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
+        if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip"))
+            ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
+            ||job->property("privacyEnabled").toBool()||!click(QStringLiteral("nkshotClipCancel")))
+            return fail(QStringLiteral("New export retained an old privacy cover"));
+        qInfo()<<"097 actual privacy toggle, drag, corner resize, keyboard, save-race, decoded output and fresh-session reset passed";
     }
     if(qEnvironmentVariableIsSet("NKSHOT_TEST_RECENT_MEDIA")) {
         auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));

@@ -129,7 +129,7 @@ bool VideoClipJob::destinationUnchanged() const {
 }
 void VideoClipJob::inspect(const QUrl &source) {
     stop();m_ready=false;m_mediaValid=false;m_encodersChecked=false;m_duration=0;m_audio=false;m_source=QUrl();m_output=QUrl();m_error.clear();m_progress=0;
-    m_width=0;m_height=0;m_squarePixels=false;m_cropPosition=QPoint(-1,-1);m_cropAspect=QStringLiteral("original");
+    m_width=0;m_height=0;m_squarePixels=false;m_privacyEnabled=false;m_drawboxAvailable=false;m_privacyRect={};m_cropPosition=QPoint(-1,-1);m_cropAspect=QStringLiteral("original");
     const QFileInfo f(source.toLocalFile());
     m_webm=f.suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||(!m_webm&&f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive))||(m_webm&&!NkShot::LocalVideoInput::hasWebMDocType(f.absoluteFilePath()))||f.size()<=0||f.size()>(m_webm?qint64(256)*1024*1024:qint64(2)*1024*1024*1024)) {
@@ -181,10 +181,15 @@ void VideoClipJob::completed(Stage stage) {
             launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-filters")},Filters,15000);return;
         }
         m_encodersChecked=true;m_x264Available=m_stdout.contains(" libx264 ");m_aacAvailable=m_stdout.contains(" aac ");
-        if(!m_x264Available||(m_audio&&m_includeAudio&&!m_aacAvailable)){fail(tr("This FFmpeg installation lacks the H.264 or AAC encoder needed for clip export."));return;}
-        m_ready=true;m_busy=false;m_stage=None;Q_EMIT changed();
+        launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-filters")},Filters,15000);
     } else if(stage==Filters) {
-        if(!m_stdout.contains(" palettegen ")||!m_stdout.contains(" paletteuse ")){fail(tr("This FFmpeg installation lacks the palette filters needed for GIF export."));return;}
+        m_drawboxAvailable=m_stdout.contains(" drawbox ");
+        if(m_privacyEnabled&&!m_drawboxAvailable){fail(tr("This FFmpeg installation lacks the opaque privacy-cover filter. Reopen clip export or install a build with drawbox."));return;}
+        if(m_format==QStringLiteral("gif")) {
+            if(!m_stdout.contains(" palettegen ")||!m_stdout.contains(" paletteuse ")){fail(tr("This FFmpeg installation lacks the palette filters needed for GIF export."));return;}
+        } else if(!m_x264Available||(m_audio&&m_includeAudio&&!m_aacAvailable)) {
+            fail(tr("This FFmpeg installation lacks the H.264 or AAC encoder needed for clip export."));return;
+        }
         m_ready=true;m_busy=false;m_stage=None;Q_EMIT changed();
     } else if(stage==Palette) {
         if(QFileInfo(m_palette).size()<=0||QFileInfo(m_palette).size()>262144){fail(tr("A safe GIF palette could not be created."));return;}
@@ -248,7 +253,7 @@ void VideoClipJob::exportClip(const QUrl &target,qint64 startMs,qint64 endMs) {
         args[args.indexOf(QStringLiteral("-vf"))+1]=webmVideoFilter(30);
         if(m_audio&&m_includeAudio)args[args.indexOf(QStringLiteral("-af"))+1]=QStringLiteral("atrim=start=%1:end=%2,asetpts=PTS-%1/TB,apad=whole_dur=%3").arg(seconds(m_start),seconds(m_end),seconds(m_clipDuration));
     }
-    args[args.indexOf(QStringLiteral("-vf"))+1]+=cropFilter();
+    args[args.indexOf(QStringLiteral("-vf"))+1]+=privacyFilter()+cropFilter();
     m_busy=true;const auto epoch=m_epoch;Q_EMIT changed();if(epoch==m_epoch&&m_busy)launch(m_ffmpeg,args,Encode,30*60*1000);
 }
 
@@ -269,6 +274,30 @@ void VideoClipJob::setOutputFormat(const QString &format) {
         m_busy=true;const auto epoch=m_epoch;Q_EMIT changed();if(epoch==m_epoch&&m_busy)launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-encoders")},Encoders,15000);
     } else if(!m_source.isEmpty()) {const auto source=m_source;inspect(source);}
     else Q_EMIT changed();
+}
+void VideoClipJob::setPrivacyEnabled(bool enabled) {
+    if(m_busy||!m_ready||enabled==m_privacyEnabled)return;
+    if(enabled&&!privacyAvailable()) {
+        m_error=tr("Opaque privacy cover needs square pixels and the FFmpeg drawbox filter.");Q_EMIT changed();return;
+    }
+    if(enabled&&m_privacyRect.isEmpty()) {
+        const int width=qMax(2,(m_width/3)&~1),height=qMax(2,(m_height/3)&~1);
+        m_privacyRect=QRect(((m_width-width)/2)&~1,((m_height-height)/2)&~1,width,height);
+    }
+    m_privacyEnabled=enabled;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+void VideoClipJob::setPrivacyRect(int x,int y,int width,int height) {
+    if(m_busy||!m_ready||!m_privacyEnabled||!privacyAvailable())return;
+    // Clamp coordinates before subtraction/addition, including INT extrema.
+    const int left=qBound(0,x,m_width-2)&~1,top=qBound(0,y,m_height-2)&~1;
+    const QRect rect(left,top,qBound(2,width,m_width-left)&~1,qBound(2,height,m_height-top)&~1);
+    if(rect==m_privacyRect)return;
+    m_privacyRect=rect;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+QString VideoClipJob::privacyFilter() const {
+    if(!m_privacyEnabled)return {};
+    return QStringLiteral(",drawbox=x=%1:y=%2:w=%3:h=%4:color=black@1:t=fill")
+        .arg(m_privacyRect.x()).arg(m_privacyRect.y()).arg(m_privacyRect.width()).arg(m_privacyRect.height());
 }
 QRect VideoClipJob::centeredCropRect() const {
     if(!m_mediaValid||m_width<2||m_height<2)return {};
@@ -320,7 +349,7 @@ QString VideoClipJob::gifFilter() const {
     const auto rect=cropRect();
     const double factor=qMin(1.,640./qMax(rect.width(),rect.height()));
     const QString range=m_webm ? webmVideoFilter(10) : QStringLiteral("trim=start=0:end=%1,setpts=PTS-STARTPTS,fps=10").arg(seconds(m_clipDuration));
-    return range+cropFilter()+QStringLiteral(",scale=%1:%2:flags=lanczos").arg(qMax(1,qRound(rect.width()*factor))).arg(qMax(1,qRound(rect.height()*factor)));
+    return range+privacyFilter()+cropFilter()+QStringLiteral(",scale=%1:%2:flags=lanczos").arg(qMax(1,qRound(rect.width()*factor))).arg(qMax(1,qRound(rect.height()*factor)));
 }
 void VideoClipJob::launchGifPass(bool palette) {
     QStringList args{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-filter_complex_threads"),QStringLiteral("2"),QStringLiteral("-ss"),seconds(m_start),QStringLiteral("-accurate_seek"),QStringLiteral("-t"),seconds(m_clipDuration),QStringLiteral("-i"),m_source.toLocalFile()};
