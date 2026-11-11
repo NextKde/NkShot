@@ -23,6 +23,11 @@ gate. Ten adapter groups and five software Core UI scenarios passed; the full
 CTest suite passed on an isolated test bus. This does not close the native recording release gate. See [recording preparation](recording-preparation.md)
 for states, conservative partial-file cleanup and explicit evidence limits.
 
+077 adds explicit recording-output ownership and guarded private cancellation
+cleanup; helper/adapter/UI and 21-target CTest validation passed. Explicit user outputs remain preserved, and
+same-UID pathname races are not an atomic guarantee. This reliability work does
+not replace the native recording acceptance gate. See [output ownership](recording-output-ownership.md).
+
 ## Next substantive workflows
 
 1. **Rolling capture:** verify a fixed-region, manually scrolled capture session

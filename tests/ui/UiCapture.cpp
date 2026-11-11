@@ -1226,6 +1226,62 @@ void installUiCaptureHook(QApplication &application)
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_ADAPTER")) {
                 QJsonObject report; const bool ok=runRecordingAdapterChecks(&report);
                 qInfo().noquote()<<QJsonDocument(report).toJson(QJsonDocument::Compact);
+                if (ok && qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_CLEANUP_WARNING")) {
+                    const auto core = SpectacleCore::instance();
+                    const auto platform = core->videoPlatform();
+                    const auto warning = report.value(QStringLiteral("cleanupWarning")).toString();
+                    const auto phase = platform->preparation()->phase();
+                    const auto source = core->annotationDocument()->baseImage();
+                    const auto depth = core->annotationDocument()->undoStackDepth();
+                    const auto video = core->currentVideo();
+                    const bool videoMode = core->videoMode();
+                    const QString clipboard = application.clipboard()->text();
+                    auto messages = InlineMessageModel::instance();
+                    const int before = messages->rowCount();
+                    if (warning.isEmpty() || platform->supportedRecordingModes() != VideoPlatform::NoRecordingModes
+                        || phase != NkShot::RecordingPreparation::Idle) {
+                        qCritical() << "Cleanup warning bridge requires real warning and idle Null platform";
+                        application.exit(223); return;
+                    }
+                    // Test-only signal handoff: the message came from real adapter
+                    // cleanup refusal above. No native capture or capability override.
+                    Q_EMIT platform->temporaryOutputCleanupWarning(warning);
+                    const auto hasWarning = [&] {
+                        for (int row = before; row < messages->rowCount(); ++row) {
+                            const auto index = messages->index(row,0);
+                            if (messages->data(index, InlineMessageModel::TypeRole).toInt() == InlineMessageModel::Warning
+                                && messages->data(index, Qt::DisplayRole).toString() == warning) return true;
+                        }
+                        return false;
+                    };
+                    if (!QTest::qWaitFor(hasWarning,1500)) {
+                        qCritical() << "Actual cleanup warning not presented by Core";
+                        application.exit(224); return;
+                    }
+                    auto notifications = visualItem(viewer->contentItem(),QStringLiteral("nkshotNotifications"));
+                    if (!notifications) notifications = visualItem(viewer->rootObject(),QStringLiteral("nkshotNotifications"));
+                    if (!QTest::qWaitFor([&] { return notifications && notifications->isVisible()
+                            && notifications->height() > 20 && notifications->width() > 100; },1500)) {
+                        qCritical() << "Cleanup warning layout unavailable"; application.exit(225); return;
+                    }
+                    // InlineMessageList animates height; wait until content extent
+                    // reaches the configured capped height, then request a frame.
+                    if (!QTest::qWaitFor([&] {
+                            const auto content = notifications->property("contentHeight").toReal();
+                            const auto maximum = notifications->property("maximumHeight").toReal();
+                            return qAbs(notifications->height()-qMin(content,maximum)) < 1;
+                        },1500)) { application.exit(225); return; }
+                    QSignalSpy frame(viewer,&QQuickWindow::frameSwapped); viewer->update();
+                    if (!QTest::qWaitFor([&] { return !frame.isEmpty(); },1500)
+                        || platform->preparation()->phase() != phase || core->currentVideo() != video
+                        || core->videoMode() != videoMode || core->annotationDocument()->baseImage() != source
+                        || core->annotationDocument()->undoStackDepth() != depth || application.clipboard()->text() != clipboard
+                        || !viewer->grabWindow().save(destination)) {
+                        qCritical() << "Cleanup warning changed media/state or failed screenshot";
+                        application.exit(226); return;
+                    }
+                    qInfo() << "Synthetic adapter cleanup warning shown by actual Core/QML; no native recording";
+                }
                 application.exit(ok?0:221); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_PREPARATION")) {

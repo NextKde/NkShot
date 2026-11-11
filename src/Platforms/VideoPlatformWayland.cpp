@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QUrl>
+#include <sys/stat.h>
 
 using namespace Qt::StringLiterals;
 
@@ -169,6 +170,11 @@ VideoPlatformWayland::~VideoPlatformWayland()
 {
     // Member destructors can emit recorder signals; disconnect before the lease dies.
     if(m_recorder) m_recorder->disconnect(this);
+    const bool pending=preparation()->phase()!=NkShot::RecordingPreparation::Recording
+        && (preparation()->phase()!=NkShot::RecordingPreparation::Idle || m_discardPreparedOutput);
+    // Native recorder destruction stops and joins its producer before output cleanup.
+    m_recorder.reset();
+    if(pending && m_ownedPreparedOutput) m_ownedPreparedOutput->cleanup();
     m_streamLease.retire();m_memoryTimer.stop();
 }
 
@@ -191,6 +197,8 @@ void VideoPlatformWayland::initialize()
             ++m_recorderGeneration;
             m_startGuard.recorderIdleObserved(m_startGuard.token());
             if(m_discardPreparedOutput) discardOwnedPreparedOutput();
+            else if(m_ownedPreparedOutput) m_ownedPreparedOutput->release();
+            m_explicitOutputReservation.reset();
             m_memoryTimer.stop();m_startPending=false;m_resetRecorder=true;
             m_streamLease.retire();
             Q_EMIT readyForRecordingChanged();
@@ -264,7 +272,7 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
         Q_EMIT recordingFailed(i18nc("@info", "Choose a recording delay of 0, 3, 5 or 10 seconds."));
         return;
     }
-    m_ownedPreparedOutput.clear();m_discardPreparedOutput=false;
+    m_ownedPreparedOutput.reset();m_explicitOutputReservation.reset();m_discardPreparedOutput=false;
     m_requestFile = fileUrl;
     m_requestedMode = recordingMode;
     m_requestPointer = includePointer;
@@ -376,16 +384,11 @@ void VideoPlatformWayland::commitRecording(quint64 token)
             return;
         }
         const auto privateDirectory=ExportManager::instance()->temporaryDir();
-        const auto privateRoot=privateDirectory ? QFileInfo(privateDirectory->path()).canonicalFilePath() : QString();
-        const auto targetPath=QDir::cleanPath(QFileInfo(tempUrl.toLocalFile()).absoluteFilePath());
-        if (privateRoot.isEmpty() || !targetPath.startsWith(privateRoot+QLatin1Char('/'))) {
-            failRecording(i18nc("@info", "The recording filename must stay inside its temporary folder."));return;
-        }
-        if (!mkDirPath(tempUrl)) { preparation()->fail(token);return; }
-        const auto parentPath=QFileInfo(QFileInfo(targetPath).absolutePath()).canonicalFilePath();
-        if ((parentPath!=privateRoot && !parentPath.startsWith(privateRoot+QLatin1Char('/')))
-            || QFileInfo(targetPath).isSymLink() || QFileInfo::exists(targetPath)) {
-            failRecording(i18nc("@info", "The temporary recording path is not available."));return;
+        if(!privateDirectory) { failRecording(i18nc("@info", "The temporary recording folder is not available."));return; }
+        m_ownedPreparedOutput=std::make_unique<NkShot::OwnedRecordingOutput>();
+        if(!m_ownedPreparedOutput->reserve(privateDirectory->path(),tempUrl.toLocalFile())) {
+            const auto error=m_ownedPreparedOutput->errorString();m_ownedPreparedOutput.reset();
+            failRecording(i18nc("@info", "Could not reserve a new temporary recording: %1",error));return;
         }
         m_recorder->setEncoder(encoder);
         m_recorder->setOutput(tempUrl.toLocalFile());
@@ -402,7 +405,15 @@ void VideoPlatformWayland::commitRecording(quint64 token)
             Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
             return;
         }
+        if (QFileInfo::exists(localFile) || QFileInfo(localFile).isSymLink()) {
+            failRecording(i18nc("@info", "The recording output already exists. Choose a new filename."));return;
+        }
         if (!mkDirPath(fileUrl)) { preparation()->fail(token);return; }
+        m_explicitOutputReservation=std::make_unique<QFile>(localFile);
+        if(!m_explicitOutputReservation->open(QIODevice::WriteOnly|QIODevice::NewOnly)) {
+            m_explicitOutputReservation.reset();
+            failRecording(i18nc("@info", "Could not reserve the recording output. Choose a new writable filename."));return;
+        }
         m_recorder->setEncoder(encoder);
         m_recorder->setOutput(localFile);
     }
@@ -489,7 +500,7 @@ void VideoPlatformWayland::commitRecording(quint64 token)
 
     if (!stream) {
         m_recorder->setOutput(QString());
-        Q_EMIT recordingFailed(i18nc("@info", "The selected capture source is unavailable."));
+        failRecording(i18nc("@info", "The selected capture source is unavailable."));
         return;
     }
     const auto generation=m_streamLease.adopt(stream);
@@ -498,6 +509,17 @@ void VideoPlatformWayland::commitRecording(quint64 token)
     m_recorder->setNodeId(0);
     connect(stream, &NkShot::RecordingSource::created, this, [this, stream, generation, token] {
         if (!m_streamLease.accepts(stream,generation) || m_attemptFailed || !preparation()->isCurrent(token)) return;
+        if(m_ownedPreparedOutput && !m_ownedPreparedOutput->identityMatches()) {
+            failRecording(i18nc("@info", "The temporary recording path changed. Recording was not started."));return;
+        }
+        if(m_explicitOutputReservation) {
+            struct stat held{}, entry{};
+            const auto path=QFile::encodeName(m_explicitOutputReservation->fileName());
+            if(::fstat(m_explicitOutputReservation->handle(),&held)!=0 || ::lstat(path.constData(),&entry)!=0
+                || !S_ISREG(entry.st_mode) || entry.st_nlink!=1 || held.st_dev!=entry.st_dev || held.st_ino!=entry.st_ino) {
+                failRecording(i18nc("@info", "The recording output changed. Choose a new filename."));return;
+            }
+        }
         m_startPending=false;
         m_recorder->setNodeId(stream->nodeId());
         if (!m_recorder->output().isEmpty()) {
@@ -678,8 +700,17 @@ bool VideoPlatformWayland::readyForRecording() const
 
 void VideoPlatformWayland::discardOwnedPreparedOutput()
 {
-    // Do not unlink a path merely because it did not exist before encoding.
-    // Existing later-session private-directory cleanup may reclaim partial files;
-    // it is not immediate or guaranteed. Explicit outputs are never removed.
-    m_ownedPreparedOutput.clear();m_discardPreparedOutput=false;
+    auto output=std::move(m_ownedPreparedOutput);
+    const bool discard=std::exchange(m_discardPreparedOutput,false);
+    if(discard && output) {
+        const auto result=output->cleanup();
+        if(result==NkShot::OwnedRecordingOutput::CleanupResult::Preserved
+            || result==NkShot::OwnedRecordingOutput::CleanupResult::Failed) {
+            // Report the old attempt without reentering its Idle/cleanup stack.
+            // This signal is informational and never invalidates a newer attempt.
+            QMetaObject::invokeMethod(this,[this] {
+                Q_EMIT temporaryOutputCleanupWarning(i18nc("@info", "The temporary recording could not be removed safely. The file was left untouched."));
+            },Qt::QueuedConnection);
+        }
+    }
 }

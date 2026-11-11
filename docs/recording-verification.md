@@ -221,3 +221,21 @@ not a real server or device. Native compositor selection, hide/present/frame
 ordering, real recorded media, GPU/audio and A/V synchronization remain open.
 Starting cancellation may retain a private partial temporary file; cleanup is
 neither immediate nor guaranteed, and explicit user output is not deleted.
+
+## Output ownership (077)
+
+077 adds descriptor-bound reservations for private recording outputs and checks
+identity before start and cleanup. The 076 conservative cleanup statement above
+is superseded **only for safely identified private reservations**; explicit
+outputs remain non-deleting and may leave an empty/partial file. Existing explicit
+outputs are now rejected. See [ownership contract and limits](recording-output-ownership.md).
+
+The final build passed 21/21 CTest targets, 18/18 static checks, 16 detailed helper
+QtTest results with zero skips, 17 real-adapter scenario groups, five Core/QML
+restoration scenarios and three reviewed warning UI scenarios. Independent checks
+passed 13 QtTest results (including direct libavformat AVIO writes), 17 existing
+workbench flows and 18 Gio portal/QML cases. QFile-controlled producer tests keep
+the real write handle open after cancellation and flush a tail before Idle;
+this is distinct from native AVIO compatibility and from native screen capture.
+See the ownership document for the pinned KPipeWire close/completion source basis.
+No new native desktop acceptance is claimed.

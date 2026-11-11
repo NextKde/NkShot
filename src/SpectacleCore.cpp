@@ -450,6 +450,10 @@ SpectacleCore::SpectacleCore(QObject *parent)
         ExportManager::instance()->exportVideo(autoExportActions() | ExportManager::Save, fileUrl, videoOutputUrl());
         m_recordingEventLoopLocker.reset();
     });
+    connect(videoPlatform, &VideoPlatform::temporaryOutputCleanupWarning, this, [](const QString &message) {
+        // A cleanup warning is not a failure of the current/new recording.
+        InlineMessageModel::instance()->push(InlineMessageModel::Warning, message);
+    });
     connect(videoPlatform, &VideoPlatform::recordingCanceled, this, [this] {
         m_recordingEventLoopLocker.reset();
         if (restoreRecordingPreparation()) return;

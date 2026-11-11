@@ -147,3 +147,8 @@ ecm_add_test(RecordingPreparationTest.cpp ../src/RecordingPreparation.cpp ../src
     TEST_NAME recording_preparation_test LINK_LIBRARIES Qt::Test Qt::Core)
 ecm_add_test(RecordingStartGuardTest.cpp TEST_NAME recording_start_guard_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(recording_preparation_test recording_start_guard_test PROPERTIES TIMEOUT 30)
+
+# 077: exclusive, identity-bound private recording outputs.
+ecm_add_test(OwnedRecordingOutputTest.cpp ../src/Platforms/OwnedRecordingOutput.cpp ../src/Platforms/OwnedRecordingOutput.h
+    TEST_NAME owned_recording_output_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(owned_recording_output_test PROPERTIES TIMEOUT 30)

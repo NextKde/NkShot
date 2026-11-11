@@ -185,3 +185,31 @@ process at a time. The prior 18-test total described under 075 is historical;
 UI scenarios (launch-only/image/video/dark/1.5× text). The complete 20-target CTest suite passed with a dedicated private bus.
 ScreenColorPickerTest deliberately refuses to run without NKSHOT_TEST_PRIVATE_BUS
 and a real isolated bus; merely setting the flag is not a substitute for isolation.
+
+## Owned recording outputs (077)
+
+`owned_recording_output_test` links QtCore/Test and exercises Linux descriptor
+operations against private temporary directories. It does not require a desktop.
+Its FFmpeg compatibility case runs a local synthetic encode into a reservation;
+if the CLI is absent, that case explicitly skips rather than reporting success.
+The application does not install FFmpeg or change the user's permissions.
+
+```sh
+cmake --build build --target owned_recording_output_test
+ctest --test-dir build -R '^owned_recording_output_test$' --output-on-failure
+```
+
+Re-run the opt-in `NKSHOT_TEST_RECORDING_ADAPTER=1` harness from the 076 section
+against the final binary for cancellation/Idle/output retention and warning
+isolation. Ownership logic is production code; injected recorder providers and
+synthetic filesystem/media fixtures belong only to tests. Final results: 21/21 CTest targets, 16 detailed helper QtTest results with zero
+skips, 17 adapter groups, five Core UI scenarios and three warning UI scenarios. The [ownership document](recording-output-ownership.md)
+separates private cleanup, explicit preservation and same-UID TOCTOU limitations.
+
+For the warning screenshot workflow, combine `NKSHOT_TEST_RECORDING_ADAPTER=1`
+with `NKSHOT_TEST_RECORDING_CLEANUP_WARNING=1`, `NKSHOT_TEST_STARTUP=1`,
+`--launchonly` and the normal screenshot destination. The adapter first produces
+a real preservation warning using synthetic files; only the test harness forwards
+it to the actual Core/InlineMessage UI. Add `NKSHOT_TEST_DARK=1` or
+`NKSHOT_TEST_UI_SIZE=420x520` for appearance checks. Never run against private media
+or claim this signal handoff is a native recording.

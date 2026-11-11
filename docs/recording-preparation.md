@@ -43,7 +43,7 @@ and canonical containment, symlink and existing-file checks precede assigning th
 output target. An empty recorder-output reset is not file creation. Countdown
 cancellation must leave an explicit existing output unchanged.
 
-**Conservative cleanup limitation:** cancellation does not unlink an output just
+**076 historical cleanup limitation (superseded for private outputs by 077 below):** cancellation does not unlink an output just
 because its pathname was recorded; inode-bound ownership is not established.
 Starting cancellation can leave a partial private temporary file. Temporary
 directories have auto-removal disabled, so exit does not guarantee cleanup. A
@@ -99,3 +99,20 @@ rendered frame. The test checks both bottom-edge background pixels against the
 QML background color. A premature first capture had shown the initial minimum
 root size, not the resized content; this was corrected in the harness without a
 production layout change.
+
+## 077 ownership update
+
+077 supersedes the 076 private-partial-file cleanup limitation above with
+[owned output reservations](recording-output-ownership.md). New private files are
+reserved exclusively and bound to held descriptors; start and cleanup revalidate
+identity. Starting cancellation can remove a still-matching private reservation
+only after producer Idle, or immediately if no producer started. Success and
+failure after actual Recording preserve the file. Unsafe identity/permissions or
+cleanup failures preserve data and report a warning, not a new recording failure.
+No directories or unrelated files are recursively removed. Same-UID concurrent
+path swaps remain a documented non-atomic limitation.
+
+Explicit output is separate: existing paths are rejected, new paths are reserved
+and checked before start, but never automatically deleted. Empty/partial explicit
+files can remain after cancellation. Final 077 results are recorded in the ownership document; the
+recorded 076 passes remain historical, not evidence for this change.

@@ -96,6 +96,8 @@ target_sources(spectacle PRIVATE
     Platforms/screencasting.cpp
     RecordingPreparation.cpp
     RecordingPreparation.h
+    Platforms/OwnedRecordingOutput.cpp
+    Platforms/OwnedRecordingOutput.h
     Platforms/RecordingBackend.cpp
     Platforms/RecordingBackend.h
     Platforms/RecordingStartGuard.h

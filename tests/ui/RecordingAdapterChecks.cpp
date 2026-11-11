@@ -17,13 +17,17 @@
 #include <QDir>
 #include <QFileInfo>
 #include <memory>
+#include <unistd.h>
 namespace {
 using Recorder = NkShot::RecordingRecorder;
 using Prep = NkShot::RecordingPreparation;
 struct Observations {
     int outputs=0,outputTargets=0,streams=0,starts=0,stops=0,retired=0;
-    bool synchronousError=false,autoCreated=false;
-    QString output;
+    bool synchronousError=false,autoCreated=false,writeOnStart=false,writeOk=false;
+    QByteArray bytes=QByteArrayLiteral("synthetic controlled QFile partial bytes 077");
+    QByteArray destructorTail;
+    bool destructorTailWritten=false,destructorFilePresent=false;
+    QString output,lastNonemptyOutput;
     bool audio=false,microphone=false;
     Recorder::Encoder encoder=Recorder::Encoder::NoEncoder;
     Screencasting::CursorMode cursor=Screencasting::Hidden;
@@ -31,23 +35,26 @@ struct Observations {
 class FakeRecorder final : public Recorder {
 public:
     explicit FakeRecorder(std::shared_ptr<Observations> observations):data(std::move(observations)){}
+    ~FakeRecorder() override {if(!data->destructorTail.isEmpty()&&writer.isOpen()){data->destructorFilePresent=QFileInfo::exists(writer.fileName());data->destructorTailWritten=append(data->destructorTail);}writer.close();}
     State state() const override {return current;}
     QList<Encoder> suggestedEncoders() const override {return {Encoder::H264Main,Encoder::VP9,Encoder::Gif,Encoder::WebP};}
     QString output() const override {return data->output;}
     bool recordSystemAudio() const override {return data->audio;}
     bool recordMicrophone() const override {return data->microphone;}
-    void setOutput(const QString &value) override {++data->outputs;if(!value.isEmpty())++data->outputTargets;data->output=value;}
+    void setOutput(const QString &value) override {++data->outputs;if(!value.isEmpty()){++data->outputTargets;data->lastNonemptyOutput=value;}data->output=value;}
     void setEncoder(Encoder value) override {data->encoder=value;}
     void setRecordSystemAudio(bool value) override {data->audio=value;}
     void setRecordMicrophone(bool value) override {data->microphone=value;}
     void setNodeId(uint value) override {node=value;}
     void setMaxPendingFrames(int) override {}
-    void start() override {++data->starts;if(data->synchronousError){Q_EMIT errorFound(QStringLiteral("synthetic start failure"));current=PipeWireBaseEncodedStream::Idle;Q_EMIT stateChanged();}}
+    void start() override {++data->starts;if(data->writeOnStart){writer.setFileName(data->output);data->writeOk=writer.open(QIODevice::WriteOnly|QIODevice::Truncate)&&writer.write(data->bytes)==data->bytes.size()&&writer.flush();}if(data->synchronousError){Q_EMIT errorFound(QStringLiteral("synthetic start failure"));report(PipeWireBaseEncodedStream::Idle);}}
     void stop() override {++data->stops;}
-    void report(State state) {current=state;Q_EMIT stateChanged();}
+    bool append(const QByteArray &tail) {return writer.isOpen()&&writer.write(tail)==tail.size()&&writer.flush();}
+    void report(State state) {if(state==PipeWireBaseEncodedStream::Idle)writer.close();current=state;Q_EMIT stateChanged();}
     uint node=0;
 private:
     std::shared_ptr<Observations> data;
+    QFile writer; // Controlled producer handle lives until explicit Idle/destruction.
     State current=PipeWireBaseEncodedStream::Idle;
 };
 class FakeSource final : public NkShot::RecordingSource {
@@ -66,10 +73,10 @@ public:
     NkShot::RecordingSource *createOutputStream(QScreen *,Screencasting::CursorMode mode) override {return make(mode);}
     NkShot::RecordingSource *createWindowStream(const QString &,Screencasting::CursorMode mode) override {return make(mode);}
     NkShot::RecordingSource *createRegionStream(const QRect &,qreal,Screencasting::CursorMode mode) override {return make(mode);}
-    bool available=true;
+    bool available=true,returnNull=false;
     QPointer<FakeSource> source;
 private:
-    NkShot::RecordingSource *make(Screencasting::CursorMode mode){++data->streams;data->cursor=mode;source=new FakeSource(data,this);if(data->autoCreated)QTimer::singleShot(0,source,[source=source]{if(source)Q_EMIT source->created(42);});return source;}
+    NkShot::RecordingSource *make(Screencasting::CursorMode mode){++data->streams;data->cursor=mode;if(returnNull)return nullptr;source=new FakeSource(data,this);if(data->autoCreated)QTimer::singleShot(0,source,[source=source]{if(source)Q_EMIT source->created(42);});return source;}
     std::shared_ptr<Observations> data;
 };
 struct Fixture {
@@ -106,7 +113,7 @@ bool runRecordingAdapterChecks(QJsonObject *report) {
         f.adapter->startRecording(output,VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);QTest::qWait(50);CHECK_ADAPTER(f.data->streams==1,"retry blocked until producer Idle");
         f.recorder->report(PipeWireBaseEncodedStream::Recording);CHECK_ADAPTER(!f.adapter->isRecording()&&saved.isEmpty(),"late Recording after cancel is ignored");CHECK_ADAPTER(f.data->retired==0,"late Recording retains source");
         f.recorder->report(PipeWireBaseEncodedStream::Idle);CHECK_ADAPTER(QTest::qWaitFor([&]{return f.data->retired==1&&f.adapter->readyForRecording();},1000),"Idle retires source and restores readyForRecording");CHECK_ADAPTER(saved.isEmpty(),"canceled attempt never saved");
-        f.adapter->startRecording(output,VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);CHECK_ADAPTER(QTest::qWaitFor([&]{return f.data->streams==2;},2000),"retry after explicit Idle");f.adapter->cancelPendingRecording();
+        f.adapter->startRecording(QUrl::fromLocalFile(folder.filePath(QStringLiteral("post-selection/retry.mp4"))),VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);CHECK_ADAPTER(QTest::qWaitFor([&]{return f.data->streams==2;},2000),"retry after explicit Idle");f.adapter->cancelPendingRecording();
         passed.append(QStringLiteral("real-adapter post-selection deadline, frozen settings, starting-cancel/late-state/Idle retry"));
     }
     {
@@ -224,10 +231,198 @@ bool runRecordingAdapterChecks(QJsonObject *report) {
             CHECK_ADAPTER(QTest::qWaitFor([&]{return data->streams==attempt+1&&bool(caster->source);},2000),"native retry creates fresh source");
             Q_EMIT caster->source->created(42);if(attempt==1)adapter->cancelPendingRecording();
             CHECK_ADAPTER(QTest::qWaitFor([&]{return adapter->readyForRecording()&&data->retired==attempt+1;},4000),"native failed producer reaches Idle and retires source");
-            CHECK_ADAPTER(!adapter->isRecording()&&saved.isEmpty()&&!QFileInfo::exists(output.toLocalFile()),"native context failure/cancel never records or saves");
+            CHECK_ADAPTER(!adapter->isRecording()&&saved.isEmpty()&&QFileInfo::exists(output.toLocalFile())&&QFileInfo(output.toLocalFile()).size()==0,"native context failure/cancel never records or saves; explicit empty reservation retained");
         }
         CHECK_ADAPTER(!errors.isEmpty(),"native context error forwarded");QElapsedTimer destruction;destruction.start();adapter.reset();CHECK_ADAPTER(destruction.elapsed()<2000,"native adapter destruction bounded");
         passed.append(QStringLiteral("real-adapter + native patched KPipeWire failed-context/Cancel/Idle/retry/destruction"));
+    }
+
+    // All media bytes below are generated test markers, not playable recordings.
+    const auto readBytes=[](const QString &path){QFile file(path);return file.open(QIODevice::ReadOnly)?file.readAll():QByteArray();};
+    const auto writeBytes=[](const QString &path,const QByteArray &bytes){QFile file(path);return file.open(QIODevice::WriteOnly|QIODevice::Truncate)&&file.write(bytes)==bytes.size();};
+    Settings::setPreferredVideoFormat(VideoPlatform::MP4_H264);
+    const auto oldOwnedTemplate=Settings::videoFilenameTemplate();
+    const auto restoreOwnedTemplate=qScopeGuard([&]{Settings::setVideoFilenameTemplate(oldOwnedTemplate);});
+    Settings::setVideoFilenameTemplate(QStringLiteral("owned077"));
+    const auto startOwned=[&](Fixture &f){
+        const int previousStreams=f.data->streams;
+        f.adapter->startRecording(QUrl(),VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+        return QTest::qWaitFor([&]{return f.data->streams==previousStreams+1
+            &&f.adapter->preparation()->phase()==Prep::Starting
+            &&bool(f.caster->source)&&!f.data->output.isEmpty()&&QFileInfo::exists(f.data->output);},2000);
+    };
+    {
+        Fixture f;CHECK_ADAPTER(f.initialized(),"owned cancel init");f.data->writeOnStart=true;
+        QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+        CHECK_ADAPTER(startOwned(f),"owned output prepared");
+        const QString first=f.data->output;
+        CHECK_ADAPTER(QFileInfo::exists(first)&&QFileInfo(first).size()==0,"owned empty file reserved before producer");
+        const QString sibling=QFileInfo(first).dir().filePath(QStringLiteral("unknown-sibling077"));
+        CHECK_ADAPTER(writeBytes(sibling,QByteArrayLiteral("unowned sibling")),"unknown sibling created");
+        Q_EMIT f.caster->source->created(42);
+        CHECK_ADAPTER(f.data->writeOk&&readBytes(first)==f.data->bytes,"controlled QFile writes actual owned partial");
+        f.adapter->cancelPendingRecording();
+        CHECK_ADAPTER(readBytes(first)==f.data->bytes&&saved.isEmpty(),"cancel keeps producer file until Idle");
+        const QByteArray tail(" synthetic draining tail");
+        CHECK_ADAPTER(f.recorder->append(tail),"canceled controlled producer can still flush tail before Idle");
+        f.data->bytes+=tail;
+        CHECK_ADAPTER(readBytes(first)==f.data->bytes,"cancel leaves named partial writable while producer drains");
+        f.recorder->report(PipeWireBaseEncodedStream::Recording);
+        CHECK_ADAPTER(readBytes(first)==f.data->bytes&&!f.adapter->isRecording(),"late Recording preserves partial until Idle");
+        const QPointer<FakeRecorder> old=f.recorder;
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return f.adapter->readyForRecording();},1000)&&!QFileInfo::exists(first)&&saved.isEmpty(),"Idle removes owned canceled partial without saved");
+        CHECK_ADAPTER(readBytes(sibling)==QByteArrayLiteral("unowned sibling"),"unknown sibling untouched");
+        CHECK_ADAPTER(startOwned(f),"owned retry prepared");
+        const QString second=f.data->output;
+        CHECK_ADAPTER(QFileInfo::exists(second)&&QFileInfo(second).size()==0,"retry obtains empty exclusive reservation even if basename is reused");
+        if(old){Q_EMIT old->errorFound(QStringLiteral("stale old output error"));old->report(PipeWireBaseEncodedStream::Idle);}
+        QTest::qWait(40);
+        CHECK_ADAPTER(QFileInfo::exists(second)&&f.adapter->preparation()->phase()==Prep::Starting,"stale old Idle/error cannot remove new reservation");
+        const int startsBeforeRetry=f.data->starts;
+        Q_EMIT f.caster->source->created(42);
+        CHECK_ADAPTER(f.data->starts==startsBeforeRetry+1&&f.data->writeOk&&readBytes(second)==f.data->bytes,"retry starts new producer with actual bytes");
+        f.adapter->cancelPendingRecording();
+        CHECK_ADAPTER(readBytes(second)==f.data->bytes,"retry partial retained until own Idle");
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return !QFileInfo::exists(second);},1000),"retry own Idle removes its reservation");
+        QFile::remove(sibling);
+        passed.append(QStringLiteral("owned-file partial Cancel/late Recording/Idle cleanup, fresh retry, stale callbacks and unknown sibling"));
+    }
+    {
+        Fixture f;CHECK_ADAPTER(f.initialized(),"owned success init");f.data->writeOnStart=true;
+        QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+        CHECK_ADAPTER(startOwned(f),"owned success prepared");const QString output=f.data->output;
+        Q_EMIT f.caster->source->created(42);CHECK_ADAPTER(f.data->writeOk,"owned success actual bytes");
+        f.recorder->report(PipeWireBaseEncodedStream::Recording);f.adapter->finishRecording();
+        f.recorder->report(PipeWireBaseEncodedStream::Rendering);
+        CHECK_ADAPTER(readBytes(output)==f.data->bytes&&saved.isEmpty(),"owned Rendering bytes retained");
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return saved.size()==1;},1000)&&readBytes(output)==f.data->bytes,"owned success retains bytes and saves once");
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);CHECK_ADAPTER(saved.size()==1,"owned duplicate Idle not saved twice");
+        QFile::remove(output);
+        for(int destruction=0;destruction<2;++destruction){
+            Fixture recording;CHECK_ADAPTER(recording.initialized(),"recording failure preservation init");
+            recording.data->writeOnStart=true;
+            QSignalSpy failedSaved(recording.adapter.get(),&VideoPlatform::recordingSaved);
+            CHECK_ADAPTER(startOwned(recording),"recording failure reservation");const QString retained=recording.data->output;
+            Q_EMIT recording.caster->source->created(42);
+            CHECK_ADAPTER(recording.data->writeOk,"recording failure controlled bytes");
+            recording.recorder->report(PipeWireBaseEncodedStream::Recording);
+            if(destruction)recording.adapter.reset();
+            else{
+                Q_EMIT recording.recorder->errorFound(QStringLiteral("synthetic failure after actual Recording state"));
+                CHECK_ADAPTER(readBytes(retained)==recording.data->bytes,"Recording error retains bytes while producer drains");
+                recording.recorder->report(PipeWireBaseEncodedStream::Idle);
+                CHECK_ADAPTER(QTest::qWaitFor([&]{return recording.adapter->readyForRecording();},1000),"Recording error reaches Idle");
+            }
+            CHECK_ADAPTER(readBytes(retained)==recording.data->bytes&&failedSaved.isEmpty(),"Recording error or destruction preserves bytes without saved");
+            QFile::remove(retained);
+        }
+        passed.append(QStringLiteral("owned-file positive Recording/Rendering/Idle retains actual bytes and saves once"));
+    }
+    {
+        for(int scenario=0;scenario<2;++scenario){
+            Fixture f;CHECK_ADAPTER(f.initialized(),"owned prestart failure init");QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+            CHECK_ADAPTER(startOwned(f),"owned prestart reservation");const QString output=f.data->output;
+            if(scenario==0)Q_EMIT f.caster->source->failed(QStringLiteral("synthetic source failure before created"));
+            else f.adapter->cancelPendingRecording();
+            CHECK_ADAPTER(QTest::qWaitFor([&]{return !QFileInfo::exists(output);},1000)&&f.data->starts==0&&saved.isEmpty(),"source failure/cancel before start removes empty reservation");
+        }
+        for (int explicitPath = 0; explicitPath < 2; ++explicitPath) {
+            Fixture f; CHECK_ADAPTER(f.initialized(),"null createStream fixture initialization");
+            f.caster->returnNull=true;
+            QSignalSpy errors(f.adapter.get(),&VideoPlatform::recordingFailed);
+            QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+            const QUrl target=explicitPath ? QUrl::fromLocalFile(folder.filePath(QStringLiteral("explicit-null-stream.mp4"))) : QUrl();
+            f.adapter->startRecording(target,VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+            CHECK_ADAPTER(QTest::qWaitFor([&]{return !errors.isEmpty();},1000),"null createStream failure reported");
+            const QString reserved=f.data->lastNonemptyOutput;
+            CHECK_ADAPTER(!reserved.isEmpty()&&f.data->starts==0&&saved.isEmpty(),"null stream never starts or saves");
+            if(explicitPath)CHECK_ADAPTER(QFileInfo::exists(reserved)&&QFileInfo(reserved).size()==0,"null stream keeps explicit empty reservation");
+            else CHECK_ADAPTER(!QFileInfo::exists(reserved),"null stream removes private empty reservation");
+        }
+        {
+            Fixture f; CHECK_ADAPTER(f.initialized(),"pending destructor writer initialization");
+            f.data->writeOnStart=true;f.data->destructorTail=QByteArrayLiteral(" final destructor drain");
+            CHECK_ADAPTER(startOwned(f),"pending destructor reservation");const QString output=f.data->output;
+            Q_EMIT f.caster->source->created(42);CHECK_ADAPTER(f.data->writeOk,"pending destructor starts controlled writer");
+            f.adapter.reset();
+            CHECK_ADAPTER(f.data->destructorTailWritten&&f.data->destructorFilePresent,"pending destructor drains writer while named partial still exists before close");
+            CHECK_ADAPTER(!QFileInfo::exists(output),"pending destructor removes private file only after writer destruction");
+        }
+        passed.append(QStringLiteral("owned-file source failure/cancel/null stream remove private reservation, retain explicit empty output"));
+    }
+    {
+        for(int kind=0;kind<4;++kind){
+            Fixture f;CHECK_ADAPTER(f.initialized(),"owned replacement init");f.data->writeOnStart=true;
+            QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+            QSignalSpy warnings(f.adapter.get(),&VideoPlatform::temporaryOutputCleanupWarning);
+            CHECK_ADAPTER(startOwned(f),"owned replacement reservation");const QString output=f.data->output;
+            Q_EMIT f.caster->source->created(42);CHECK_ADAPTER(f.data->writeOk,"owned replacement initial partial");
+            const QString other=folder.filePath(QStringLiteral("replacement-%1.mp4").arg(kind));
+            const QByteArray replacement("replacement must remain");
+            if(kind==3){
+                CHECK_ADAPTER(::link(QFile::encodeName(output).constData(),QFile::encodeName(other).constData())==0,"owned multi-hardlink setup");
+            }else{
+                CHECK_ADAPTER(QFile::remove(output),"remove owned name for replacement");
+                if(kind==0)CHECK_ADAPTER(writeBytes(output,replacement),"replace regular inode");
+                if(kind==1){CHECK_ADAPTER(writeBytes(other,replacement),"symlink destination");CHECK_ADAPTER(QFile::link(other,output),"replace symlink");}
+                if(kind==2){CHECK_ADAPTER(QDir().mkdir(output),"replace directory");CHECK_ADAPTER(writeBytes(output+QStringLiteral("/keep"),replacement),"directory content");}
+            }
+            f.adapter->cancelPendingRecording();f.recorder->report(PipeWireBaseEncodedStream::Idle);
+            CHECK_ADAPTER(QTest::qWaitFor([&]{return f.adapter->readyForRecording();},1000)&&saved.isEmpty(),"replacement cancellation settles without saved");
+            CHECK_ADAPTER(QTest::qWaitFor([&]{return !warnings.isEmpty();},1000),"replacement cleanup preservation emits nonfatal warning");
+            if (!result.contains(QStringLiteral("cleanupWarning")))
+                result.insert(QStringLiteral("cleanupWarning"), warnings.first().first().toString());
+            if(kind==0)CHECK_ADAPTER(readBytes(output)==replacement,"replacement regular preserved");
+            if(kind==1)CHECK_ADAPTER(QFileInfo(output).isSymLink()&&readBytes(other)==replacement,"replacement symlink and target preserved");
+            if(kind==2)CHECK_ADAPTER(QFileInfo(output).isDir()&&readBytes(output+QStringLiteral("/keep"))==replacement,"replacement directory preserved");
+            if(kind==3)CHECK_ADAPTER(readBytes(output)==f.data->bytes&&readBytes(other)==f.data->bytes,"multiply-linked original preserved");
+            if(kind==2){QFile::remove(output+QStringLiteral("/keep"));QDir().rmdir(output);}else QFile::remove(output);
+            QFile::remove(other);
+        }
+        passed.append(QStringLiteral("owned-file cleanup refuses replaced inode, symlink, directory and multiple hardlinks"));
+    }
+    {
+        Fixture f;CHECK_ADAPTER(f.initialized(),"before-created replacement init");f.data->writeOnStart=true;
+        QSignalSpy errors(f.adapter.get(),&VideoPlatform::recordingFailed);
+        CHECK_ADAPTER(startOwned(f),"before-created reservation");const QString output=f.data->output;
+        CHECK_ADAPTER(QFile::remove(output)&&writeBytes(output,QByteArrayLiteral("replacement before created")),"before-created replacement");
+        Q_EMIT f.caster->source->created(42);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return !errors.isEmpty();},1000)&&f.data->starts==0,"identity mismatch before created refuses recorder start");
+        CHECK_ADAPTER(readBytes(output)==QByteArrayLiteral("replacement before created"),"before-created replacement not deleted");
+        QFile::remove(output);
+        passed.append(QStringLiteral("owned-file identity recheck before source-created refuses start without deleting replacement"));
+    }
+    {
+        for(int kind=0;kind<3;++kind){
+            const QString output=folder.filePath(QStringLiteral("explicit-existing-%1.mp4").arg(kind));
+            const QString other=folder.filePath(QStringLiteral("explicit-target-%1.mp4").arg(kind));
+            const QByteArray bytes("existing explicit bytes");
+            if(kind==0)CHECK_ADAPTER(writeBytes(output,bytes),"explicit existing file");
+            else {CHECK_ADAPTER(writeBytes(other,bytes),"explicit target");
+                if(kind==1)CHECK_ADAPTER(QFile::link(other,output),"explicit symlink");
+                else CHECK_ADAPTER(::link(QFile::encodeName(other).constData(),QFile::encodeName(output).constData())==0,"explicit hardlink");}
+            Fixture f;CHECK_ADAPTER(f.initialized(),"explicit rejection init");f.data->writeOnStart=true;
+            QSignalSpy errors(f.adapter.get(),&VideoPlatform::recordingFailed);
+            f.adapter->startRecording(QUrl::fromLocalFile(output),VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+            CHECK_ADAPTER(QTest::qWaitFor([&]{return !errors.isEmpty();},1000),"existing explicit commit rejected");
+            CHECK_ADAPTER(f.data->streams==0&&f.data->starts==0&&readBytes(output)==bytes,"existing explicit no stream and bytes preserved");
+            if(kind)CHECK_ADAPTER(readBytes(other)==bytes,"explicit link destination preserved");
+        }
+        passed.append(QStringLiteral("explicit-existing regular/symlink/hardlink rejected at commit without stream or byte changes"));
+    }
+    {
+        const QString output=folder.filePath(QStringLiteral("explicit-new-partial.mp4"));
+        Fixture f;CHECK_ADAPTER(f.initialized(),"new explicit init");f.data->writeOnStart=true;
+        QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+        f.adapter->startRecording(QUrl::fromLocalFile(output),VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return bool(f.caster->source);},1000),"new explicit source");
+        Q_EMIT f.caster->source->created(42);CHECK_ADAPTER(f.data->writeOk,"new explicit partial written");
+        f.adapter->cancelPendingRecording();f.recorder->report(PipeWireBaseEncodedStream::Idle);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return f.adapter->readyForRecording();},1000)&&saved.isEmpty()&&readBytes(output)==f.data->bytes,"new explicit partial never claimed by owned cleanup");
+        passed.append(QStringLiteral("new explicit output partial survives canceled producer Idle"));
     }
     result.insert(QStringLiteral("passed"),true);result.insert(QStringLiteral("checks"),passed);result.insert(QStringLiteral("nativeAcceptance"),false);result.insert(QStringLiteral("watchdog30sExecuted"),false);result.insert(QStringLiteral("watchdogInjected40msExecuted"),true);if(report)*report=result;return true;
 #undef CHECK_ADAPTER

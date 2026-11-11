@@ -10,6 +10,8 @@
 #include "CaptureStreamLease.h"
 #include "RecordingBackend.h"
 #include "RecordingStartGuard.h"
+#include "OwnedRecordingOutput.h"
+#include <QFile>
 #include <functional>
 #include <PipeWireRecord>
 #include <memory>
@@ -68,7 +70,8 @@ private:
     quint64 m_requestToken = 0;
     QTimer m_startWatchdog;
     QList<QMetaObject::Connection> m_targetConnections;
-    QString m_ownedPreparedOutput;
+    std::unique_ptr<NkShot::OwnedRecordingOutput> m_ownedPreparedOutput;
+    std::unique_ptr<QFile> m_explicitOutputReservation;
     bool m_discardPreparedOutput = false;
     void discardOwnedPreparedOutput();
 

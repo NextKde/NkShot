@@ -2033,3 +2033,58 @@ Independent decoding of the final new-file MP4 again confirms 70 frames over
 seconds; the source hash is unchanged. The final binary hash stayed identical
 through the independent regression runs. This validates local-file clipping,
 not native screen recording or device A/V synchronization.
+
+
+## 077 — Identity-bound cleanup for canceled private recording outputs
+
+A private recording now exclusively reserves its output before stream creation.
+The helper retains file and directory descriptors, checks owner-only permissions,
+rejects traversal/symlinks and verifies inode/device/link count both before
+producer start and before cleanup. The existing filename and relative save path
+are preserved, with no random attempt-directory prefix leaked into exports.
+
+Cancel or Starting failure removes only a safely identified private reservation,
+after producer Idle (or immediately if no producer was issued). Recorder
+destruction stops/joins its writer before pending cleanup. Successful recordings
+and failures after actual Recording retain their bytes. Missing/changed identity,
+expanded permissions or multiple links cause preservation; a queued warning does
+not fail a new attempt. Empty directories and unknown siblings are not recursively
+removed. POSIX inode-check then unlink is not atomic against an adversarial
+same-UID concurrent pathname swap; no absolute cleanup guarantee is claimed.
+
+Explicit output paths now require a new filename: existing regular files, hard
+links and symlinks are refused at commit without truncation. New explicit outputs
+are also exclusively reserved and rechecked before start, but are never deleted
+on cancellation, so an empty or partial explicit file can remain.
+
+Final verification:
+- 21/21 CTest targets, 18/18 static checks and whitespace passed.
+- Helper: 16 QtTest results, zero skips, including actual FFmpeg encoding into a
+  pre-created output and verification that its inode remains the reserved one.
+- 17 real Wayland-adapter groups using explicit test providers. New file cases
+  hold a QFile write handle after Cancel, append/flush real tail bytes, and verify
+  cleanup only after Idle; they cover retry, old callbacks, success preservation,
+  Recording failure/destruction preservation, pending destructor ordering, null
+  streams, protected replacements and explicit-output byte/hash preservation.
+  This controlled QFile writer is not native AVIO or screen recording.
+- Five actual Core/QML cancellation/restoration scenarios and three actual warning
+  UI scenarios passed. The warning message originates in real synthetic-file
+  cleanup refusal and is forwarded by a test-only bridge to the production Core
+  warning route. No platform recording capability was faked.
+- Independent review passed 13 QtTest results, including direct libavformat
+  AVIO open/write/flush/close and inode checks, root relocation/permissions, FIFO,
+  hard links, NUL paths and 200-iteration descriptor stability; 17 older workbench
+  flows and 18 external Gio portal/QML scenarios also passed.
+
+Reviewed software-window captures: [light](screenshots/077-warning-light.png),
+[dark](screenshots/077-warning-dark.png), and
+[420×520](screenshots/077-warning-compact.png). They contain no private media or
+desktop pixels. See [ownership and remaining limits](recording-output-ownership.md)
+and [reproduction](building.md#owned-recording-outputs-077). Real KDE selection,
+GPU capture, device audio and native captured-media/A-V acceptance remain open.
+
+The independent final MP4 regression output also passed exact decoding checks:
+70 frames over 3.5 seconds, first/last content matching source frames 25/94,
+AAC pulses at 0.75/1.75/2.75 seconds, and unchanged source hash. The final binary
+hash was unchanged across validation. This verifies the existing local export
+workflow, not newly captured native recording.

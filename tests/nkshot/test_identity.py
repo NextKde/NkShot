@@ -158,11 +158,13 @@ class IdentityTests(unittest.TestCase):
         start = source[source.index('void VideoPlatformWayland::commitRecording'):source.index('void VideoPlatformWayland::finishRecording()')]
         stream = start.index('m_screencasting->createOutputStream')
         # Structural boundary, not a claim of real compositor execution.
-        for marker in ['m_recorder->setOutput(QString())', 'mkDirPath(tempUrl)',
+        for marker in ['m_recorder->setOutput(QString())', 'm_ownedPreparedOutput->reserve(',
                        'mkDirPath(fileUrl)', 'm_recorder->setOutput(localFile)',
                        'setRecordMicrophone(m_requestMicrophone && audioSupported)']:
             self.assertLess(start.index(marker), stream)
         self.assertEqual(start.count('encoder == Encoder::NoEncoder'), 2)
+        self.assertIn('QIODevice::WriteOnly|QIODevice::NewOnly', start)
+        self.assertIn('m_ownedPreparedOutput->identityMatches()', start)
         self.assertIn('if (!stream)', start)
 
     def test_recording_callbacks_are_scoped_and_connected_once(self):

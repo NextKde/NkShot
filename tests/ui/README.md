@@ -607,3 +607,14 @@ zero-delay no-flash, readiness rejection and cross-workflow cancellation.
 Screenshots identify synthetic selection results; they are not screenshots of a
 native selection or proof of compositor capture. Use an isolated test session
 bus and fresh configuration, never a user's desktop session or private media.
+
+### Private recording output cleanup (077)
+
+The adapter harness now runs 17 groups, including real synthetic file writes with
+a held QFile producer, cancellation/drain/Idle cleanup, protected replacements,
+explicit NewOnly reservation and success/error retention. Its JSON includes the
+first actual preservation warning. Set `NKSHOT_TEST_RECORDING_CLEANUP_WARNING=1`
+alongside `NKSHOT_TEST_RECORDING_ADAPTER=1`, `NKSHOT_TEST_STARTUP=1` and
+`--launchonly` to forward that warning through the production Core/InlineMessage
+route and capture the real warning layout. This bridge is test-only, with no
+capability override and no native-recording claim.
