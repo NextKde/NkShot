@@ -1344,3 +1344,29 @@ fixture. At 100%, one image pixel occupies one logical Qt unit; physical high-DP
 1:1 output, touch/trackpad behavior and native stacking are not certified.
 No pinch gesture or compositor/recording success is claimed. Environment lookup
 again returned only the cloud computer, not a real KDE desktop.
+
+## 062 — Grouped playback speed and sound controls
+
+Recording previews gain one Playback settings button rather than a row of extra
+controls. Its compact popup groups speed (0.5×–2×), mute and volume. Silent media
+shows why sound controls are unavailable. These are preview settings; source
+files and capture preferences are unaffected. GIF/WebP retain their independent
+animated-image decoder route without misleading audio/speed controls.
+
+The actual Qt multimedia backend loads a generated six-second H.264/AAC fixture.
+UI events exercise mute/unmute, volume, 2× selection, Escape, reopening and outside
+dismissal, with byte-for-byte source preservation. A silent MP4 verifies disabled
+sound controls; GIF, WebP and corrupt MP4 retry regressions pass. Build, CTest 9/9,
+static 16/16 and whitespace checks pass. Visual review replaced platform-default
+boxy combo/volume controls with the shared NextKde colors and rounded treatment.
+Reviewed [light settings](screenshots/062-playback-light.png.settings.png),
+[dark settings](screenshots/062-playback-dark.png.settings.png),
+[compact settings](screenshots/062-playback-compact.png.settings.png) and
+[silent-file guidance](screenshots/062-playback-silent.png.settings.png).
+
+All images are actual software-rendered windows using synthetic media. The cloud
+reports no audio output device, so metadata and output-property tests do not prove
+audible playback or A/V synchronization. Real KWin capture, microphone/system
+recording and capture pause/resume remain unaccepted. The inspected KPipeWire
+recording interface does not provide a ready-made seamless pause operation; no
+stop/restart workaround is presented as native pause/resume.

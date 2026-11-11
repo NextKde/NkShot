@@ -57,3 +57,20 @@ software UI screenshots are recorded in the iteration log.
 These are generated local media fixtures, not files captured from a real desktop.
 They do not change any full recording acceptance item above. Audio, GPU output,
 rotation/HDR, high-resolution throughput and native desktop capture remain open.
+
+## Playback sound and speed (062)
+
+A single Playback settings button groups 0.5×–2× playback speed, mute and volume.
+These controls affect the preview only, not the saved media or future capture
+settings. Silent files show an explicit no-audio-track message and disable sound
+controls. GIF/WebP continue on their separate animated-image route and do not
+expose these audio/speed settings. Popup Escape, reopening and outside dismissal
+are exercised along with the normal play/pause/seek path.
+
+A generated six-second H.264/AAC file is probed for both tracks, then loaded by the
+actual Qt multimedia backend. UI interactions verify the playback-rate and audio
+output settings; no physical audio device exists here, so audible output, pitch
+quality and A/V synchronization are **not** certified. The displayed test pattern
+and tone are synthetic fixtures, not a desktop recording. MP4 without audio,
+GIF/WebP and corrupt-file retry are regression-tested. Native recording, live
+microphone/system capture and capture pause/resume remain separate open items.

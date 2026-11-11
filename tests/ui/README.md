@@ -271,3 +271,13 @@ It checks scale bounds, Fit after resizing, full-resolution clipboard pixels and
 unchanged source/history. `NKSHOT_TEST_PIN_ZOOM_COMPACT=1` uses a 260×300 window.
 The main screenshot shows the panned 100% view; `.fit.png` shows the initial Fit
 view; `.width.png` shows the top-aligned width-fit reading mode. No screenshot is a live captured desktop or a touch/trackpad acceptance test.
+
+### Playback sound/speed controls (062)
+
+Combine `NKSHOT_TEST_PLAYBACK=/path/to/with-audio.mp4` and
+`NKSHOT_TEST_PLAYBACK_SETTINGS=1` to use actual popup, mute/unmute, volume slider
+and speed-combo interactions, followed by Escape/reopen/outside dismissal.
+`NKSHOT_TEST_PLAYBACK_SILENT=1` expects no audio track and disabled sound controls.
+The additional `.settings.png` shows the opened popup. Audio-track metadata and
+QAudioOutput properties are checked, not physical sound output. Source-file bytes
+must remain unchanged. The fixture used for 062 is generated H.264 plus AAC tone.

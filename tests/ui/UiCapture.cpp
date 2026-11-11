@@ -671,6 +671,32 @@ void installUiCaptureHook(QApplication &application)
                         application.exit(119); return;
                     }
                 }
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK_SETTINGS")) {
+                    auto click=[&](const char *name){auto item=visualItem(viewer->contentItem(),QString::fromLatin1(name));if(!item || !item->isVisible()) return false;QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());QTest::qWait(120);return true;};
+                    auto player=recording->findChild<QObject *>(QStringLiteral("nkshotMediaPlayer"));
+                    auto audio=recording->findChild<QObject *>(QStringLiteral("nkshotPlaybackAudio"));
+                    auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotPlaybackSettingsPopup"));
+                    if(!player || !audio || !popup || !click("nkshotPlaybackSettings") || !popup->property("opened").toBool()) {application.exit(244);return;}
+                    auto mute=visualItem(viewer->contentItem(),QStringLiteral("nkshotPlaybackMute"));
+                    auto volume=visualItem(viewer->contentItem(),QStringLiteral("nkshotPlaybackVolume"));
+                    const bool hasAudio=player->property("hasAudio").toBool();
+                    if(!mute || !volume || hasAudio==qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK_SILENT") || mute->isEnabled()!=hasAudio || volume->isEnabled()!=hasAudio) {application.exit(245);return;}
+                    if(hasAudio) {
+                        if(!click("nkshotPlaybackMute") || !audio->property("muted").toBool() || volume->isEnabled()) {application.exit(246);return;}
+                        if(!click("nkshotPlaybackMute") || audio->property("muted").toBool() || !volume->isEnabled()) {application.exit(247);return;}
+                        QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,volume->mapToScene(QPointF(volume->width()*0.35,volume->height()/2)).toPoint());QTest::qWait(100);
+                        if(audio->property("volume").toReal()<0.2 || audio->property("volume").toReal()>0.5) {application.exit(248);return;}
+                    }
+                    if(!click("nkshotPlaybackSpeed")) {application.exit(249);return;}
+                    QTest::keyClick(viewer,Qt::Key_End);QTest::keyClick(viewer,Qt::Key_Return);QTest::qWait(150);
+                    if(qAbs(player->property("playbackRate").toReal()-2)>0.01) {application.exit(250);return;}
+                    viewer->grabWindow().save(destination+QStringLiteral(".settings.png"));
+                    QTest::keyClick(viewer,Qt::Key_Escape);QTest::qWait(150);
+                    if(popup->property("opened").toBool() || !click("nkshotPlaybackSettings") || !popup->property("opened").toBool()) {application.exit(251);return;}
+                    QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,recording->mapToScene(QPointF(12,12)).toPoint());QTest::qWait(150);
+                    if(popup->property("opened").toBool()) {application.exit(252);return;}
+                    qInfo()<<"NkShot playback speed/mute/volume/silent-track gating/Escape/reopen/outside-dismiss UI passed; audible output not verified";
+                }
                 if (qEnvironmentVariableIsSet("NKSHOT_TEST_MEDIA_SWITCH")) {
                     QTemporaryDir repairFolder;
                     const auto repairPath = repairFolder.filePath(QStringLiteral("repair.mp4"));

@@ -93,6 +93,7 @@ FocusScope {
 
     AudioOutput {
         id: audioOutput
+        objectName: "nkshotPlaybackAudio"
     }
 
     MediaPlayer {
@@ -258,6 +259,16 @@ FocusScope {
                     mediaPlayer.setPosition(pos)
                 }
             }
+            TtToolButton {
+                id: playbackSettingsButton
+                objectName: "nkshotPlaybackSettings"
+                visible: !root.usesAnimatedImage
+                enabled: mediaPlayer.hasVideo
+                icon.name: "configure"
+                text: i18nc("@action", "Playback settings")
+                display: QQC.ToolButton.IconOnly
+                onClicked: playbackSettings.opened ? playbackSettings.close() : playbackSettings.open()
+            }
             QQC.Label {
                 visible: !root.hasAnimatedImage
                 leftPadding: parent.spacing
@@ -324,4 +335,108 @@ FocusScope {
             }
         ]
     }
+    QQC.Popup {
+        id: playbackSettings
+        objectName: "nkshotPlaybackSettingsPopup"
+        parent: root
+        width: Math.min(280, root.width - 24)
+        x: Math.max(12, root.width - width - 12)
+        y: Math.max(12, toolBar.y - height - 8)
+        padding: 16
+        closePolicy: QQC.Popup.CloseOnEscape | QQC.Popup.CloseOnPressOutside
+        background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0}
+        contentItem: ColumnLayout {
+            spacing: 12
+            QQC.Label {
+                text: i18nc("@title", "Playback")
+                color: Kos.AppTheme.paletteText
+                font.bold: true
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                QQC.Label {text: i18nc("@label", "Speed"); color: Kos.AppTheme.paletteText; Layout.fillWidth: true}
+                QQC.ComboBox {
+                    id: speedChoice
+                    implicitHeight: 32
+                    leftPadding: 10
+                    rightPadding: 28
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 8; elevation: 0; strokeWidth: 0}
+                    contentItem: QQC.Label {text: speedChoice.displayText; color: Kos.AppTheme.paletteText; verticalAlignment: Text.AlignVCenter}
+                    indicator: QQC.Label {text: "⌄"; color: Kos.AppTheme.mutedText; x: speedChoice.width - width - 10; anchors.verticalCenter: parent.verticalCenter}
+                    objectName: "nkshotPlaybackSpeed"
+                    model: ["0.5×", "0.75×", "1×", "1.25×", "1.5×", "2×"]
+                    property var rates: [0.5, 0.75, 1, 1.25, 1.5, 2]
+                    currentIndex: rates.indexOf(mediaPlayer.playbackRate)
+                    Accessible.name: i18nc("@label", "Playback speed")
+                    onActivated: mediaPlayer.playbackRate = rates[currentIndex]
+                }
+            }
+            QQC.CheckBox {
+                id: muteChoice
+                palette.windowText: Kos.AppTheme.paletteText
+                indicator: Rectangle {
+                    x: muteChoice.leftPadding
+                    y: (muteChoice.height - height) / 2
+                    width: 18; height: 18; radius: 5
+                    color: muteChoice.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
+                    border.color: muteChoice.checked ? Kos.AppTheme.accent : Kos.AppTheme.border
+                    opacity: muteChoice.enabled ? 1 : 0.5
+                    QQC.Label {anchors.centerIn: parent; text: "✓"; visible: muteChoice.checked; color: Kos.AppTheme.accentText}
+                }
+                objectName: "nkshotPlaybackMute"
+                Layout.fillWidth: true
+                text: i18nc("@option:check", "Mute playback")
+                enabled: mediaPlayer.hasAudio
+                checked: audioOutput.muted
+                onToggled: audioOutput.muted = checked
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                QQC.Slider {
+                    id: volumeSlider
+                    implicitHeight: 28
+                    implicitWidth: 160
+                    background: Rectangle {
+                        x: volumeSlider.leftPadding
+                        y: volumeSlider.topPadding + (volumeSlider.availableHeight - height) / 2
+                        width: volumeSlider.availableWidth; height: 4; radius: 2
+                        color: Kos.AppTheme.border
+                        opacity: volumeSlider.enabled ? 1 : 0.5
+                        Rectangle {width: volumeSlider.visualPosition * parent.width; height: parent.height; radius: 2; color: Kos.AppTheme.accent}
+                    }
+                    handle: Rectangle {
+                        x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
+                        y: volumeSlider.topPadding + (volumeSlider.availableHeight - height) / 2
+                        width: 14; height: 14; radius: 7
+                        color: Kos.AppTheme.contentBackground
+                        border.color: Kos.AppTheme.accent; border.width: 2
+                        opacity: volumeSlider.enabled ? 1 : 0.5
+                    }
+                    objectName: "nkshotPlaybackVolume"
+                    Layout.fillWidth: true
+                    from: 0; to: 1
+                    stepSize: 0.05
+                    enabled: mediaPlayer.hasAudio && !audioOutput.muted
+                    value: audioOutput.volume
+                    Accessible.name: i18nc("@label", "Playback volume")
+                    onMoved: audioOutput.volume = value
+                }
+                QQC.Label {
+                    text: Math.round(audioOutput.volume * 100) + "%"
+                    color: Kos.AppTheme.mutedText
+                    Layout.minimumWidth: 36
+                }
+            }
+            QQC.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: mediaPlayer.hasAudio ? i18nc("@info", "Playback only. The saved recording stays unchanged.") : i18nc("@info", "This recording has no audio track.")
+                color: Kos.AppTheme.mutedText
+            }
+        }
+    }
+    onSourceUrlChanged: playbackSettings.close()
+
 }
