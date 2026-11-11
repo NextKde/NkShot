@@ -153,3 +153,9 @@ and clicks the installed eng or chi_sim entry before waiting for real recognitio
 The menus are programmatically opened, but the language choice is a mouse click.
 Combine with OCR_CHINESE, OCR_SAVE, OCR_COMPACT or DARK for the existing downstream
 checks. A pre-click menu image is saved alongside the result with `.menu.png`.
+
+`NKSHOT_TEST_TOOL_KEYS=1 NKSHOT_TEST_EDITING=1` seeds one annotation and sends
+actual Alt+1…7 events in dock order, checking tool identity, unchanged rendered
+pixels and undo depth. Run separately from TEXT_INPUT/REDACTION tests because
+those tests intentionally assert history starting from an unedited document.
+Redaction regressions require `make_fixture.py --texture`.

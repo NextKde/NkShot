@@ -53,6 +53,7 @@ ButtonGrid {
         parent: target || root
         text: {
             let name = target?.text ?? ""
+            if (root.essentialsOnly && target?.toolKey) name += " (" + target.toolKey + ")"
             let extraHelp = target?.extraHelp ?? ""
             if (!extraHelp) {
                 return name
@@ -87,6 +88,13 @@ ButtonGrid {
         icon.color: palette.buttonText
         property string extraHelp: ""
         property bool secondary: false
+        property string toolKey: ""
+        Shortcut {
+            sequence: button.toolKey
+            enabled: root.essentialsOnly && button.visible && button.enabled && button.toolKey.length > 0
+            context: Qt.WindowShortcut
+            onActivated: button.clicked()
+        }
         visible: !root.essentialsOnly || !secondary
         implicitHeight: root.paletteMode ? 36 : QmlUtils.iconTextButtonHeight
         implicitWidth: root.paletteMode ? 36 : implicitContentWidth + leftPadding + rightPadding
@@ -140,6 +148,7 @@ ButtonGrid {
     }
     ToolButton {
         id: cropToolButton
+        toolKey: "Alt+1"
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar crop image tool", "Crop")
         icon.name: "transform-crop"
@@ -149,6 +158,7 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar select annotation tool", "Select")
+        toolKey: "Alt+2"
         icon.name: "edit-select"
         enabled: root.editorDocument.undoStackDepth > 0
         checked: root.toolType === AnnotationTool.SelectTool
@@ -157,6 +167,7 @@ ButtonGrid {
     ToolButton {
         objectName: "nkshotFreehandTool"
         id: freehandButton
+        toolKey: "Alt+3"
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar freehand line tool", "Freehand")
         extraHelp: i18nc("@info:tooltip", "Shift: Snap to straight lines")
@@ -186,6 +197,7 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar arrow line tool", "Arrow")
+        toolKey: "Alt+4"
         extraHelp: lineButton.extraHelp
         icon.name: "draw-arrow"
         checked: root.toolType === AnnotationTool.ArrowTool
@@ -193,6 +205,7 @@ ButtonGrid {
     }
     ToolButton {
         id: rectangleButton
+        toolKey: "Alt+5"
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar rectangle tool", "Rectangle")
         extraHelp: i18nc("@info:tooltip",
@@ -213,6 +226,7 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar pixelate tool", "Pixelate")
+        toolKey: "Alt+6"
         extraHelp: rectangleButton.extraHelp
         icon.name: "pixelate"
         checked: root.toolType === AnnotationTool.PixelateTool
@@ -230,6 +244,7 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar text tool", "Text")
+        toolKey: "Alt+7"
         icon.name: "draw-text"
         checked: root.toolType === AnnotationTool.TextTool
         onClicked: root.tool.type = AnnotationTool.TextTool

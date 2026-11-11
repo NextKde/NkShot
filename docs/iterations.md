@@ -871,3 +871,25 @@ and exact UTF-8 save. Reviewed [light menu](screenshots/045-ocr-menu-light.png),
 Only installed eng/chi_sim models and software-rendered menus were exercised;
 large language lists, mixed-language accuracy and native desktop operation are
 not established. This editor submenu does not replace the capture-overlay action.
+
+## 046 — Fast editor tool switching and core editing regression
+
+The standalone editor's seven primary tools gain window-scoped Alt+1…Alt+7
+shortcuts, in dock order: Crop, Select, Freehand, Arrow, Rectangle, Pixelate, Text.
+Their hover-help text includes the assigned key. Shortcuts require the visible,
+enabled essentials palette; the full-screen capture palette is unchanged. Normal
+unmodified typing is not intercepted. Disabled Select remains disabled when there
+are no annotations. Tool changes use the same existing button handlers.
+
+Final build, CTest 5/5 and static checks 16/16 pass. Real key events switch all
+seven tools without changing rendered pixels or undo depth, in both themes.
+Separate actual editing regressions pass: English keyboard plus Chinese IME text,
+text undo/redo, drag crop cancel/accept and keyboard undo/redo, and pixelate/blur
+drag gestures with pixel-exact undo/redo. Redaction needs the patterned fixture;
+a flat-color input is not a useful visible-change assertion. Reviewed
+[light](screenshots/046-tool-keys-light.png), [dark](screenshots/046-tool-keys-dark.png),
+[text](screenshots/046-tool-keys-text.png) and
+[pixelation](screenshots/046-tool-keys-pixelate.png).
+These are actual software-rendered editor interactions on synthetic images, not
+KDE desktop capture/recording verification, compositor shortcut-conflict testing
+or a guarantee that blurred/pixelated private information cannot be recovered.

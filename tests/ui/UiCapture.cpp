@@ -641,6 +641,36 @@ void installUiCaptureHook(QApplication &application)
                 QTest::qWait(300);
                 qInfo() << "NkShot actual crop cancel/accept and keyboard undo/redo passed" << rect;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_TOOL_KEYS")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                if (document->undoStackDepth() == 0) {
+                    document->tool()->setType(AnnotationTool::RectangleTool);
+                    document->beginItem({100, 100}); document->continueItem({200, 160}); document->finishItem();
+                }
+                const auto pixels = document->renderToImage();
+                const auto depth = document->undoStackDepth();
+                const QList<AnnotationTool::Tool> types{AnnotationTool::CropTool, AnnotationTool::SelectTool,
+                    AnnotationTool::FreehandTool, AnnotationTool::ArrowTool, AnnotationTool::RectangleTool,
+                    AnnotationTool::PixelateTool, AnnotationTool::TextTool};
+                viewer->requestActivate();
+                QTest::qWait(100);
+                for (int i = 0; i < types.size(); ++i) {
+                    if (i == 1 && depth == 0) continue;
+                    QTest::keyClick(viewer, Qt::Key(Qt::Key_1 + i), Qt::AltModifier);
+                    if (!QTest::qWaitFor([&] { return document->tool()->type() == types[i]; }, 1000)
+                        || !samePixels(document->renderToImage(), pixels) || document->undoStackDepth() != depth) {
+                        qCritical() << "Tool shortcut failed" << i << document->tool()->type();
+                        application.exit(110); return;
+                    }
+                }
+                QTest::keyClick(viewer, Qt::Key_3, Qt::AltModifier);
+                auto freehand = visualItem(viewer->contentItem(), QStringLiteral("nkshotFreehandTool"));
+                if (freehand) {
+                    QTest::mouseMove(viewer, freehand->mapToScene(QPointF(freehand->width()/2, freehand->height()/2)).toPoint());
+                    QTest::qWait(1200);
+                }
+                qInfo() << "NkShot actual Alt tool shortcuts preserve pixels and undo history";
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_TEXT_INPUT")) {
                 auto document = SpectacleCore::instance()->annotationDocument();
                 auto viewport = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnnotationViewport"));
