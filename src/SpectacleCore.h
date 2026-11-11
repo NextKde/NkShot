@@ -36,6 +36,7 @@ class SpectacleCore : public QObject
 #ifdef NKSHOT_ENABLE_UI_CAPTURE
     friend class RecordingPreparationUiChecks;
     friend class RecordingControlsUiChecks;
+    friend class LocalMediaOpenUiChecks;
 #endif
 
     Q_OBJECT
@@ -76,6 +77,12 @@ public:
     void setScreenCaptureUrl(const QString &filePath);
 
     QUrl outputUrl() const;
+    bool canOpenMedia() const;
+    quint64 mediaOpenEpoch() const { return m_captureEpoch; }
+    bool hasOpenedMedia() const { return !m_openedMediaSource.isEmpty(); }
+    QUrl openedMediaCopyUrl() const;
+    bool commitOpenedMedia(const QUrl &source, const QImage &image, bool video);
+
 
     int captureTimeRemaining() const;
     qreal captureProgress() const;
@@ -219,6 +226,9 @@ private:
     std::array<bool, CommandLineOptions::TotalOptions> m_cliOptions = {};
 
     QUrl m_editExistingUrl;
+    QUrl m_openedMediaSource;
+    int m_pendingImageGrabs = 0;
+    quint64 m_imageGrabSerial = 0;
     QUrl m_outputUrl;
 
     ImagePlatform::GrabMode m_lastGrabMode = ImagePlatform::GrabMode::NoGrabModes;

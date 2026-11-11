@@ -14,6 +14,7 @@
 
 class ViewerWindowPrivate;
 class VideoClipJob;
+namespace NkShot { class LocalMediaLoader; }
 
 /**
  * The window used for viewing media after it has been accepted or finished recording.
@@ -24,6 +25,8 @@ class VideoClipJob;
 class ViewerWindow : public SpectacleWindow
 {
     Q_OBJECT
+    Q_PROPERTY(bool openingMedia READ openingMedia NOTIFY openingMediaChanged)
+    Q_PROPERTY(bool canOpenMedia READ canOpenMedia NOTIFY openingMediaChanged)
     Q_PROPERTY(bool scanningCode READ scanningCode NOTIFY scanningCodeChanged)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
@@ -42,6 +45,9 @@ public:
 
     static ViewerWindow *instance();
 
+    Q_INVOKABLE void openMedia();
+    bool openingMedia() const { return m_openingMedia; }
+    bool canOpenMedia() const;
     Q_INVOKABLE QQuickWindow *openScrollPreview();
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
@@ -62,6 +68,7 @@ public:
     Q_INVOKABLE void chooseClipOutput(qint64 startMs, qint64 endMs);
     Q_INVOKABLE void cancelClipExport();
 Q_SIGNALS:
+    void openingMediaChanged();
     void choosingClipOutputChanged();
     void clipUiCancelled();
     void scanningCodeChanged();
@@ -83,6 +90,12 @@ private:
 
     void setBackgroundColorRole(QPalette::ColorRole role);
 
+    void offerOpenedMedia(const QUrl &source, const QImage &image, bool video);
+    void finishOpeningMedia();
+    NkShot::LocalMediaLoader *m_mediaLoader = nullptr;
+    QPointer<QObject> m_openDialog;
+    bool m_openingMedia = false;
+    quint64 m_openEpoch = 0;
     QPointer<QQuickWindow> m_colorPicker;
     QPointer<QQuickWindow> m_quickNote;
     QPointer<QQuickWindow> m_scrollPreview;

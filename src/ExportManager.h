@@ -54,6 +54,7 @@ public:
     static QString defaultVideoSaveLocation();
     bool isFileExists(const QUrl &url) const;
     bool isImageSavedNotInTemp() const;
+    bool choosingSaveDestination() const { return m_pendingSaveDialogs > 0; }
     void setImage(const QImage &image);
     QImage image() const;
     void updateTimestamp();
@@ -126,7 +127,7 @@ public:
     /**
      * Export an video with the given actions using the given URL or an automatically generated URL.
      */
-    void exportVideo(ExportManager::Actions actions, const QUrl &inputUrl, QUrl outputUrl = {});
+    void exportVideo(ExportManager::Actions actions, const QUrl &inputUrl, QUrl outputUrl = {}, bool preserveSource = false);
 
     /**
      * Scan the current image for a QR code.
@@ -158,6 +159,7 @@ private:
     bool isTempFileAlreadyUsed(const QUrl &url) const;
 
     bool m_imageSavedNotInTemp;
+    int m_pendingSaveDialogs = 0;
     QImage m_saveImage;
     QDateTime m_timestamp;
     QUrl m_tempFile;

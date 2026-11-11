@@ -6,6 +6,10 @@
  */
 
 #include "ViewerWindow.h"
+#include "LocalMediaLoader.h"
+#include "RecordingPreparation.h"
+#include <QMessageBox>
+#include <QProgressDialog>
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
 #include "QuickNoteWindow.h"
@@ -53,6 +57,24 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
     s_viewerWindowInstance = this;
     s_isAnnotating = false;
     m_clipJob = new VideoClipJob(this);
+    m_mediaLoader = new NkShot::LocalMediaLoader(this);
+    connect(m_mediaLoader, &NkShot::LocalMediaLoader::imageReady, this,
+        [this](const QImage &image, const QUrl &source) { offerOpenedMedia(source, image, false); });
+    connect(m_mediaLoader, &NkShot::LocalMediaLoader::videoReady, this,
+        [this](const QUrl &source, qint64, QSize, bool) { offerOpenedMedia(source, {}, true); });
+    connect(m_mediaLoader, &NkShot::LocalMediaLoader::changed, this, [this] {
+        if (!m_mediaLoader->busy() && !m_mediaLoader->error().isEmpty()) {
+            InlineMessageModel::instance()->push(InlineMessageModel::Error, m_mediaLoader->error());
+            finishOpeningMedia();
+        }
+    });
+    connect(SpectacleCore::instance()->videoPlatform(), &VideoPlatform::recordingStateChanged,
+        this, &ViewerWindow::openingMediaChanged);
+    connect(SpectacleCore::instance()->videoPlatform()->preparation(), &NkShot::RecordingPreparation::changed,
+        this, &ViewerWindow::openingMediaChanged);
+    connect(m_clipJob, &VideoClipJob::changed, this, &ViewerWindow::openingMediaChanged);
+    connect(this, &ViewerWindow::choosingClipOutputChanged, this, &ViewerWindow::openingMediaChanged);
+    new QShortcut(QKeySequence::Open, this, this, &ViewerWindow::openMedia);
     connect(SpectacleCore::instance(), &SpectacleCore::currentVideoChanged, this, &ViewerWindow::cancelClipExport);
     connect(SpectacleCore::instance(), &SpectacleCore::videoModeChanged, this, &ViewerWindow::cancelClipExport);
     connect(SpectacleCore::instance()->videoPlatform(), &VideoPlatform::recordingStateChanged, this, [this] {
@@ -279,6 +301,124 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap)
         }));
     });
     dialog->open();
+}
+
+bool ViewerWindow::canOpenMedia() const
+{
+    return !m_openingMedia && SpectacleCore::instance()->canOpenMedia()
+        && !m_clipJob->busy() && !choosingClipOutput()
+        && !m_combiningImages && !m_resizingImage;
+}
+
+void ViewerWindow::finishOpeningMedia()
+{
+    m_openingMedia = false;
+    if (auto widget = qobject_cast<QWidget *>(m_openDialog.data())) {
+        widget->hide();
+        widget->deleteLater();
+    }
+    m_openDialog = nullptr;
+    Q_EMIT openingMediaChanged();
+}
+
+void ViewerWindow::openMedia()
+{
+    if (!canOpenMedia()) {
+        InlineMessageModel::instance()->push(InlineMessageModel::InformationalType,
+            i18nc("@info", "Finish the current task before opening another file."));
+        return;
+    }
+    m_openingMedia = true;
+    m_openEpoch = SpectacleCore::instance()->mediaOpenEpoch();
+    auto dialog = new QFileDialog();
+    m_openDialog = dialog;
+    dialog->setObjectName(QStringLiteral("nkshotOpenMediaDialog"));
+    dialog->winId();
+    dialog->windowHandle()->setTransientParent(this);
+    dialog->setWindowTitle(i18nc("@title:window", "Open image or recording"));
+    dialog->setFileMode(QFileDialog::ExistingFile);
+    dialog->setAcceptMode(QFileDialog::AcceptOpen);
+    dialog->setSupportedSchemes({QStringLiteral("file")});
+    dialog->setNameFilters({
+        i18nc("@item:inlistbox", "Supported images and short recordings (*.png *.jpg *.jpeg *.webp *.mp4)"),
+        i18nc("@item:inlistbox", "Images up to 40 megapixels (*.png *.jpg *.jpeg *.webp)"),
+        i18nc("@item:inlistbox", "H.264 MP4 up to 10 minutes / 256 MiB (*.mp4)")});
+    dialog->setWindowModality(Qt::ApplicationModal);
+    connect(this, &QObject::destroyed, dialog, &QObject::deleteLater);
+    connect(dialog, &QFileDialog::finished, this, [this, dialog](int result) {
+        const auto url = dialog->selectedUrls().value(0);
+        dialog->deleteLater();
+        m_openDialog = nullptr;
+        if (result != QDialog::Accepted) { finishOpeningMedia(); return; }
+        if (!SpectacleCore::instance()->canOpenMedia()
+            || m_openEpoch != SpectacleCore::instance()->mediaOpenEpoch()) { finishOpeningMedia(); return; }
+        auto progress = new QProgressDialog(i18nc("@info", "Checking local file…"),
+            i18nc("@action", "Cancel"), 0, 0);
+        progress->setObjectName(QStringLiteral("nkshotOpenMediaProgress"));
+        progress->winId();
+        progress->windowHandle()->setTransientParent(this);
+        progress->setWindowModality(Qt::ApplicationModal);
+        progress->setMinimumDuration(0);
+        m_openDialog = progress;
+        connect(this, &QObject::destroyed, progress, &QObject::deleteLater);
+        connect(progress, &QProgressDialog::canceled, this, [this] {
+            m_mediaLoader->cancel();
+            finishOpeningMedia();
+        });
+        progress->show();
+        m_mediaLoader->load(url);
+    });
+    Q_EMIT openingMediaChanged();
+    dialog->open();
+}
+
+void ViewerWindow::offerOpenedMedia(const QUrl &source, const QImage &image, bool video)
+{
+    if (auto progress = qobject_cast<QProgressDialog *>(m_openDialog.data())) {
+        progress->hide();
+        progress->deleteLater();
+        m_openDialog = nullptr;
+    }
+    auto core = SpectacleCore::instance();
+    if (!m_openingMedia || !core->canOpenMedia() || m_openEpoch != core->mediaOpenEpoch()
+        || m_clipJob->busy() || choosingClipOutput()) { finishOpeningMedia(); return; }
+    auto commit = [this, source, image, video] {
+        auto core = SpectacleCore::instance();
+        if (!m_mediaLoader->validatedSourceUnchanged()) {
+            InlineMessageModel::instance()->push(InlineMessageModel::Error,
+                i18nc("@info", "The selected file changed. Choose it again; your current content is unchanged."));
+            finishOpeningMedia();
+            return;
+        }
+        if (core->canOpenMedia() && m_openEpoch == core->mediaOpenEpoch()
+            && !m_clipJob->busy() && !choosingClipOutput()) {
+            finishOpeningMedia();
+            core->commitOpenedMedia(source, image, video);
+        } else finishOpeningMedia();
+    };
+    if (core->annotationDocument()->baseImage().isNull() && core->currentVideo().isEmpty()) {
+        commit();
+        return;
+    }
+    auto confirm = new QMessageBox(QMessageBox::Question,
+        i18nc("@title:window", "Replace current content?"),
+        core->videoMode()
+            ? i18nc("@info", "Open a different file? The current recording remains on disk.")
+            : i18nc("@info", "Opening this file replaces the current content and its edit history. Unsaved changes will be lost."),
+        QMessageBox::Discard | QMessageBox::Cancel);
+    confirm->setObjectName(QStringLiteral("nkshotReplaceMediaDialog"));
+    confirm->winId();
+    confirm->windowHandle()->setTransientParent(this);
+    confirm->setDefaultButton(QMessageBox::Cancel);
+    confirm->setWindowModality(Qt::ApplicationModal);
+    m_openDialog = confirm;
+    connect(this, &QObject::destroyed, confirm, &QObject::deleteLater);
+    connect(confirm, &QMessageBox::finished, this, [this, confirm, commit](int result) {
+        confirm->deleteLater();
+        if (result == QMessageBox::Discard) commit();
+        else finishOpeningMedia();
+    });
+    confirm->open();
 }
 
 ViewerWindow::~ViewerWindow()

@@ -229,6 +229,10 @@ void SpectacleWindow::setSource(const QUrl &source, const QVariantMap &initialPr
 
 void SpectacleWindow::save()
 {
+    if (SpectacleCore::instance()->hasOpenedMedia() || SpectacleCore::instance()->videoMode()) {
+        saveAs();
+        return;
+    }
     SpectacleCore::instance()->syncExportImage();
     ExportManager::instance()->exportImage(ExportManager::Save | ExportManager::UserAction,
                                            SpectacleCore::instance()->outputUrl());
@@ -238,12 +242,15 @@ void SpectacleWindow::saveAs()
 {
     if (SpectacleCore::instance()->videoMode()) {
         ExportManager::instance()->exportVideo(ExportManager::SaveAs | ExportManager::UserAction,
-                                               SpectacleCore::instance()->currentVideo());
+                                               SpectacleCore::instance()->currentVideo(),
+                                               SpectacleCore::instance()->openedMediaCopyUrl(),
+                                               SpectacleCore::instance()->hasOpenedMedia());
         return;
     }
     SpectacleCore::instance()->syncExportImage();
     ExportManager::instance()->exportImage(ExportManager::SaveAs | ExportManager::UserAction,
-                                           SpectacleCore::instance()->outputUrl());
+                                           SpectacleCore::instance()->hasOpenedMedia() ? SpectacleCore::instance()->openedMediaCopyUrl()
+                                                                                       : SpectacleCore::instance()->outputUrl());
 }
 
 void SpectacleWindow::copyImage()

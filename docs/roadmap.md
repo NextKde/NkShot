@@ -111,3 +111,10 @@ not remove the outstanding native desktop acceptance gate.
 Implemented acknowledged recording controls and a downstream A/V timeline patch,
 not playback pause. Native KWin/device synchronization, hardware encoders and
 static-target refresh after Resume remain the next acceptance boundary.
+
+### 085 reopen local screenshots and recordings
+
+One Open workflow now leads into existing annotation, playback and clip/GIF export.
+Imports are validated before confirmed replacement, with source-safe copy defaults.
+Scope is static supported images and short H.264/AAC MP4; [limits](open-local-media.md)
+are explicit. Drag-and-drop, multiple documents and broader formats are not included.

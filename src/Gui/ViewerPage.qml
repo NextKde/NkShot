@@ -169,6 +169,13 @@ EmptyPage {
                         icon.color: palette.buttonText
                     }
                     background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5 }
+                    QQC.MenuItem {
+                        objectName: "nkshotOpenMediaAction"
+                        text: i18nc("@action", "Open…")
+                        icon.name: "document-open"
+                        enabled: contextWindow.canOpenMedia
+                        onTriggered: contextWindow.openMedia()
+                    }
                     TaskMenu {
                         id: sharingMenu
                         objectName: "nkshotSharingMenu"

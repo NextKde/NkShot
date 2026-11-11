@@ -270,3 +270,23 @@ rather than silently using video-only pause. See [contract](recording-pause.md) 
 [`tests/kpipewire/README.md`](../tests/kpipewire/README.md) for the standalone real
 encoder/muxer regression fixture and exact isolated commands. No global library
 replacement is required. Native KDE validation remains separate.
+
+## 085 local media import checks
+
+`ctest -R '^(local_media_loader_test|video_clip_test)$'` exercises real local
+image/MP4 decoding and the existing export job. Importing MP4 needs existing
+`ffmpeg` and `ffprobe`; the image loader uses Qt image plugins. The loader does
+not require encoding support merely to open an MP4. It respects Qt's configured
+image allocation ceiling, so unusually low `QT_IMAGEIO_MAXALLOC` settings may
+reject large screenshots without changing that setting.
+
+With `NKSHOT_ENABLE_UI_CAPTURE`, `NKSHOT_TEST_LOCAL_MEDIA_OPEN=1` drives real Open,
+confirmation, Save As and clip dialogs with generated media. Existing DARK/COMPACT
+flags apply. The normal variant also opens a real 19.2MP generated long image.
+Controlled delayed capture/Finished platforms cover gating, not native recording.
+
+For generic source builds these external CLI tools remain optional at build time;
+MP4 Open/clip operations report their absence at runtime. Debian preview085
+packaging explicitly declares the `ffmpeg` package dependency (which supplies both
+CLIs). The existing 084 preview requires users to install it separately. This
+metadata change does not claim that an 085 package has already been built.

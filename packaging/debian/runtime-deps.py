@@ -27,6 +27,9 @@ for p in stage.rglob('*'):
             name = owners[0].split(': ')[0]
             version = subprocess.check_output(['dpkg-query','-W','-f=${Version}',name], text=True)
         packages[name.split(':')[0]] = version
+# QProcess launches these executables; ELF closure cannot discover them.
+# Debian's tested ffmpeg package supplies both /usr/bin/ffmpeg and /usr/bin/ffprobe.
+packages['ffmpeg'] = '7:9.0.2-4'
 required = ['qml6-module-qtcore','qml6-module-qt5compat-graphicaleffects','qml6-module-qtquick-window','qml6-module-qtquick','qml6-module-qtquick-controls','qml6-module-qtquick-dialogs',
  'qml6-module-qtquick-layouts','qml6-module-qtquick-shapes','qml6-module-qtquick-templates',
  'qml6-module-qtquick-effects','qml6-module-qtqml-workerscript','qml6-module-qtmultimedia',

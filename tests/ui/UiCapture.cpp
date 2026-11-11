@@ -3,6 +3,7 @@
 #include "RecordingAdapterChecks.h"
 #include "RecordingPreparationUiChecks.h"
 #include "RecordingControlsUiChecks.h"
+#include "LocalMediaOpenUiChecks.h"
 #include "TranslationUiChecks.h"
 #include "ScrollSessionUiChecks.h"
 #include <QJsonDocument>
@@ -1235,6 +1236,11 @@ void installUiCaptureHook(QApplication &application)
                 QString failure; const bool ok=TranslationUiChecks::run(application,destination,&failure);
                 qInfo()<<"Translation UI"<<ok<<failure;
                 application.exit(ok ? 0 : 228);return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_LOCAL_MEDIA_OPEN")) {
+                QString failure; const bool ok=LocalMediaOpenUiChecks::run(application,destination,&failure);
+                qInfo()<<"Local media Open UI"<<ok<<failure;
+                application.exit(ok ? 0 : 235); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_CONTROLS") || qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_PAUSE")) {
                 QString failure; const bool ok=RecordingControlsUiChecks::run(application,destination,&failure);

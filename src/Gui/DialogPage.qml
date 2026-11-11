@@ -67,6 +67,13 @@ EmptyPage {
                 padding: 6
                 background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5}
                 QQC.MenuItem {
+                    objectName: "nkshotOpenMediaAction"
+                    text: i18nc("@action", "Open…")
+                    icon.name: "document-open"
+                    enabled: contextWindow.canOpenMedia
+                    onTriggered: contextWindow.openMedia()
+                }
+                QQC.MenuItem {
                     objectName: "nkshotStartupColorAction"
                     text: i18nc("@action", "Pick a color…")
                     icon.name: "color-picker"

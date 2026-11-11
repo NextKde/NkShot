@@ -633,6 +633,7 @@ void ExportManager::exportImage(ExportManager::Actions actions, QUrl url)
 
     bool success = false;
     if (actions & SaveAs) {
+        ++m_pendingSaveDialogs;
         QStringList supportedFilters;
 
         // construct the supported mimetype list
@@ -646,6 +647,7 @@ void ExportManager::exportImage(ExportManager::Actions actions, QUrl url)
         const QString filenameExtension = Settings::self()->preferredImageFormat().toLower();
         const QString mimetype = QMimeDatabase().mimeTypeForFile(u"~/fakefile."_s + filenameExtension, QMimeDatabase::MatchExtension).name();
         auto dialog = new QFileDialog();
+        dialog->setWindowModality(Qt::ApplicationModal);
         dialog->setAcceptMode(QFileDialog::AcceptSave);
         dialog->setFileMode(QFileDialog::AnyFile);
         QUrl dirUrl = url.adjusted(QUrl::RemoveFilename);
@@ -668,7 +670,7 @@ void ExportManager::exportImage(ExportManager::Actions actions, QUrl url)
 
         // Don't use exec() like the QFileDialog docs show.
         // It can cause a race condition that leads to a crash when the QML environment is being destroyed.
-        connect(dialog, &QFileDialog::finished, this, [actions, url, dialog](int result) mutable {
+        connect(dialog, &QFileDialog::finished, this, [this, actions, url, dialog](int result) mutable {
             dialog->deleteLater();
             const bool accepted = result == QDialog::Accepted;
             const auto &selectedUrl = dialog->selectedUrls().value(0, QUrl());
@@ -681,6 +683,7 @@ void ExportManager::exportImage(ExportManager::Actions actions, QUrl url)
             Settings::setLastImageSaveAsLocation(url);
             // restart the export now that we've done the save as action
             ExportManager::instance()->exportImage(actions, url);
+            --m_pendingSaveDialogs;
         });
         dialog->open();
         return;
@@ -807,7 +810,7 @@ void ExportManager::scanQRCode()
     auto future = QtConcurrent::run(scan);
 }
 
-void ExportManager::exportVideo(ExportManager::Actions actions, const QUrl &inputUrl, QUrl outputUrl)
+void ExportManager::exportVideo(ExportManager::Actions actions, const QUrl &inputUrl, QUrl outputUrl, bool preserveSource)
 {
     // input can be empty or nonexistent, but not if we're saving
     const auto &inputFile = inputUrl.toLocalFile();
@@ -825,11 +828,13 @@ void ExportManager::exportVideo(ExportManager::Actions actions, const QUrl &inpu
     }
 
     if (actions & SaveAs) {
+        ++m_pendingSaveDialogs;
         QMimeDatabase mimeDatabase;
         // construct the file name
         const auto &extension = inputName.mid(inputName.lastIndexOf(u'.'));
         const auto &mimetype = mimeDatabase.mimeTypeForFile(inputName, QMimeDatabase::MatchExtension).name();
         auto dialog = new QFileDialog();
+        dialog->setWindowModality(Qt::ApplicationModal);
         dialog->setAcceptMode(QFileDialog::AcceptSave);
         dialog->setFileMode(QFileDialog::AnyFile);
         QUrl dirUrl = outputUrl.adjusted(QUrl::RemoveFilename);
@@ -848,7 +853,7 @@ void ExportManager::exportVideo(ExportManager::Actions actions, const QUrl &inpu
 
         // Don't use exec() like the QFileDialog docs show.
         // It can cause a race condition that leads to a crash when the QML environment is being destroyed.
-        connect(dialog, &QFileDialog::finished, this, [actions, inputUrl, outputUrl, dialog](int result) mutable {
+        connect(dialog, &QFileDialog::finished, this, [this, actions, inputUrl, outputUrl, dialog, preserveSource](int result) mutable {
             dialog->deleteLater();
             const bool accepted = result == QDialog::Accepted;
             const auto &selectedUrl = dialog->selectedUrls().value(0, QUrl());
@@ -860,13 +865,14 @@ void ExportManager::exportVideo(ExportManager::Actions actions, const QUrl &inpu
             actions.setFlag(Save, accepted);
             Settings::setLastVideoSaveAsLocation(outputUrl);
             // restart the export now that we've done the save as action
-            ExportManager::instance()->exportVideo(actions, inputUrl, outputUrl);
+            ExportManager::instance()->exportVideo(actions, inputUrl, outputUrl, preserveSource);
+            --m_pendingSaveDialogs;
         });
         dialog->open();
         return;
     }
 
-    bool inputFromTemp = temporaryDir() && inputFile.startsWith(m_tempDir->path());
+    bool inputFromTemp = !preserveSource && temporaryDir() && inputFile.startsWith(m_tempDir->path());
     if (!outputUrl.isValid()) {
         if (actions & AnySave && inputFromTemp) {
             // Use the temp url without the temp dir as the new url, if necessary

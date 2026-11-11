@@ -2285,3 +2285,47 @@ Native KDE/device A/V/GPU acceptance remains open. In particular, a static targe
 with an old render timestamp is not relabelled after Resume: the previously encoded
 picture may remain until fresh content arrives. Source gating is not device
 permission revocation. Translation remains untouched.
+
+## 085 — Reopen local screenshots and recordings
+
+Added **More → Open… / Ctrl+O** to the startup page and viewer. Local files are
+validated before any document replacement; an explicit confirmation defaults to
+Cancel when content already exists. Imported images enter the existing editor,
+with copy-first Save As defaults. Imported MP4s enter actual playback and existing
+clip/GIF export. Full-file Save As copies an imported video without moving its
+source, including when its pathname resembles a private temporary directory.
+
+The finite supported scope is static PNG/JPEG/WebP up to 40MP and short H.264/AAC
+MP4 up to 10 minutes/256 MiB. MP4 requires installed ffmpeg/ffprobe and bounded full
+validation. [Limits and workflow](open-local-media.md) are explicit. No remote URL,
+new document/tab system, drag-and-drop or paused translation work is included.
+
+Cancellation, invalid input and unconfirmed replacement preserve pixels/history.
+Open is blocked during recording/preparation/drain, busy clip export, outstanding
+capture and Save As. Capture completion now holds the guard through its entire
+handler, including nested event loops; KWin workspace capture emits one terminal
+outcome and cancels cleanly with no screens, rather than accepting a partial result
+then delivering a second failure. Final source identity is rechecked after the
+replacement confirmation.
+
+Focused validation passed two CTests: loader **13 QtTest results** and existing
+video clip **21 results**, including real 40MP decoding. Three actual software UI
+runs (light/dark/420 × 520) passed real file dialogs, pixelate mouse gestures,
+replacement/file-dialog cancellation, invalid-file preservation, new-copy saving,
+Save As/in-flight capture/nested-event-loop gates, Finished-recording Open, missing
+ffprobe recovery, MP4 playback and real clip export. The normal run additionally
+opened a 19.2MP generated image, zoomed it with actual keys, and copied an entire
+MP4 byte-for-byte before reopening it. Independent decoding of the actual exported clip confirmed 36 frames / 1.8 seconds,
+H.264 + AAC, and first/last frames matching source frames 27/62.
+Static checks passed 18/18; whitespace passed.
+Tests wait for actual focus and the canvas entrance transform before interacting
+or taking screenshots, without disabling production animation.
+
+Reviewed original software-window captures: [long image at 50%](screenshots/085-open-long-image.png),
+[imported MP4 clip saved](screenshots/085-open-recording-clip-dark.png), and
+[invalid file leaves edits intact](screenshots/085-open-error-retained-compact.png).
+Images and video are generated nonpersonal fixtures. Controlled delayed-capture
+and Finished-state adapters verify Core gating, not native capture. KDE dialogs,
+real compositor capture, GPU long-image rendering and device A/V remain unverified.
+The packaging notes also document the actually tested 084 package; a new 085
+package is not implied by these source/UI results.

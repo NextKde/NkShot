@@ -494,11 +494,14 @@ void ImagePlatformKWin::trackSource(ScreenShotSourceMeta2 *source, OutputSignal 
             }
         }
 
-        if (!images.empty()) {
-            Q_EMIT (this->*outputSignal)(combinedImage(images));
-        }
+        // A workspace request has one terminal outcome. A partial image must
+        // not enter an export's nested event loop before a second terminal signal.
         if (!errorString.isEmpty()) {
             Q_EMIT newScreenshotFailed(errorString);
+        } else if (images.empty() || images.size() != results.size()) {
+            Q_EMIT newScreenshotCanceled();
+        } else {
+            Q_EMIT (this->*outputSignal)(combinedImage(images));
         }
     });
 }
@@ -526,6 +529,10 @@ void ImagePlatformKWin::takeScreenShotActiveScreen(ScreenShotFlags flags)
 void ImagePlatformKWin::takeScreenShotWorkspace(ScreenShotFlags flags)
 {
     const auto &screens = qGuiApp->screens();
+    if (screens.isEmpty()) {
+        Q_EMIT newScreenshotCanceled();
+        return;
+    }
     QList<ScreenShotSource2 *> sources;
     sources.reserve(screens.count());
     for (auto screen : screens) {
@@ -537,6 +544,10 @@ void ImagePlatformKWin::takeScreenShotWorkspace(ScreenShotFlags flags)
 void ImagePlatformKWin::takeScreenShotCroppable(ScreenShotFlags flags)
 {
     const auto &screens = qGuiApp->screens();
+    if (screens.isEmpty()) {
+        Q_EMIT newScreenshotCanceled();
+        return;
+    }
     QList<ScreenShotSource2 *> sources;
     sources.reserve(screens.count());
     for (auto screen : screens) {

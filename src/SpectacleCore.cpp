@@ -54,6 +54,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDir>
+#include <QScopeGuard>
 #include <QDrag>
 #include <QKeySequence>
 #include <QMetaObject>
@@ -142,6 +143,8 @@ SpectacleCore::SpectacleCore(QObject *parent)
         const auto epoch=m_captureEpoch;
         QMetaObject::invokeMethod(this,[this,epoch] {
             if(epoch!=m_captureEpoch) return;
+            ++m_pendingImageGrabs;
+            ++m_imageGrabSerial;
             m_imagePlatform->doGrab(ImagePlatform::ShutterMode::Immediate,m_lastGrabMode,m_lastIncludePointer,m_lastIncludeDecorations,m_lastIncludeShadow);
         },Qt::QueuedConnection);
     };
@@ -227,9 +230,18 @@ SpectacleCore::SpectacleCore(QObject *parent)
         },Qt::QueuedConnection);
     });
 
-    connect(imagePlatform, &ImagePlatform::newScreenshotTaken, this, [this](const QImage &image){
+    const auto finishGrab = [this] {
+        const auto serial = m_imageGrabSerial;
+        const QPointer<SpectacleCore> self(this);
+        return qScopeGuard([self, serial] {
+            if (self && serial == self->m_imageGrabSerial) self->m_pendingImageGrabs = 0;
+        });
+    };
+    connect(imagePlatform, &ImagePlatform::newScreenshotTaken, this, [this, finishGrab](const QImage &image){
+        const auto grabCompletion = finishGrab();
         InlineMessageModel::instance()->clear();
         m_editExistingUrl.clear();
+        m_openedMediaSource.clear();
         m_cliOptions[CommandLineOptions::EditExisting] = false;
         m_annotationDocument->clearAnnotations();
         m_annotationDocument->setBaseImage(image);
@@ -244,9 +256,11 @@ SpectacleCore::SpectacleCore(QObject *parent)
         ExportManager::instance()->exportImage(autoExportActions(), outputUrl());
         setVideoMode(false);
     });
-    connect(imagePlatform, &ImagePlatform::newCroppableScreenshotTaken, this, [this](const QImage &image) {
+    connect(imagePlatform, &ImagePlatform::newCroppableScreenshotTaken, this, [this, finishGrab](const QImage &image) {
+        const auto grabCompletion = finishGrab();
         InlineMessageModel::instance()->clear();
         m_editExistingUrl.clear();
+        m_openedMediaSource.clear();
         m_cliOptions[CommandLineOptions::EditExisting] = false;
         setVideoMode(false);
         m_annotationDocument->clearAnnotations();
@@ -307,11 +321,13 @@ SpectacleCore::SpectacleCore(QObject *parent)
         }
         }
     };
-    connect(imagePlatform, &ImagePlatform::newScreenshotFailed, this, [onScreenshotOrRecordingFailed](const QString message) {
+    connect(imagePlatform, &ImagePlatform::newScreenshotFailed, this, [onScreenshotOrRecordingFailed, finishGrab](const QString message) {
+        const auto grabCompletion = finishGrab();
         auto uiMessage = i18nc("@info", "An error occurred while taking a screenshot.");
         onScreenshotOrRecordingFailed(message, uiMessage, &SpectacleCore::dbusScreenshotFailed);
     });
-    connect(imagePlatform, &ImagePlatform::newScreenshotCanceled, this, [this]() {
+    connect(imagePlatform, &ImagePlatform::newScreenshotCanceled, this, [this, finishGrab]() {
+        const auto grabCompletion = finishGrab();
         if (m_startMode != StartMode::Gui || !m_returnToViewer || isGuiNull()) {
             Q_EMIT allDone();
             return;
@@ -358,6 +374,7 @@ SpectacleCore::SpectacleCore(QObject *parent)
         s_systemTrayIcon->setToolTipSubTitle(subtitle);
     });
     connect(videoPlatform, &VideoPlatform::recordingSaved, this, [this](const QUrl &fileUrl) {
+        m_openedMediaSource.clear();
         // Always try to save. Needed to move recordings out of temp dir.
         ExportManager::instance()->exportVideo(autoExportActions() | ExportManager::Save, fileUrl, videoOutputUrl());
         m_recordingEventLoopLocker.reset();
@@ -1119,6 +1136,12 @@ void SpectacleCore::activate(const QStringList &arguments, const QString &workin
 
 void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode grabMode, int timeout, bool includePointer, bool includeDecorations, bool includeWindowShadow)
 {
+    if (m_pendingImageGrabs > 0) {
+        InlineMessageModel::instance()->push(InlineMessageModel::InformationalType,
+            i18nc("@info", "A screenshot is still being captured. Wait for it to finish."));
+        return;
+    }
+
     if(m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
         && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) cancelPendingRecording();
     const auto captureEpoch=++m_captureEpoch;
@@ -1139,6 +1162,8 @@ void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode grabMode, int time
         && m_imagePlatform->supportedShutterModes().testFlag(ImagePlatform::OnClick)
     ) {
         SpectacleWindow::setVisibilityForAll(QWindow::Hidden);
+        ++m_pendingImageGrabs;
+        ++m_imageGrabSerial;
         m_imagePlatform->doGrab(ImagePlatform::ShutterMode::OnClick, m_lastGrabMode, m_lastIncludePointer, m_lastIncludeDecorations, m_lastIncludeShadow);
         return;
     }
@@ -1166,6 +1191,8 @@ void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode grabMode, int time
         SpectacleWindow::setVisibilityForAll(QWindow::Hidden);
         QTimer::singleShot(timeout, this, [this,captureEpoch]() {
             if(captureEpoch!=m_captureEpoch) return;
+            ++m_pendingImageGrabs;
+            ++m_imageGrabSerial;
             m_imagePlatform->doGrab(ImagePlatform::ShutterMode::Immediate, m_lastGrabMode, m_lastIncludePointer, m_lastIncludeDecorations, m_lastIncludeShadow);
         });
         return;
@@ -1567,6 +1594,48 @@ void SpectacleCore::setVideoMode(bool videoMode)
         takeNewScreenshot(ImagePlatform::PerScreenImageNative, 0, Settings::includePointer(), Settings::includeDecorations(), Settings::includeShadow());
     }
     Q_EMIT videoModeChanged(videoMode);
+}
+
+bool SpectacleCore::canOpenMedia() const
+{
+    return m_pendingImageGrabs == 0 && !ExportManager::instance()->choosingSaveDestination()
+        && m_videoPlatform->preparation()->phase() == NkShot::RecordingPreparation::Idle
+        && (m_videoPlatform->recordingState() == VideoPlatform::RecordingState::NotRecording
+            || m_videoPlatform->recordingState() == VideoPlatform::RecordingState::Finished)
+        && m_videoPlatform->readyForRecording() && m_delayAnimation->state() != QAbstractAnimation::Running
+        && m_captureWindows.empty();
+}
+
+QUrl SpectacleCore::openedMediaCopyUrl() const
+{
+    if (m_openedMediaSource.isEmpty()) return {};
+    const QFileInfo input(m_openedMediaSource.toLocalFile());
+    return QUrl::fromLocalFile(input.dir().filePath(input.completeBaseName() + QStringLiteral("-copy.")
+        + (m_videoMode ? QStringLiteral("mp4") : QStringLiteral("png"))));
+}
+
+bool SpectacleCore::commitOpenedMedia(const QUrl &source, const QImage &image, bool video)
+{
+    if (!canOpenMedia() || !source.isLocalFile() || (!video && image.isNull())) return false;
+    ++m_captureEpoch;
+    m_annotationSyncTimer->stop();
+    m_cliOptions.fill(false);
+    m_outputUrl.clear();
+    m_editExistingUrl.clear();
+    m_openedMediaSource = source;
+    m_annotationDocument->clearAnnotations();
+    m_annotationDocument->setBaseImage(video ? QImage() : image);
+    setExportImage(video ? QImage() : image);
+    ExportManager::instance()->updateTimestamp();
+    m_videoMode = video; // Do not use the capture-mode setter: it may trigger a screenshot.
+    setCurrentVideo(video ? source : QUrl());
+    Q_EMIT videoModeChanged(video);
+    InlineMessageModel::instance()->clear();
+    initViewerWindow(ViewerWindow::Viewer);
+    ViewerWindow::instance()->setAnnotating(!video);
+    ViewerWindow::instance()->setVisible(true);
+    SpectacleWindow::setTitleForAll(video ? SpectacleWindow::Saved : SpectacleWindow::Unsaved, source.fileName());
+    return true;
 }
 
 QUrl SpectacleCore::currentVideo() const

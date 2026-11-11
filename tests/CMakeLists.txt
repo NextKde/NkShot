@@ -172,3 +172,9 @@ ecm_add_test(RecordingPauseClockTest.cpp ../src/Platforms/VideoPlatform.cpp ../s
     ../src/RecordingPreparation.cpp ../src/RecordingPreparation.h
     TEST_NAME recording_pause_clock_test LINK_LIBRARIES Qt::Test Qt::Core Qt::Gui Qt::Qml)
 set_tests_properties(recording_pause_clock_test PROPERTIES TIMEOUT 15)
+
+# 085: local-only staged media loading, without mutating the active document.
+ecm_add_test(LocalMediaLoaderTest.cpp ../src/LocalMediaLoader.cpp ../src/LocalMediaLoader.h
+    TEST_NAME local_media_loader_test LINK_LIBRARIES Qt::Test Qt::Core Qt::Gui KF6::I18n)
+target_include_directories(local_media_loader_test PRIVATE ../src)
+set_tests_properties(local_media_loader_test PROPERTIES TIMEOUT 60)

@@ -53,7 +53,7 @@ package database. Build from the exact published source, not an uncommitted tree
    For the exact 080 source above, use `0.1.0~preview080`. For a later verified
    source revision, choose its own release version and record the actual commit;
    do not reuse `preview080`. Epochs and path/control characters are rejected.
-   No post-080 package is claimed built or validated by this document.
+   The verified 084 preview is documented below; no 085 package is claimed.
 
 Packaging stages CMake install manifests afresh. It does **not** copy the entire
 live prefix, a Python virtual environment, translator models, or UI test harness.
@@ -62,6 +62,11 @@ libraries; QML runtime modules are declared separately. Library package versions
 are conservative lower bounds from the build system. This makes a large but safe
 runtime dependency set; it is not a claim of ABI compatibility with older systems.
 The script includes licenses for the app and both bundled libraries.
+The 085 packaging source explicitly declares `ffmpeg (>= 7:9.0.2-4)` in Depends:
+Debian's tested official package supplies both `/usr/bin/ffmpeg` and
+`/usr/bin/ffprobe`. Clip/GIF export and MP4 opening launch these via QProcess,
+so ELF dependency scanning alone cannot discover this requirement. This is a
+source-level dependency fix, not a claim that an 085 package has been built.
 
 For the isolated extracted-deb toolchain only, `NKSHOT_PACKAGE_MAP` can point to a
 JSON map of installed file paths to `[package,version]`, derived from the actual
@@ -69,14 +74,21 @@ official .deb archives. This is not a substitute for validating package origins.
 
 ## Install / remove
 
-For the already generated **080** preview artifact, on the matching test system:
+For the current **084** preview artifact, on the matching test system:
 
 ```
-sudo apt install ./nkshot_0.1.0~preview080_amd64.deb
+sha256sum -c SHA256SUMS
+sudo apt install ./nkshot_0.1.0~preview084_amd64.deb ffmpeg
 nkshot
 # Removal leaves user captures/settings untouched:
 sudo apt remove nkshot
 ```
+
+The already delivered 084 package omitted the explicit FFmpeg CLI dependency.
+Install the official `ffmpeg` package alongside it (as above) for clip/GIF features;
+its shared-library dependency closure alone does not provide those commands.
+The 084 artifact and checksum are unchanged. The 085 source fixes this omission,
+but there is no newly built 085 package yet.
 
 Do not force dependencies or install this package on an older Plasma system.
 `apt` resolving dependencies is a prerequisite, not proof of capture correctness.
@@ -116,13 +128,32 @@ and the host sandbox refused creation of a new D-Bus socket. No install transact
 or real Plasma capture was performed. Treat this as a packaging preview pending
 the acceptance checks above, not a stable end-user release.
 
-## Next package preparation (not yet built)
+## Verified 084 packaging preview
 
-After the pause/resume source and dependency metadata are frozen and published,
-record that exact commit and use a new clean source snapshot with its own production
-build directory (planned: `/build/package084`). Use the lead-verified private
-KPipeWire build only after its patch hashes and capability export are finalized;
-do not race or rebuild a shared dependency while core validation is underway.
-Keep the existing 080 package and its evidence separate, select an explicit new
-Debian version, then repeat archive, dependency, launcher and native acceptance
-checks. This is a plan, not a claim that an 084 package or fixture has passed.
+Source commit: `5570265df73ceaf009a637610425e9f3abdb692b`.
+Package: `nkshot_0.1.0~preview084_amd64.deb` (2,670,104 bytes).
+SHA256: `7060ca48688fdca667a14875122c407d63d6011b1bde20f73e5eb538d4a4f903`.
+
+All 844 published source blobs matched before and after an isolated production
+Release build, with `BUILD_TESTING=OFF` and `NKSHOT_ENABLE_UI_CAPTURE=OFF`.
+The snapshot excludes unpublished translation work and later active app changes.
+Applying the two KPipeWire patches in order to the pinned pristine source produced
+all metadata-specified final source hashes. Packaging used the frozen verified
+private dependency build, without rebuilding the shared development libraries.
+
+The complete archive extracted successfully. All packaged ELF dependencies resolved
+and produced the same dependency list before and after extraction. The package's
+recorder library retains the strong exported `timelinePauseVersion()` symbol and
+the application retains its strong reference. A probe using the actual packaged
+library returned `timeline-pause=1`. The extracted launcher returned
+`nkshot 6.8.3`, the inherited application version; the Debian package version is
+`0.1.0~preview084`. Registration remains independent of system Spectacle.
+
+This is **not** native-desktop acceptance. No apt install/uninstall transaction,
+actual KDE UI startup, real compositor capture, PipeWire-device recording, GPU
+encoding or native pause/resume was verified for this package. The existing
+synthetic production-source encoder/muxer fixture is separate evidence, not a
+packaged end-to-end desktop test. Static resumed video may retain the previous
+picture until a fresh eligible timestamped frame arrives. The old 080 package
+remains historical evidence and does not contain the timeline-pause capability.
+No 085 package has been built or validated by this report.
