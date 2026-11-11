@@ -152,3 +152,8 @@ set_tests_properties(recording_preparation_test recording_start_guard_test PROPE
 ecm_add_test(OwnedRecordingOutputTest.cpp ../src/Platforms/OwnedRecordingOutput.cpp ../src/Platforms/OwnedRecordingOutput.h
     TEST_NAME owned_recording_output_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(owned_recording_output_test PROPERTIES TIMEOUT 30)
+
+# 078: real private-bus status-host availability, not shell rendering acceptance.
+ecm_add_test(StatusNotifierAvailabilityTest.cpp ../src/Platforms/StatusNotifierAvailability.cpp ../src/Platforms/StatusNotifierAvailability.h
+    TEST_NAME status_notifier_availability_test LINK_LIBRARIES Qt::Test Qt::Core Qt::DBus)
+set_tests_properties(status_notifier_availability_test PROPERTIES TIMEOUT 30)

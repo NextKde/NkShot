@@ -116,3 +116,23 @@ Explicit output is separate: existing paths are rejected, new paths are reserved
 and checked before start, but never automatically deleted. Empty/partial explicit
 files can remain after cancellation. Final 077 results are recorded in the ownership document; the
 recorded 076 passes remain historical, not evidence for this change.
+
+## 078 cancel and status-item contract
+
+During preparation, Start/Stop is **cancel-only**: it cannot launch a second
+attempt. One GUI status item is reused through preparation, Recording and
+Rendering. Its activation/menu cancels a pending attempt. Starting has no floating
+countdown window. Recording time, notifications and animation begin only after
+actual Recording; Rendering disables actions and drains normally rather than
+forcing a stop that could discard frames.
+
+Before any GUI output/stream commit, Starting requires an asynchronously confirmed
+registered status-notifier host. Unknown/unavailable host state cancels preparation,
+restores the GUI and explains why. Host loss cancels preparation; during actual
+Recording it requests normal finish/drain. CLI/D-Bus retain external control and
+do not acquire this new GUI host requirement. Application exit destroys the status
+item and retains the 077 producer stop/join and output-ownership cleanup rules.
+
+A true host property proves protocol registration, **not** that the shell actually
+shows the item. Native tray visibility, focus, hide/presentation timing and first
+recorded frames remain unaccepted. Private-bus host tests and actual Core/SNI protocol checks passed. See the 078 verification section for scope.

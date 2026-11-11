@@ -28,6 +28,10 @@ cleanup; helper/adapter/UI and 21-target CTest validation passed. Explicit user 
 same-UID pathname races are not an atomic guarantee. This reliability work does
 not replace the native recording acceptance gate. See [output ownership](recording-output-ownership.md).
 
+078 tightens pending cancellation and GUI status-control continuity, including a
+registered-host check before recording commit. Private-bus protocol/Core checks pass; protocol
+availability does not close native tray visibility or first-frame acceptance.
+
 ## Next substantive workflows
 
 1. **Rolling capture:** verify a fixed-region, manually scrolled capture session

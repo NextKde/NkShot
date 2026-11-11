@@ -213,3 +213,15 @@ a real preservation warning using synthetic files; only the test harness forward
 it to the actual Core/InlineMessage UI. Add `NKSHOT_TEST_DARK=1` or
 `NKSHOT_TEST_UI_SIZE=420x520` for appearance checks. Never run against private media
 or claim this signal handoff is a native recording.
+
+## Status-notifier availability checks (078)
+
+`StatusNotifierAvailability` uses existing QtDBus. Its test watcher runs in a
+separate process on a dedicated private session bus. Use the same isolated-bus
+arrangement as `screen_color_picker_test`, with `NKSHOT_TEST_PRIVATE_BUS=1`; never
+register the fake watcher on a normal desktop session. No package installation or
+production capability override is introduced. The watcher test passed 11 QtTest results. `NKSHOT_TEST_RECORDING_CONTROLS=1` with
+`--launchonly` runs the actual Core and KStatusNotifierItem against a private test
+watcher, including real D-Bus GetAll/Activate calls. Use a fresh XDG configuration
+and `NKSHOT_TEST_UI_CAPTURE` destination; `NKSHOT_TEST_DARK=1` selects dark appearance.
+The full suite passed 22/22 CTest targets. These checks do not certify native tray display.

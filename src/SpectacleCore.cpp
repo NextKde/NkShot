@@ -38,6 +38,8 @@
 #include <KMessageBox>
 #include <KNotification>
 #include <KStatusNotifierItem>
+#include "Platforms/StatusNotifierAvailability.h"
+#include <QMenu>
 #include <KWindowSystem>
 #if WITH_X11
 #include <KX11Extras>
@@ -75,6 +77,20 @@ using namespace Qt::StringLiterals;
 
 SpectacleCore *SpectacleCore::s_self = nullptr;
 static std::unique_ptr<KStatusNotifierItem> s_systemTrayIcon;
+// A tray activation can synchronously cancel preparation. Do not destroy the
+// notifier while its own DBus/activation method is still on the stack.
+static void retireRecordingTray(QObject *owner, QPointer<QAction> &action)
+{
+    if(!s_systemTrayIcon) return;
+    auto item=s_systemTrayIcon.release();
+    item->disconnect(owner);
+    if(action) action->disconnect(owner);
+    action.clear();
+    for(auto movie:item->findChildren<QMovie *>()) { movie->disconnect();movie->stop(); }
+    item->setStatus(KStatusNotifierItem::Passive);
+    item->deleteLater();
+}
+
 
 static QList<KNotification *> notifications;
 
@@ -310,6 +326,20 @@ SpectacleCore::SpectacleCore(QObject *parent)
     });
 
     auto videoPlatform = m_videoPlatform.get();
+    m_statusNotifierAvailability=std::make_unique<NkShot::StatusNotifierAvailability>();
+    connect(m_statusNotifierAvailability.get(),&NkShot::StatusNotifierAvailability::changed,this,[this] {
+        if(!m_recordingControlRequired || m_statusNotifierAvailability->hostAvailable()) return;
+        const auto phase=m_videoPlatform->preparation()->phase();
+        if(phase!=NkShot::RecordingPreparation::Idle && phase!=NkShot::RecordingPreparation::Recording) {
+            cancelPendingRecording();
+            InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+                i18nc("@info", "The recording control in the system tray is unavailable. Recording was canceled."));
+        } else if(m_videoPlatform->isRecording()) {
+            finishRecording();
+            InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+                i18nc("@info", "The system tray became unavailable. The recording is being stopped safely."));
+        }
+    });
     connect(videoPlatform->preparation(), &NkShot::RecordingPreparation::changed, this, &SpectacleCore::updateRecordingPreparationUi);
     connect(videoPlatform, &VideoPlatform::recordingStateChanged, this, [this, videoPlatform](VideoPlatform::RecordingState state) {
         if (state == VideoPlatform::RecordingState::Recording) {
@@ -317,16 +347,13 @@ SpectacleCore::SpectacleCore(QObject *parent)
             static const auto recordingIcon = u":/icons/256-status-media-recording.webp"_s;
             static const auto recordingStartedIcon = u":/icons/256-status-media-recording-started.webp"_s;
             static const auto recordingPulseIcon = u":/icons/256-status-media-recording-pulse.webp"_s;
-            s_systemTrayIcon = std::make_unique<KStatusNotifierItem>();
-            s_systemTrayIcon->setStatus(KStatusNotifierItem::Active);
-            s_systemTrayIcon->setCategory(KStatusNotifierItem::SystemServices);
+            ensureRecordingTray();
+            m_recordingTrayAction->setText(i18nc("@action", "Stop recording"));
+            m_recordingTrayAction->setEnabled(true);
             s_systemTrayIcon->setToolTipTitle(videoPlatform->isRecordingAudio()
                                                   ? i18nc("@info:tooltip title for recording tray icon", "NkShot is Recording with Sound")
                                                   : i18nc("@info:tooltip title for recording tray icon", "NkShot is Recording"));
-            s_systemTrayIcon->setStandardActionsEnabled(false);
-            connect(s_systemTrayIcon.get(), &KStatusNotifierItem::activateRequested, this, [] {
-                SpectacleCore::instance()->finishRecording();
-            });
+
             const auto messageTitle = videoPlatform->isRecordingAudio() ? i18nc("recording notification title", "NkShot is Recording with Sound")
                                                                         : i18nc("recording notification title", "NkShot is Recording");
             auto getSimpleDefaultShortcut = [] {
@@ -413,10 +440,10 @@ SpectacleCore::SpectacleCore(QObject *parent)
             const auto messageBody = i18nc("recording notification message", "Please wait");
             s_systemTrayIcon->setToolTipTitle(i18nc("@info:tooltip title for rendering tray icon", //
                                                     "NkShot is Finishing the Recording"));
-            auto subtitle = i18nc("@info:tooltip subtitle for rendering tray icon", //
-                                  "Time recorded: %1\n" //
-                                  "Click to stop rendering early (this will lose data)",
-                                  recordedTime());
+            m_recordingTrayAction->setText(i18nc("@action", "Finishing recording…"));
+            m_recordingTrayAction->setEnabled(false);
+            auto subtitle = i18nc("@info:tooltip subtitle for rendering tray icon",
+                                  "Time recorded: %1\nPlease wait while the recording is saved.", recordedTime());
             auto notification = new KNotification(u"notification"_s, KNotification::CloseOnTimeout | KNotification::DefaultEvent, this);
             notification->setTitle(messageTitle);
             notification->setText(messageBody);
@@ -430,7 +457,7 @@ SpectacleCore::SpectacleCore(QObject *parent)
             notification->sendEvent();
             s_systemTrayIcon->setToolTipSubTitle(subtitle);
         } else {
-            s_systemTrayIcon.reset();
+            retireRecordingTray(this,m_recordingTrayAction);
             m_captureWindows.clear();
         }
     });
@@ -830,6 +857,8 @@ bool SpectacleCore::performOcrExtraction(const QString &languageCode)
 
 SpectacleCore::~SpectacleCore() noexcept
 {
+    s_systemTrayIcon.reset();
+    m_statusNotifierAvailability.reset();
     // Runtime window replacement uses deleteLater, but teardown must destroy
     // the QML views before their shared engine and singleton models disappear.
     // Otherwise a still-live ComboBox can react to model destruction while the
@@ -1611,6 +1640,7 @@ void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withP
     ++m_captureEpoch;
     m_delayAnimation->stop();
     snapshotRecordingPreparation();
+    m_recordingControlRequired=m_startMode==StartMode::Gui;
     QuickNoteWindow::hideDraftsForCapture();
     const bool hasCaptureWindows = !CaptureWindow::instances().empty();
     if (hasCaptureWindows && mode != VideoPlatform::Region && !m_recordingEventLoopLocker) {
@@ -1690,10 +1720,19 @@ QString SpectacleCore::timeFromMilliseconds(qint64 milliseconds) const
 void SpectacleCore::activateAction(const QString &actionName, const QVariant &parameter)
 {
     Q_UNUSED(parameter)
+    const bool recordingToggle=actionName==ShortcutActions::self()->recordRegionAction()->objectName()
+        || actionName==ShortcutActions::self()->recordScreenAction()->objectName()
+        || actionName==ShortcutActions::self()->recordWindowAction()->objectName();
     if (m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
         && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) {
         cancelPendingRecording();
+        // Start/Stop means stop this attempt, not cancel-and-open another selector.
+        // Return before changing the original GUI restoration intent.
+        if(recordingToggle) return;
     }
+    // A second Stop during producer drain is not a new recording intent and
+    // must not change how the already-restored GUI starts its next recording.
+    if(recordingToggle && !m_videoPlatform->isRecording() && !m_videoPlatform->readyForRecording()) return;
     m_startMode = StartMode::DBus;
     if (m_videoPlatform->isRecording()) {
         // BUG: https://bugs.kde.org/show_bug.cgi?id=481471
@@ -1762,6 +1801,14 @@ void SpectacleCore::updateRecordingPreparationUi()
 {
     using Prep=NkShot::RecordingPreparation;
     const auto preparation=m_videoPlatform->preparation();
+    if(preparation->phase()==Prep::Starting && m_recordingControlRequired
+        && !m_statusNotifierAvailability->hostAvailable()) {
+        cancelPendingRecording();
+        InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+            i18nc("@info", "Recording was canceled because the system tray is unavailable."));
+        return;
+    }
+    updateRecordingPreparationTray();
     if(preparation->phase()==Prep::Countdown && m_recordingRestoreGui
        && (preparation->remainingMilliseconds()>0 || (m_recordingCountdown && m_recordingCountdown->isVisible()))) {
         if(!m_recordingCountdown) {
@@ -1787,4 +1834,45 @@ void SpectacleCore::cancelPendingRecording()
 {
     ++m_captureEpoch;
     m_videoPlatform->cancelPendingRecording();
+}
+
+void SpectacleCore::ensureRecordingTray()
+{
+    if(s_systemTrayIcon) return;
+    s_systemTrayIcon=std::make_unique<KStatusNotifierItem>(QStringLiteral("nkshot-recording"),this);
+    s_systemTrayIcon->setTitle(i18nc("@title", "NkShot recording"));
+    s_systemTrayIcon->setStatus(KStatusNotifierItem::Active);
+    s_systemTrayIcon->setCategory(KStatusNotifierItem::SystemServices);
+    s_systemTrayIcon->setStandardActionsEnabled(false);
+    s_systemTrayIcon->setIconByName(QStringLiteral("media-record"));
+    m_recordingTrayAction=s_systemTrayIcon->contextMenu()->addAction(i18nc("@action", "Cancel recording start"));
+    m_recordingTrayAction->setObjectName(QStringLiteral("nkshotCancelRecordingStart"));
+    connect(m_recordingTrayAction,&QAction::triggered,this,&SpectacleCore::activateRecordingTray);
+    connect(s_systemTrayIcon.get(),&KStatusNotifierItem::activateRequested,this,&SpectacleCore::activateRecordingTray);
+}
+
+void SpectacleCore::activateRecordingTray()
+{
+    const auto phase=m_videoPlatform->preparation()->phase();
+    if(phase==NkShot::RecordingPreparation::Selecting || phase==NkShot::RecordingPreparation::Countdown
+        || phase==NkShot::RecordingPreparation::Starting) cancelPendingRecording();
+    else if(m_videoPlatform->isRecording()) finishRecording();
+    // Rendering must drain; repeated activation cannot restart or discard it.
+}
+
+void SpectacleCore::updateRecordingPreparationTray()
+{
+    using Prep=NkShot::RecordingPreparation;
+    const auto preparation=m_videoPlatform->preparation();
+    const auto phase=preparation->phase();
+    if(phase==Prep::Recording) return; // actual recorder state updates existing item
+    if(phase==Prep::Idle) { retireRecordingTray(this,m_recordingTrayAction); return; }
+    ensureRecordingTray();
+    m_recordingTrayAction->setText(i18nc("@action", "Cancel recording start"));
+    m_recordingTrayAction->setEnabled(true);
+    const auto title=phase==Prep::Selecting ? i18nc("@info:tooltip", "Select a recording target")
+        : phase==Prep::Countdown ? i18nc("@info:tooltip", "Recording starts in %1 s",(preparation->remainingMilliseconds()+999)/1000)
+        : i18nc("@info:tooltip", "Starting recording…");
+    s_systemTrayIcon->setToolTipTitle(title);
+    s_systemTrayIcon->setToolTipSubTitle(i18nc("@info:tooltip", "Click to cancel this recording attempt."));
 }

@@ -2088,3 +2088,25 @@ The independent final MP4 regression output also passed exact decoding checks:
 AAC pulses at 0.75/1.75/2.75 seconds, and unchanged source hash. The final binary
 hash was unchanged across validation. This verifies the existing local export
 workflow, not newly captured native recording.
+
+## 078 — continuous recording cancellation
+
+Recording Start/Stop shortcuts now cancel a selecting/counting/starting attempt
+without immediately restarting it or replacing the original GUI completion intent.
+During Rendering and canceled-producer drain they are no-ops. A single status item
+provides preparation cancellation and transitions to recording stop and finishing
+status; no new floating Starting panel can accidentally enter captured frames.
+GUI starts require a confirmed registered tray host before creating output/streams.
+Unavailable hosts restore the workbench with a short explanation. CLI/D-Bus retain
+external control and do not inherit this GUI requirement. The 077 ownership/drain
+safety contract is unchanged.
+
+Validation: 22/22 CTest, 18/18 static checks, 11 detailed watcher QtTest results,
+real Core/SNI private-D-Bus checks in light/dark, 17 adapter groups, and local
+MP4/GIF export-and-playback smoke tests. The final wording-only adjustment was
+rebuilt and its affected Core/SNI checks repeated. Reviewed software captures:
+[light](screenshots/078-control-light.png) and [dark](screenshots/078-control-dark.png).
+These show the real restored workbench with a test-induced missing-host warning,
+not a native desktop tray. No personal media is present. Native KDE tray visibility,
+focus and first captured frame exclusion remain unaccepted; registered-host protocol
+state alone cannot prove visible shell controls.

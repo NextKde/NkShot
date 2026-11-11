@@ -2,6 +2,7 @@
 #include "UiCapture.h"
 #include "RecordingAdapterChecks.h"
 #include "RecordingPreparationUiChecks.h"
+#include "RecordingControlsUiChecks.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include "Gui/ViewerWindow.h"
@@ -1222,6 +1223,11 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_CONTROLS")) {
+                QString failure; const bool ok=RecordingControlsUiChecks::run(application,destination,&failure);
+                qInfo()<<"Recording controls UI"<<ok<<failure;
+                application.exit(ok?0:227); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_ADAPTER")) {
                 QJsonObject report; const bool ok=runRecordingAdapterChecks(&report);

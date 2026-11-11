@@ -239,3 +239,28 @@ the real write handle open after cancellation and flush a tail before Idle;
 this is distinct from native AVIO compatibility and from native screen capture.
 See the ownership document for the pinned KPipeWire close/completion source basis.
 No new native desktop acceptance is claimed.
+
+## Preparation status/control continuity (078)
+
+078 reuses one GUI status item across preparation/Recording/Rendering and makes
+Start/Stop cancel-only while pending. Starting has no floating window. The GUI
+checks registered-host protocol availability before output/stream commit; unknown
+or missing host cancels with recovery guidance. Host loss cancels pending work or
+normally finishes/drains actual Recording. Non-GUI CLI/D-Bus are not host-gated.
+
+Private-bus watcher tests passed 11 QtTest results, covering the real property type,
+owner changes, signals, stale replies and destruction. Actual Core/SNI integration
+passed in light and dark appearance: all three recording shortcuts cancel in
+Selecting/Countdown/Starting, D-Bus GetAll/Activate reaches the real notifier,
+menu cancellation restores the workbench, missing/lost host cancels, and rendering
+or producer drain leaves the prior GUI intent unchanged. Explicit screenshot
+intent still cancels preparation then starts its own countdown.
+
+One full run passed 22/22 CTest targets (71.77 s); static checks passed 18/18.
+The 17 adapter groups and actual local MP4/GIF export-and-playback smoke tests
+passed. A final short warning-text/test-isolation adjustment was rebuilt and the
+affected light/dark Core/SNI scenarios rerun, not an unnecessary full suite repeat.
+No native screen or panel was used. Actual Recording/Rendering state behavior is
+covered by the controlled adapter, not a new native successful-capture test. Registered-host state does not establish shell visibility,
+native focus or clean first-frame capture. Rendering must drain without forced
+frame loss; only actual Recording starts recording timing/notifications/animation.

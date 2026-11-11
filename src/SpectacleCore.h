@@ -7,6 +7,7 @@
 
 #include <QEventLoopLocker>
 #include <QObject>
+#include <QPointer>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QVariantAnimation>
@@ -28,10 +29,13 @@
 #include <memory>
 
 class RecordingCountdownWindow;
+class QAction;
+namespace NkShot { class StatusNotifierAvailability; }
 class SpectacleCore : public QObject
 {
 #ifdef NKSHOT_ENABLE_UI_CAPTURE
     friend class RecordingPreparationUiChecks;
+    friend class RecordingControlsUiChecks;
 #endif
 
     Q_OBJECT
@@ -161,6 +165,9 @@ private:
     void snapshotRecordingPreparation();
     bool restoreRecordingPreparation();
     void updateRecordingPreparationUi();
+    void ensureRecordingTray();
+    void updateRecordingPreparationTray();
+    void activateRecordingTray();
     void initCaptureWindows(CaptureWindow::Mode mode);
     void initViewerWindow(ViewerWindow::Mode mode);
     void deleteWindows();
@@ -180,6 +187,9 @@ private:
     std::unique_ptr<VideoPlatform> m_videoPlatform;
     std::unique_ptr<QQmlEngine> m_engine;
     std::unique_ptr<RecordingCountdownWindow> m_recordingCountdown;
+    std::unique_ptr<NkShot::StatusNotifierAvailability> m_statusNotifierAvailability;
+    QPointer<QAction> m_recordingTrayAction;
+    bool m_recordingControlRequired = false;
     QRect m_recordingRestoreGeometry;
     QWindow::Visibility m_recordingRestoreVisibility = QWindow::Windowed;
     bool m_recordingRestoreActive = false;
