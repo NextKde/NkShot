@@ -22,7 +22,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | Resize sharing copy | Implemented reusable helper | Actual options/preview/clipboard/PNG and source-history isolation | Native portals pending |
 | Background styling and text watermark | Implemented non-destructive sharing copy (053) | See 053 tests; local render/preview/export, not source mutation | GPU/native desktop acceptance pending |
 | Quick notes | Separate quick-note workflow not implemented | Existing annotation Text tool does not establish parity | Not accepted |
-| Desktop recording with system/mic audio | KPipeWire backend retained | Encoder initialization and synthetic audio pipeline with documented skips | Real capture, A/V sync, device/permission failure pending |
+| Desktop recording with system/mic audio | KPipeWire backend retained | Encoder initialization, synthetic audio pipeline with documented skips; output preflight filesystem/ordering checks (063) | Real capture, A/V sync, device/permission failure pending |
 | Local MP4/GIF/WebP playback | Implemented, software-frame fallback; MP4 playback sound/speed controls (062) | Actual decode, playback/seek, format transitions, failure recovery, audio-track/settings UI | Audible output, A/V synchronization, GPU/performance pending |
 | Capture pause/resume | Not implemented; current recording path is start/finish | Playback pause is separate and does not pause capture | Requires backend design and real A/V timing acceptance |
 | Recording annotation/click effects/camera overlay | Not implemented | Pointer capture option is not a click-effect feature | Not accepted |

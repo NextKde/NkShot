@@ -1372,3 +1372,30 @@ Their local implementation toggles the video source stream without coordinating
 audio capture or removing paused time from the media timeline. They are not yet
 integrated into NkShot or accepted as seamless recording pause/resume. The earlier
 derived-interface-only conclusion that no pause API exists was incomplete.
+
+## 063 — Validate recording output before requesting capture
+
+A focused recording-core audit found that a directory named `clip.mp4` passed the
+old parent-folder-only validation. A real temporary-filesystem test now reproduces
+and rejects it. The new preflight rejects non-local/relative targets and existing
+non-regular files, retains writable existing files, and creates only parent
+folders for new files. It never opens/truncates the output itself.
+
+Output and encoder checks now precede compositor stream creation and window
+minimization. Stale recorder node/output properties are cleared first; selection
+requests are resolved before changing them. An unavailable stream has a runtime
+failure path instead of relying on an assertion, checked before frame-size use.
+
+Independent review caught an initial overrestriction requiring write permission
+on the parent of an existing writable file. That was corrected and tested, along
+with FIFO rejection. It also identified remaining old-stream/state-connection
+risks, recorded in the verification guide rather than claimed solved. No broad,
+unvalidated lifecycle rewrite was bundled into this small fix.
+
+Final build, CTest 10/10, static 17/17 and whitespace checks pass. Tests verify real
+filesystem rejection and byte preservation plus source ordering; they do not
+simulate a successful native recording. No UI was redesigned in this stage.
+The [playback regression screenshot](screenshots/063-playback-regression.png)
+is an actual software window using synthetic media, not evidence that recording
+startup or compositor capture succeeded. Real KDE failure injection, disk-full
+handling and complete recording lifecycle acceptance remain open.

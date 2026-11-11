@@ -87,3 +87,7 @@ ecm_add_test(LocalTextExtractionTest.cpp ../src/Imaging/LocalTextExtraction.cpp
     TEST_NAME local_text_extraction_test LINK_LIBRARIES Qt::Test Qt::Gui PkgConfig::TESSERACT)
 target_compile_options(local_text_extraction_test PRIVATE -fexceptions)
 set_tests_properties(local_text_extraction_test PROPERTIES TIMEOUT 40 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Real filesystem preflight only; does not establish native recording acceptance.
+ecm_add_test(RecordingOutputPathTest.cpp TEST_NAME recording_output_path_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(recording_output_path_test PROPERTIES TIMEOUT 10)

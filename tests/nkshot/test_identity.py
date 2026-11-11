@@ -153,6 +153,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('kcfg_useLiquidMaterial', names)
         self.assertIn('kcfg_reduceUiMotion', names)
 
+    def test_recording_output_precedes_capture_stream(self):
+        source = read('src/Platforms/VideoPlatformWayland.cpp')
+        start = source[source.index('auto startRecordingTask ='):source.index('void VideoPlatformWayland::finishRecording()')]
+        stream = start.index('m_screencasting->createOutputStream')
+        # Structural boundary, not a claim of real compositor execution.
+        for marker in ['m_recorder->setOutput(QString())', 'mkDirPath(tempUrl)',
+                       'mkDirPath(fileUrl)', 'm_recorder->setOutput(localFile)',
+                       'setRecordMicrophone(Settings::videoRecordMicrophone() && audioSupported)']:
+            self.assertLess(start.index(marker), stream)
+        self.assertEqual(start.count('encoder == Encoder::NoEncoder'), 2)
+        self.assertIn('if (!stream)', start)
+
 
 if __name__ == '__main__':
     unittest.main()

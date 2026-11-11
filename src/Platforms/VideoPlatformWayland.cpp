@@ -5,6 +5,7 @@
 */
 
 #include "VideoPlatformWayland.h"
+#include "RecordingOutputPath.h"
 #include "ExportManager.h"
 #include "Platforms/VideoPlatform.h"
 #include "screencasting.h"
@@ -180,6 +181,65 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
             return;
         }
 
+        if (!m_recorder) {
+            Q_EMIT recordingFailed(i18nc("@info", "The recording backend is still initializing. Try again."));
+            return;
+        }
+        // Selection is not a recording attempt. Resolve it before touching output.
+        if ((recordingMode == Screen && !options.value(screenKey).value<QScreen *>())
+            || (recordingMode == Window && options.value(windowIdKey).toString().isEmpty())
+            || (recordingMode == Region && options.value(rectKey).toRectF().isEmpty())) {
+            selectAndRecord(fileUrl, recordingMode, includePointer);
+            return;
+        }
+        // No compositor stream can start against a previous attempt's file.
+        m_recorder->setNodeId(0);
+        m_recorder->setOutput(QString());
+        // Validate and configure output BEFORE requesting a compositor stream.
+        auto format = static_cast<Format>(Settings::preferredVideoFormat());
+        if (!fileUrl.isValid()) {
+            ExportManager::instance()->updateTimestamp();
+            const auto filename = ExportManager::formattedFilename(Settings::videoFilenameTemplate(),
+                                                                   ExportManager::instance()->timestamp(),
+                                                                   options[captionKey].toString(),
+                                                                   Settings::videoSaveLocation());
+            auto tempUrl = ExportManager::instance()->tempVideoUrl(filename);
+            if (!tempUrl.isLocalFile()) {
+                Q_EMIT recordingFailed(
+                    i18nc("@info:shell, %1 is the temporary URL", "Failed to record: Temporary file URL is not a local file (%1)", tempUrl.toString()));
+                return;
+            }
+            const auto encoder = encoderForFormat(format);
+            if (encoder == Encoder::NoEncoder) {
+                Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
+                return;
+            }
+            if (!mkDirPath(tempUrl)) return;
+            m_recorder->setEncoder(encoder);
+            m_recorder->setOutput(tempUrl.toLocalFile());
+        } else {
+            if (!fileUrl.isLocalFile()) {
+                Q_EMIT recordingFailed(
+                    i18nc("@info:shell, %1 is the output file URL", "Failed to record: Output file URL is not a local file (%1)", fileUrl.toString()));
+                return;
+            }
+            const auto localFile = fileUrl.toLocalFile();
+            format = formatForPath(localFile);
+            const auto encoder = encoderForFormat(format);
+            if (encoder == Encoder::NoEncoder) {
+                Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
+                return;
+            }
+            if (!mkDirPath(fileUrl)) return;
+            m_recorder->setEncoder(encoder);
+            m_recorder->setOutput(localFile);
+        }
+        // The stored settings stay enabled when the checkboxes are disabled
+        // for a format without audio support, don't forward them in that case.
+        const bool audioSupported = formatSupportsAudio(format);
+        m_recorder->setRecordSystemAudio(Settings::videoRecordSystemAudio() && audioSupported);
+        m_recorder->setRecordMicrophone(Settings::videoRecordMicrophone() && audioSupported);
+
         Screencasting::CursorMode mode = includePointer ? Screencasting::CursorMode::Embedded : Screencasting::Hidden;
         ScreencastingStream *stream = nullptr;
 
@@ -255,10 +315,13 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
             break; // This shouldn't happen
         }
 
+        if (!stream) {
+            m_recorder->setOutput(QString());
+            Q_EMIT recordingFailed(i18nc("@info", "The selected capture source is unavailable."));
+            return;
+        }
         m_recorder->setMaxPendingFrames(availableFrames(m_frameBytes));
         m_recorder->setNodeId(0);
-
-        Q_ASSERT(stream);
         connect(stream, &ScreencastingStream::created, this, [this, stream, recordingMode] {
             m_recorder->setNodeId(stream->nodeId());
             if (!m_recorder->output().isEmpty()) {
@@ -288,48 +351,6 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
                                              "region changed in a way that disrupted the recording."));
             }
         });
-
-        // set up output
-        auto format = static_cast<Format>(Settings::preferredVideoFormat());
-        if (!fileUrl.isValid()) {
-            ExportManager::instance()->updateTimestamp();
-            const auto filename = ExportManager::formattedFilename(Settings::videoFilenameTemplate(),
-                                                                   ExportManager::instance()->timestamp(),
-                                                                   options[captionKey].toString(),
-                                                                   Settings::videoSaveLocation());
-            auto tempUrl = ExportManager::instance()->tempVideoUrl(filename);
-            if (!tempUrl.isLocalFile()) {
-                Q_EMIT recordingFailed(
-                    i18nc("@info:shell, %1 is the temporary URL", "Failed to record: Temporary file URL is not a local file (%1)", tempUrl.toString()));
-                return;
-            }
-            if (!mkDirPath(tempUrl)) {
-                return;
-            }
-            m_recorder->setEncoder(encoderForFormat(format));
-            m_recorder->setOutput(tempUrl.toLocalFile());
-        } else {
-            if (!fileUrl.isLocalFile()) {
-                Q_EMIT recordingFailed(
-                    i18nc("@info:shell, %1 is the output file URL", "Failed to record: Output file URL is not a local file (%1)", fileUrl.toString()));
-                return;
-            }
-            if (!mkDirPath(fileUrl)) {
-                return;
-            }
-            const auto localFile = fileUrl.toLocalFile();
-            format = formatForPath(localFile);
-            m_recorder->setEncoder(encoderForFormat(format));
-            m_recorder->setOutput(localFile);
-        }
-        // The stored settings stay enabled when the checkboxes are disabled
-        // for a format without audio support, don't forward them in that case.
-        const bool audioSupported = formatSupportsAudio(format);
-        m_recorder->setRecordSystemAudio(Settings::videoRecordSystemAudio() && audioSupported);
-        m_recorder->setRecordMicrophone(Settings::videoRecordMicrophone() && audioSupported);
-        if (m_recorder->nodeId() != 0) {
-            m_recorder->start();
-        }
 
         connect(m_recorder.get(), &PipeWireRecord::stateChanged, this, [this, recordingMode] {
             if (m_recorder->state() == PipeWireRecord::Idle) {
@@ -374,13 +395,12 @@ void VideoPlatformWayland::timerEvent(QTimerEvent *event)
 
 bool VideoPlatformWayland::mkDirPath(const QUrl &fileUrl)
 {
-    QDir dir(fileUrl.adjusted(QUrl::RemoveFilename).toLocalFile());
-    if (dir.exists() || dir.mkpath(u"."_s)) {
-        return true;
-    } else {
-        Q_EMIT recordingFailed(i18nc("@info:shell, %1 is a directory path", "Failed to record: Unable to create folder (%1)", dir.path()));
-        return false;
-    }
+    const auto result = NkShot::prepareRecordingOutputPath(fileUrl);
+    if (result == NkShot::RecordingOutputError::None) return true;
+    Q_EMIT recordingFailed(result == NkShot::RecordingOutputError::InvalidFile
+        ? i18nc("@info", "Failed to record: The output must be a writable local file, not a folder.")
+        : i18nc("@info", "Failed to record: The output folder could not be created or is not writable."));
+    return false;
 }
 
 void VideoPlatformWayland::selectAndRecord(const QUrl &fileUrl, RecordingMode recordingMode, bool includePointer)

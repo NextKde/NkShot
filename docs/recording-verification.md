@@ -93,3 +93,25 @@ a next audit target: output-path setup currently follows source-stream creation,
 and recorder state connections are installed in each start request. These are
 risks to investigate with injected failures or a real KDE session, not bugs claimed
 reproduced here. No unvalidated native-backend lifecycle rewrite was shipped.
+
+## Output preflight hardening (063)
+
+The output-path check previously accepted a directory named `clip.mp4`, because
+it checked only whether the parent directory existed. The new Qt filesystem test
+reproduces that invalid destination and verifies rejection. Existing FIFOs and
+other non-regular files are also rejected. Preflight does not open/truncate a
+recording file: existing bytes remain intact, and a new destination creates only
+its parent directories. Existing writable regular files remain valid even when
+their parent is not writable. New files require a writable parent.
+
+The Wayland adapter now resolves target selection first, clears old node/output
+properties, checks encoder availability and prepares the output path **before**
+creating a new compositor stream or minimizing windows. A null stream is handled
+before using its frame-size estimate. Structural tests enforce this ordering;
+they are not compositor execution tests. The actual recorder must still handle
+storage/permission changes after preflight.
+
+Independent static review identified remaining lifecycle work: old streams are
+not retired or generation-isolated, recorder state callbacks accumulate per start,
+and encoder write failures need explicit handling. These are not claimed fixed by
+063. Real KWin failure injection and A/V recording acceptance remain necessary.
