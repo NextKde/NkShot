@@ -46,6 +46,8 @@ target_sources(spectacle PRIVATE
     Gui/SoftwareVideoPreview.h
     Gui/OcrTextWindow.cpp
     Gui/OcrTextWindow.h
+    Gui/ScrollCaptureWindow.cpp
+    Gui/ScrollCaptureWindow.h
     Gui/PinnedImageWindow.cpp
     Gui/PinnedImageWindow.h
     Gui/PortableAnnotationViewport.cpp
@@ -218,6 +220,7 @@ qt_target_qml_sources(spectacle
     Gui/TtToolButton.qml
     Gui/UndoRedoGroup.qml
     Gui/OcrText.qml
+    Gui/ScrollCapture.qml
     Gui/PinnedImage.qml
     Gui/ViewerPage.qml
 )

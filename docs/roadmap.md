@@ -62,3 +62,11 @@ should gate on fresh runtime API>=5, explicitly exclude caller windows and avoid
 a sleep-based legacy fallback. See the source references and remaining native
 acceptance checklist in the rolling capture plan. This capability investigation
 and adapter gate are not a delivered user-facing scrolling feature.
+
+### Integrated technical preview
+
+058 connects the actual selector/panel/controller/API5 adapter under an explicit
+`NKSHOT_EXPERIMENTAL_SCROLL=1` gate. The default interface remains unchanged.
+Unavailable-state/selection-layout tests do not establish native success. The
+next gate is real desktop capture, focus/restoration, permissions, fractional DPI
+and exported result acceptance; see [preview guide](scroll-preview.md).

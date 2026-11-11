@@ -281,6 +281,14 @@ EmptyPage {
                     }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
+                        objectName: "nkshotScrollPreviewEntry"
+                        visible: contextWindow.scrollPreviewEnabled && !SpectacleCore.videoMode
+                        height: visible ? implicitHeight : 0
+                        text: i18nc("@action", "Scrolling capture (preview)…")
+                        icon.name: "view-fullscreen"
+                        onTriggered: contextWindow.openScrollPreview()
+                    }
+                    QQC.MenuItem {
                         enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
                         opacity: enabled ? 1 : 0.38
                         text: i18nc("@action", "New Recording")

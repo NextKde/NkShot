@@ -23,6 +23,7 @@ class ViewerWindowPrivate;
 class ViewerWindow : public SpectacleWindow
 {
     Q_OBJECT
+    Q_PROPERTY(bool scrollPreviewEnabled READ scrollPreviewEnabled CONSTANT)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
 public:
@@ -37,6 +38,8 @@ public:
 
     static ViewerWindow *instance();
 
+    bool scrollPreviewEnabled() const;
+    Q_INVOKABLE QQuickWindow *openScrollPreview();
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
     Q_INVOKABLE QSize imageSnapshotSize() const;
@@ -64,6 +67,7 @@ private:
 
     void setBackgroundColorRole(QPalette::ColorRole role);
 
+    QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
     bool m_combiningImages = false;
     bool m_resizingImage = false;

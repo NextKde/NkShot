@@ -78,3 +78,10 @@ required visual checks.
 
 Build requirements and the first verified results: [building](docs/building.md),
 [iteration log](docs/iterations.md).
+
+## Experimental manual scrolling capture
+
+An explicit, default-off [technical preview](docs/scroll-preview.md) integrates a
+single-display selector, manual next-frame panel and API5-only KWin backend. It
+has not passed native desktop acceptance; do not treat it as a released scrolling
+feature or enable it in packaging defaults. No automated scrolling is provided.

@@ -231,3 +231,13 @@ environment with no session DBus. It verifies null/missing-backend request refus
 repeat cancellation, and unchanged editor pixels/history. It exits with an error
 if session DBus is connected rather than claiming a live-capture test. Its screenshot
 is the unchanged existing editor, not a rolling-capture demo.
+
+`NKSHOT_TEST_SCROLL_PREVIEW=1` verifies the actual More entry stays hidden by default
+and refuses opening. With `NKSHOT_EXPERIMENTAL_SCROLL=1` it clicks the real entry,
+checks unavailable-state/reuse/disabled actions, Escape/reopen and source isolation.
+This branch requires no session DBus; it never supplies synthetic capture success.
+Use DARK and SCROLL_COMPACT variants. `NKSHOT_TEST_SCROLL_SELECTOR_VISUAL=1` only
+overrides the QML component phase to inspect rectangle drag layout; the C++ phase
+remains Setup, which rejects region acceptance. The `.selector-layout.png` and `.session-layout.png` are layout diagnostics, not
+native capture screenshots. Add SCROLL_VIDEO to confirm the opt-in entry and open
+method remain blocked in video mode.

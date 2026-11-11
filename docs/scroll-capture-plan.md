@@ -1,5 +1,10 @@
 # Rolling capture feasibility and acceptance plan
 
+Current status: [058 opt-in technical preview](scroll-preview.md) connects the
+selector, panel, controller and API5 adapter. It is default-off and lacks native
+KWin acceptance. Numbered sections below record the evolving implementation;
+statements about missing UI in 054–057 describe those earlier stages.
+
 ## Inspected source boundary
 
 `ImagePlatform::doGrab()` emits accepted image/failure/cancel signals. The ordinary
@@ -205,3 +210,11 @@ but API5 success, renderer exclusion, denied permission, probe/frame cancellatio
 on a real bus and fractional-DPI output remain unverified. Next work should be
 one integrated selector/panel/backend path with native acceptance, rather than
 more standalone model layers or a fake demonstration.
+
+## Integrated preview (058)
+
+The standalone preview now connects the real request adapter to the controller.
+Preparation confirmation authorizes the adapter's enforced API5 compositor exclusion
+contract, not a timed local repaint assumption. The backend verifies the capability
+again before each actual capture. No production-default entry is enabled; see the
+preview guide for the opt-in route, verified interactions and native test gaps.

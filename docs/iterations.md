@@ -1198,3 +1198,43 @@ because this sandbox forbids Unix socket creation; no workaround or claim of liv
 KWin acceptance is made. Native API5 result/exclusion, denial, probe/frame timeout
 and hotplug remain unverified. The next substantive milestone is a single integrated
 selector/session-panel/native-backend workflow, not another synthetic capture demo.
+
+## 058 — Integrated manual-scroll technical preview, explicitly default-off
+
+Connected a standalone display picker, fullscreen one-output drag selector,
+manual frame panel, isolated controller, API5-only KWin request source and separate
+result pin. It is only accessible with `NKSHOT_EXPERIMENTAL_SCROLL=1` and only in
+image mode; no production default enables it. Capability preflight precedes region
+selection and every frame rechecks the real compositor API. There is no automatic
+scroll injection or sleep-based legacy fallback.
+
+The panel has one primary action (Select region, Capture first, Capture next),
+secondary Finish and Cancel. During selection/session the original editor/pin/text
+windows are hidden for target access and their previous visibility is retained for
+restoration. Selector failure, cancellation, output removal and teardown restore
+windows; result-preview failure retains the composed image for retry. Original
+image/history/export state is separate. These native paths are implemented but
+not accepted on a real desktop yet.
+
+Build, CTest 8/8, static 16/16 and whitespace checks pass. Actual offscreen tests
+click the real opt-in More entry, verify default-off and video-mode exclusion,
+window reuse, unavailable-backend explanation, disabled selection, Escape close,
+reopening and unchanged original pixels/history. Existing sharing-copy clipboard/
+PNG and composition workflows pass. The visual review caught and corrected a white
+native display picker in dark mode, replacing it with the same Kos control surface.
+
+Reviewed actual [unavailable preview](screenshots/058-preview-light.png),
+[dark](screenshots/058-preview-dark.png) and [narrow](screenshots/058-preview-compact.png)
+windows. Separate [selector](screenshots/058-preview-light.png.selector-layout.png)
+and [panel](screenshots/058-preview-light.png.session-layout.png) screenshots are
+**layout diagnostics only**: tests override the QML display phase, keep the C++
+phase in Setup, and cannot accept any region or frame. They are not native desktop
+capture examples. Existing [sharing regression](screenshots/058-existing-sharing.png)
+was also checked.
+
+Real KWin success, permission denial, compositor PID exclusion, fullscreen input,
+window restoration, fractional-DPI/hotplug behavior, native accessibility and
+end-to-end scrolling export remain unverified in this socket-restricted cloud.
+Selector keyboard resizing is not implemented. The new [preview guide](scroll-preview.md)
+spells out the explicit opt-in, bounds, workflow and acceptance gaps. Do not promote
+this prototype to a default feature until native testing passes.

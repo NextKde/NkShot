@@ -6,6 +6,7 @@
  */
 
 #include "ViewerWindow.h"
+#include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
 #include "OcrTextWindow.h"
 #include "Imaging/ImageTransforms.h"
@@ -406,3 +407,17 @@ void ViewerWindow::resizeEvent(QResizeEvent *event)
 }
 
 #include "moc_ViewerWindow.cpp"
+
+bool ViewerWindow::scrollPreviewEnabled() const {return qEnvironmentVariable("NKSHOT_EXPERIMENTAL_SCROLL")==QStringLiteral("1");}
+QQuickWindow *ViewerWindow::openScrollPreview()
+{
+    if(!scrollPreviewEnabled() || SpectacleCore::instance()->videoMode()) return nullptr;
+    if(m_scrollPreview) {
+        auto existing=qobject_cast<ScrollCaptureWindow *>(m_scrollPreview.data());
+        if(!existing || existing->phase()!=1) {m_scrollPreview->show();m_scrollPreview->requestActivate();}
+        return m_scrollPreview;
+    }
+    auto view=new ScrollCaptureWindow(engine());
+    if(view->status()!=QQuickView::Ready) {delete view;return nullptr;}
+    m_scrollPreview=view;view->show();view->requestActivate();return view;
+}
