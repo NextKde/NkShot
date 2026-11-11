@@ -236,8 +236,27 @@ void installUiCaptureHook(QApplication &application)
                 auto document = SpectacleCore::instance()->annotationDocument();
                 document->setBaseImage(source);
                 const auto original = document->renderToImage();
-                if (!QTest::qWaitFor([] { return SpectacleCore::instance()->ocrAvailable(); }, 10000)
-                    || !SpectacleCore::instance()->startOcrExtraction(chinese ? QStringLiteral("chi_sim") : QStringLiteral("eng"))) {
+                if (!QTest::qWaitFor([] { return SpectacleCore::instance()->ocrAvailable(); }, 10000)) {
+                    application.exit(92); return;
+                }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_LANGUAGE")) {
+                    auto parentMenu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                    if (parentMenu) QMetaObject::invokeMethod(parentMenu, "open");
+                    QTest::qWait(200);
+                    auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotOcrLanguageMenu"));
+                    if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(108); return; }
+                    QTest::qWait(300);
+                    auto entry = visualItem(viewer->contentItem(), QStringLiteral("nkshotOcrLanguage_")
+                        + (chinese ? QStringLiteral("chi_sim") : QStringLiteral("eng")));
+                    if (!entry || !entry->isEnabled() || entry->width() < 50) {
+                        qWarning() << "OCR language menu missing" << menu->property("count") << menu->property("languages") << entry;
+                        viewer->grabWindow().save(destination + QStringLiteral(".failed.png"));
+                        application.exit(109); return;
+                    }
+                    viewer->grabWindow().save(destination + QStringLiteral(".menu.png"));
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
+                } else if (!SpectacleCore::instance()->startOcrExtraction(chinese ? QStringLiteral("chi_sim") : QStringLiteral("eng"))) {
                     application.exit(92); return;
                 }
                 QPointer<OcrTextWindow> result;

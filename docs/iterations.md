@@ -851,3 +851,23 @@ prior selection/copy/close tests. Reviewed [light](screenshots/044-ocr-save-ligh
 and [Chinese](screenshots/044-ocr-save-chinese.png).
 Tests use widget file pickers and synthetic images; native portals, existing-file
 overwrite prompts and filesystem failure injection remain unverified.
+
+## 045 — Choose an installed OCR language from the editor
+
+Keep the existing one-click Extract Text action and add a low-frequency More →
+Extract text in submenu listing the engine's installed recognition models by
+human-readable name. Orientation-only osd is excluded. Selecting a model invokes
+the existing one-shot language override; no download, external service or new
+persistent language setting is introduced. Both entries disable during recognition;
+the default action shows Extracting text while busy.
+
+Build, CTest 5/5 and static checks 16/16 pass. The UI harness opens More/submenu
+and physically clicks the English or simplified-Chinese entry, then verifies
+actual Tesseract recognition, selection/copy, close and unchanged image pixels.
+The Chinese compact scenario also reruns cancel/reopen/reuse, invalid extension
+and exact UTF-8 save. Reviewed [light menu](screenshots/045-ocr-menu-light.png),
+[dark menu](screenshots/045-ocr-menu-dark.png) and
+[compact Chinese saved result](screenshots/045-ocr-language-compact.png).
+Only installed eng/chi_sim models and software-rendered menus were exercised;
+large language lists, mixed-language accuracy and native desktop operation are
+not established. This editor submenu does not replace the capture-overlay action.

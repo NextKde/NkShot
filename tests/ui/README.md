@@ -147,3 +147,9 @@ Save clicks, cancellation/reopen, repeated-dialog reuse, rejected .png extension
 exact UTF-8 file bytes and source isolation. Run light/dark/compact/Chinese
 variants. Native portal behavior, overwrite prompts and disk failures are not
 covered by this harness.
+
+`NKSHOT_TEST_OCR_LANGUAGE=1` with OCR_RESULT opens the actual More/language menus
+and clicks the installed eng or chi_sim entry before waiting for real recognition.
+The menus are programmatically opened, but the language choice is a mouse click.
+Combine with OCR_CHINESE, OCR_SAVE, OCR_COMPACT or DARK for the existing downstream
+checks. A pre-click menu image is saved alongside the result with `.menu.png`.

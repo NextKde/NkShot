@@ -171,6 +171,34 @@ EmptyPage {
                         height: visible ? implicitHeight : 0
                         action: OcrAction {}
                     }
+                    QQC.Menu {
+                        id: ocrLanguageMenu
+                        objectName: "nkshotOcrLanguageMenu"
+                        title: i18nc("@action:menu", "Extract text in…")
+                        enabled: !SpectacleCore.videoMode && SpectacleCore.ocrAvailable && SpectacleCore.ocrStatus !== 1
+                        width: Math.min(240, root.width - 32)
+                        palette: moreMenu.palette
+                        padding: 6
+                        property var languages: SpectacleCore.ocrAvailable ? SpectacleCore.ocrAvailableLanguages() : ({})
+                        background: Kos.KosSurface {
+                            fillColor: Kos.AppTheme.contentBackground
+                            radius: 14
+                            elevation: 0.5
+                        }
+                        Instantiator {
+                            model: Object.keys(ocrLanguageMenu.languages).filter(function(code) { return code !== "osd" }).sort()
+                            delegate: QQC.MenuItem {
+                                required property string modelData
+                                objectName: "nkshotOcrLanguage_" + modelData
+                                text: ocrLanguageMenu.languages[modelData]
+                                icon.name: "document-scan"
+                                icon.color: palette.buttonText
+                                onTriggered: SpectacleCore.startOcrExtraction(modelData)
+                            }
+                            onObjectAdded: (index, object) => ocrLanguageMenu.insertItem(index, object)
+                            onObjectRemoved: (index, object) => ocrLanguageMenu.removeItem(object)
+                        }
+                    }
                     QQC.MenuItem {
                         opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
