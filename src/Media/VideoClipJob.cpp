@@ -134,7 +134,7 @@ void VideoClipJob::inspect(const QUrl &source) {
     if(!m_annotationOverlay.isNull()){m_annotationOverlay=QImage();++m_annotationRevision;}m_overlayAvailable=false;
     m_exportSpeed=1.;m_atempoAvailable=false;m_start=0;m_end=0;
     m_outputResolution=QStringLiteral("original");
-    m_width=0;m_height=0;m_squarePixels=false;m_privacyEnabled=false;m_drawboxAvailable=false;m_privacyRect={};m_cropPosition=QPoint(-1,-1);m_cropAspect=QStringLiteral("original");
+    m_width=0;m_height=0;m_squarePixels=false;m_privacyEnabled=false;m_drawboxAvailable=false;m_privacyRect={};m_cropPosition=QPoint(-1,-1);m_freeCropRect={};m_cropAspect=QStringLiteral("original");
     const QFileInfo f(source.toLocalFile());
     m_webm=f.suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||(!m_webm&&f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive))||(m_webm&&!NkShot::LocalVideoInput::hasWebMDocType(f.absoluteFilePath()))||f.size()<=0||f.size()>(m_webm?qint64(256)*1024*1024:qint64(2)*1024*1024*1024)) {
@@ -403,6 +403,10 @@ QString VideoClipJob::privacyFilter() const {
 QRect VideoClipJob::centeredCropRect() const {
     if(!m_mediaValid||m_width<2||m_height<2)return {};
     if(m_cropAspect==QStringLiteral("original"))return QRect(0,0,m_width,m_height);
+    if(m_cropAspect==QStringLiteral("free")) {
+        const auto size=m_freeCropRect.size();
+        return QRect(((m_width-size.width())/2)&~1,((m_height-size.height())/2)&~1,size.width(),size.height());
+    }
     int numerator=1,denominator=1;
     if(m_cropAspect==QStringLiteral("portrait")){numerator=9;denominator=16;}
     else if(m_cropAspect==QStringLiteral("wide")){numerator=16;denominator=9;}
@@ -414,6 +418,7 @@ QRect VideoClipJob::centeredCropRect() const {
     return QRect(((m_width-width)/2)&~1,((m_height-height)/2)&~1,width,height);
 }
 QRect VideoClipJob::cropRect() const {
+    if(m_cropAspect==QStringLiteral("free"))return m_freeCropRect;
     auto rect=centeredCropRect();
     if(!rect.isEmpty()&&m_cropAspect!=QStringLiteral("original")&&m_cropPosition.x()>=0&&m_cropPosition.y()>=0)
         rect.moveTopLeft(m_cropPosition);
@@ -427,18 +432,30 @@ void VideoClipJob::setCropPosition(int x,int y) {
     // The final even offsets keep both image and YUV420 chroma inside source.
     const QPoint position(qBound(0,x,m_width-rect.width())&~1,qBound(0,y,m_height-rect.height())&~1);
     if(position==rect.topLeft())return;
-    m_cropPosition=position==centeredCropRect().topLeft()?QPoint(-1,-1):position;
+    if(m_cropAspect==QStringLiteral("free"))m_freeCropRect.moveTopLeft(position);
+    else m_cropPosition=position==centeredCropRect().topLeft()?QPoint(-1,-1):position;
     m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
 }
 void VideoClipJob::resetCropPosition() {
     if(m_busy||!m_ready||!cropAvailable()||m_cropAspect==QStringLiteral("original")||cropCentered())return;
+    if(m_cropAspect==QStringLiteral("free"))m_freeCropRect=centeredCropRect();
     m_cropPosition=QPoint(-1,-1);m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+void VideoClipJob::setCropRect(int x,int y,int width,int height) {
+    if(m_busy||!m_ready||!cropAvailable()||m_cropAspect!=QStringLiteral("free"))return;
+    // Clamp operands before arithmetic; dimensions and offsets remain YUV420-safe.
+    x=qBound(0,x,m_width-2)&~1; y=qBound(0,y,m_height-2)&~1;
+    width=qBound(2,width,m_width-x)&~1; height=qBound(2,height,m_height-y)&~1;
+    const QRect rect(x,y,width,height);
+    if(rect==m_freeCropRect)return;
+    m_freeCropRect=rect;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
 }
 void VideoClipJob::setCropAspect(const QString &aspect) {
     if(m_busy||!m_ready||aspect==m_cropAspect)return;
     if(aspect!=QStringLiteral("original")&&!cropAvailable())return;
     if(aspect!=QStringLiteral("original")&&aspect!=QStringLiteral("square")
-        &&aspect!=QStringLiteral("portrait")&&aspect!=QStringLiteral("wide"))return;
+        &&aspect!=QStringLiteral("portrait")&&aspect!=QStringLiteral("wide")&&aspect!=QStringLiteral("free"))return;
+    if(aspect==QStringLiteral("free"))m_freeCropRect=cropRect();
     m_cropAspect=aspect;m_cropPosition=QPoint(-1,-1);m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
 }
 QString VideoClipJob::cropFilter() const {

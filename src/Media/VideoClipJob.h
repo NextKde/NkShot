@@ -59,6 +59,7 @@ public:
     QRect cropRect() const;
     bool cropCentered() const;
     Q_INVOKABLE void setCropPosition(int x, int y);
+    Q_INVOKABLE void setCropRect(int x, int y, int width, int height);
     Q_INVOKABLE void resetCropPosition();
     double exportSpeed() const { return m_exportSpeed; }
     Q_INVOKABLE void setExportSpeed(double speed);
@@ -114,6 +115,7 @@ private:
     bool m_privacyEnabled = false, m_drawboxAvailable = false;
     QRect m_privacyRect;
     QPoint m_cropPosition = QPoint(-1, -1);
+    QRect m_freeCropRect;
     QString m_cropAspect = QStringLiteral("original");
     QString m_outputResolution = QStringLiteral("original");
     QString m_format = QStringLiteral("mp4");

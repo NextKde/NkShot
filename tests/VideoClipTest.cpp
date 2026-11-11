@@ -123,6 +123,57 @@ private Q_SLOTS:
         job.inspect(QUrl::fromLocalFile(input));QCOMPARE(job.cropAspect(),QStringLiteral("original"));QVERIFY(job.cropRect().isEmpty());QCOMPARE(job.sourceSize(),QSize(0,0));
         QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());QCOMPARE(job.cropRect(),QRect(0,0,320,240));
     }
+    void freeCrop_data() {
+        QTest::addColumn<bool>("webm");QTest::newRow("mp4")<<false;QTest::newRow("webm")<<true;
+    }
+    void freeCrop() {
+        QFETCH(bool,webm);const auto input=webm?cropWebm:cropMp4;const auto original=hash(input);VideoClipJob job;
+        QVERIFY2(ready(job,input),qPrintable(job.error()));job.setCropAspect(QStringLiteral("wide"));job.setCropPosition(0,60);
+        const auto previous=job.cropRect();job.setCropAspect(QStringLiteral("free"));QCOMPARE(job.cropRect(),previous);
+        job.setCropRect(41,61,161,101);const QRect expected(40,60,160,100);QCOMPARE(job.cropRect(),expected);
+        QImage overlay(job.sourceSize(),QImage::Format_ARGB32);overlay.fill(Qt::transparent);
+        for(int y=80;y<100;++y)for(int x=60;x<80;++x)overlay.setPixelColor(x,y,Qt::white);
+        QVERIFY(job.setAnnotationOverlay(overlay));job.setPrivacyEnabled(true);job.setPrivacyRect(60,80,20,20);
+        job.setOutputResolution(QStringLiteral("720p"));QCOMPARE(job.outputSize(),expected.size());
+        const auto sourceFrame=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),input,QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-an"),QStringLiteral("-pix_fmt"),QStringLiteral("gray"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});QCOMPARE(sourceFrame.size(),320*240);
+        for(const auto &format:{QStringLiteral("mp4"),QStringLiteral("gif")}) {
+            job.setOutputFormat(format);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY(job.ready());QCOMPARE(job.cropRect(),expected);
+            const auto target=folder.filePath(QStringLiteral("free-%1.%2").arg(webm).arg(format));
+            job.exportClip(QUrl::fromLocalFile(target),200,800);QVERIFY(job.busy());
+            job.setCropRect(0,0,2,2);job.setCropPosition(0,0);job.resetCropPosition();QCOMPARE(job.cropRect(),expected);
+            QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
+            QStringList args{QStringLiteral("-v"),QStringLiteral("error")};if(format==QStringLiteral("gif"))args<<QStringLiteral("-ignore_loop")<<QStringLiteral("1");
+            args<<QStringLiteral("-i")<<target<<QStringLiteral("-frames:v")<<QStringLiteral("1")<<QStringLiteral("-an")<<QStringLiteral("-pix_fmt")<<QStringLiteral("gray")<<QStringLiteral("-f")<<QStringLiteral("rawvideo")<<QStringLiteral("pipe:1");
+            const auto output=execute(ffmpeg,args);QCOMPARE(output.size(),160*100);
+            for(const QPoint point:{QPoint(8,8),QPoint(80,50),QPoint(150,90)})
+                QVERIFY(qAbs(int(uchar(output.at(point.y()*160+point.x())))-int(uchar(sourceFrame.at((point.y()+60)*320+point.x()+40))))<=5);
+            QVERIFY(uchar(output.at(30*160+30))<8); // Opaque privacy wins over the white annotation.
+            const auto audio=execute(ffprobe,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-select_streams"),QStringLiteral("a"),QStringLiteral("-show_entries"),QStringLiteral("stream=codec_type"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),target});
+            QCOMPARE(audio.contains("audio"),format==QStringLiteral("mp4"));
+            if(format==QStringLiteral("mp4")) {
+                const auto pcm=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),target,QStringLiteral("-vn"),QStringLiteral("-ac"),QStringLiteral("1"),QStringLiteral("-f"),QStringLiteral("s16le"),QStringLiteral("pipe:1")});
+                QVERIFY(pcm.size()>1000);int peak=0;for(qsizetype i=0;i+1<pcm.size();i+=2) {const auto sample=qint16(quint16(uchar(pcm[i]))|(quint16(uchar(pcm[i+1]))<<8));peak=qMax(peak,qAbs(int(sample)));}QVERIFY(peak>1000);
+            }
+            QSignalSpy unchanged(&job,&VideoClipJob::changed);job.setCropRect(41,61,161,101);QCOMPARE(unchanged.size(),0);QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
+            QCOMPARE(hash(input),original);
+        }
+        job.resetCropPosition();QCOMPARE(job.cropRect(),QRect(80,70,160,100));QVERIFY(job.cropCentered());QVERIFY(job.outputUrl().isEmpty());
+        QSignalSpy unchanged(&job,&VideoClipJob::changed);job.resetCropPosition();QCOMPARE(unchanged.size(),0);
+    }
+    void freeCropBoundsAndReset() {
+        VideoClipJob job;QSignalSpy changes(&job,&VideoClipJob::changed);job.setCropRect(0,0,2,2);QCOMPARE(changes.size(),0);
+        QVERIFY(ready(job,cropMp4));job.setCropRect(0,0,2,2);QCOMPARE(job.cropRect(),QRect(0,0,320,240));
+        job.setCropAspect(QStringLiteral("free"));QCOMPARE(job.cropRect(),QRect(0,0,320,240));
+        job.setCropRect(std::numeric_limits<int>::max(),std::numeric_limits<int>::min(),std::numeric_limits<int>::max(),std::numeric_limits<int>::min());QCOMPARE(job.cropRect(),QRect(318,0,2,2));
+        job.setCropRect(std::numeric_limits<int>::min(),std::numeric_limits<int>::max(),std::numeric_limits<int>::min(),std::numeric_limits<int>::max());QCOMPARE(job.cropRect(),QRect(0,238,2,2));
+        job.setCropRect(13,17,53,75);QCOMPARE(job.cropRect(),QRect(12,16,52,74));
+        job.setCropPosition(std::numeric_limits<int>::max(),std::numeric_limits<int>::max());QCOMPARE(job.cropRect(),QRect(268,166,52,74));
+        job.resetCropPosition();QCOMPARE(job.cropRect(),QRect(134,82,52,74));QVERIFY(job.cropCentered());
+        job.setCropAspect(QStringLiteral("square"));QCOMPARE(job.cropRect(),QRect(40,0,240,240));
+        job.setCropAspect(QStringLiteral("free"));QCOMPARE(job.cropRect(),QRect(40,0,240,240));
+        job.inspect(QUrl::fromLocalFile(cropWebm));QCOMPARE(job.cropAspect(),QStringLiteral("original"));
+        job.setCropRect(0,0,2,2);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY(job.ready());QCOMPARE(job.cropRect(),QRect(0,0,320,240));
+    }
     void movableCrop_data() {
         QTest::addColumn<bool>("webm");QTest::addColumn<QString>("aspect");QTest::addColumn<QRect>("expected");
         const QList<QPair<QString,QRect>> cases{{QStringLiteral("square"),QRect(0,0,240,240)},
@@ -422,7 +473,7 @@ private Q_SLOTS:
         execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-i"),cropMp4,
             QStringLiteral("-vf"),QStringLiteral("setsar=4/3"),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-c:a"),QStringLiteral("copy"),input});
         VideoClipJob job;QVERIFY2(ready(job,input),qPrintable(job.error()));QVERIFY(!job.cropAvailable());QVERIFY(!job.privacyAvailable());QVERIFY(!job.annotationAvailable());QImage unsupported(job.sourceSize(),QImage::Format_ARGB32);unsupported.fill(Qt::white);QVERIFY(!job.setAnnotationOverlay(unsupported));job.setPrivacyEnabled(true);QVERIFY(!job.privacyEnabled());job.setCropAspect(QStringLiteral("square"));
-        QSignalSpy unmoved(&job,&VideoClipJob::changed);job.setCropPosition(20,30);job.resetCropPosition();QCOMPARE(unmoved.size(),0);
+        QSignalSpy unmoved(&job,&VideoClipJob::changed);job.setCropAspect(QStringLiteral("free"));job.setCropRect(0,0,20,20);job.setCropPosition(20,30);job.resetCropPosition();QCOMPARE(unmoved.size(),0);
         QCOMPARE(job.cropAspect(),QStringLiteral("original"));QCOMPARE(job.cropRect(),QRect(0,0,320,240));
         const auto target=folder.filePath(QStringLiteral("non-square-sar-copy.mp4"));job.exportClip(QUrl::fromLocalFile(target),200,1200);
         QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));

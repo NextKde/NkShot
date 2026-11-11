@@ -29,8 +29,9 @@ aspect, opening a new clip session or inspecting a new source starts centered.
 Both MP4 and GIF use the same resolved crop rectangle. The source file stays
 unchanged; existing new-file-only output publication and verification remain.
 
-This is adjustable **fixed-aspect framing**, not freeform resizing, tracking a
-moving subject, animated pan/zoom or a live camera/capture overlay. Existing
+The original presets remain adjustable **fixed-aspect framing**. The additional
+[Free mode (112)](video-free-crop.md) allows corner resizing. Neither mode tracks a
+moving subject, animates pan/zoom or adds a live camera/capture overlay. Existing
 square-pixel/support-format restrictions apply. Cropping does not remove audio.
 
 ## Evidence

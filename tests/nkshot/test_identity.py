@@ -187,6 +187,20 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('signal positionRequested', overlay)
         self.assertIn('signal centerRequested', overlay)
 
+    def test_free_crop_keeps_export_and_preview_contract(self):
+        overlay = read('src/Gui/CropPreviewOverlay.qml')
+        self.assertIn('signal rectRequested', overlay)
+        self.assertNotIn('VideoClipJob', overlay)
+        self.assertNotIn('SpectacleCore', overlay)
+        view = read('src/Gui/RecordingView.qml')
+        self.assertIn('setCropRect', view)
+        self.assertIn('!clipPopup.locked', view)
+        self.assertIn('!clipPopup.editingPrivacy', view)
+        job = read('src/Media/VideoClipJob.cpp')
+        self.assertIn('void VideoClipJob::setCropRect(', job)
+        self.assertIn('m_freeCropRect', job)
+        self.assertIn('m_clipJob->cropRect() != cropRect', read('src/Gui/ViewerWindow.cpp'))
+
     def test_video_annotations_reuse_isolated_editor(self):
         impl = read('src/Gui/ImageCopyEditor.cpp')
         self.assertIn('annotationsImage().copy()', impl)

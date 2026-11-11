@@ -753,3 +753,17 @@ blocked until an explicit return to original; closing the result cannot bypass
 that pause. Captures: `.text-cover.png`, `.text-cover-preview.png`,
 `.covered-copy.png`, `.original-paused.png`. These are software-window checks,
 not native KDE capture or guaranteed OCR privacy coverage.
+
+## Free video framing (112)
+
+`NKSHOT_TEST_FREE_CROP=1` extends the `NKSHOT_TEST_LOCAL_MEDIA_OPEN=1` workflow.
+Use a local square-pixel MP4/WebM fixture through `NKSHOT_TEST_LOCAL_MEDIA_VIDEO`.
+The helper selects Free using the real Frame menu, resizes each corner while
+checking its opposite edges, moves the interior, exercises precise/fast keyboard
+movement and resizing, and checks Center preserves size. Privacy adjustment must
+exclude crop interaction. A real output dialog and encoding job must lock it;
+changing the free rectangle out-of-band must reject the obsolete Save request.
+The existing output dimension/source-byte checks continue, with backend tests
+independently decoding MP4/GIF pixels, cover/annotation order and MP4 sound.
+`.free-crop.png` captures the actual collapsed contextual preview. Do not combine
+this option with `NKSHOT_TEST_REFRAME_CLIP`, which tests the old fixed-aspect flow.

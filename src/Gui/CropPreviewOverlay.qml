@@ -8,10 +8,36 @@ Item {
     required property rect cropRect
     required property rect displayRect
     property bool interactive: false
+    property bool freeResize: false
+    property int gestureRevision: 0
+    onInteractiveChanged: ++gestureRevision
+    onFreeResizeChanged: ++gestureRevision
+    onSourceSizeChanged: ++gestureRevision
+    onDisplayRectChanged: ++gestureRevision
+    onVisibleChanged: ++gestureRevision
+    onActiveFocusChanged: { if (!activeFocus) ++gestureRevision }
+    Connections {
+        target: root.Window.window
+        function onActiveChanged() { if (!root.Window.window.active) ++root.gestureRevision }
+    }
+    signal rectRequested(int x, int y, int width, int height)
+    function even(value) { return Math.round(value / 2) * 2 }
+    function resizeCorner(rect, leftSide, topSide, dx, dy) {
+        const right = rect.x + rect.width, bottom = rect.y + rect.height
+        const maxRight = Math.floor(sourceSize.width / 2) * 2
+        const maxBottom = Math.floor(sourceSize.height / 2) * 2
+        const x = leftSide ? Math.max(0, Math.min(right - 2, even(rect.x + dx))) : rect.x
+        const y = topSide ? Math.max(0, Math.min(bottom - 2, even(rect.y + dy))) : rect.y
+        const r = leftSide ? right : Math.max(x + 2, Math.min(maxRight, even(right + dx)))
+        const b = topSide ? bottom : Math.max(y + 2, Math.min(maxBottom, even(bottom + dy)))
+        rectRequested(x, y, r - x, b - y)
+    }
     signal positionRequested(int x, int y)
     signal centerRequested()
     activeFocusOnTab: interactive
-    Accessible.name: qsTr("Video crop position. Drag or use arrow keys. Home centers.")
+    Accessible.name: freeResize
+        ? qsTr("Video crop. Drag corners to resize. Arrow keys move; Control and arrows resize. Home centers.")
+        : qsTr("Video crop position. Drag or use arrow keys. Home centers.")
     Keys.onPressed: event => {
         if (!root.interactive) return
         const step = event.modifiers & Qt.ShiftModifier ? 10 : 2
@@ -22,7 +48,9 @@ Item {
         else if (event.key === Qt.Key_Up) y -= step
         else if (event.key === Qt.Key_Down) y += step
         else return
-        root.positionRequested(x, y)
+        if (root.freeResize && (event.modifiers & Qt.ControlModifier))
+            root.resizeCorner(root.cropRect, false, false, x - root.cropRect.x, y - root.cropRect.y)
+        else root.positionRequested(x, y)
         event.accepted = true
     }
     Item {
@@ -40,6 +68,7 @@ Item {
         Rectangle {x: 0; y: imageArea.cropTop; width: imageArea.cropLeft; height: imageArea.cropHeight; color: "#99000000"}
         Rectangle {x: imageArea.cropLeft+imageArea.cropWidth; y: imageArea.cropTop; width: Math.max(0,imageArea.width-x); height: imageArea.cropHeight; color: "#99000000"}
         Rectangle {
+            id: frame
             objectName: "nkshotVideoCropFrame"
             x: imageArea.cropLeft; y: imageArea.cropTop
             width: imageArea.cropWidth; height: imageArea.cropHeight
@@ -50,16 +79,66 @@ Item {
                 cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                 property point startPointer
                 property rect startCrop
+                property int revision: -1
                 onPressed: mouse => {
                     root.forceActiveFocus(Qt.MouseFocusReason)
                     startPointer = mapToItem(imageArea, mouse.x, mouse.y)
                     startCrop = root.cropRect
+                    revision = root.gestureRevision
                 }
                 onPositionChanged: mouse => {
-                    if (!pressed || imageArea.width <= 0 || imageArea.height <= 0) return
+                    if (!pressed || revision !== root.gestureRevision || imageArea.width <= 0 || imageArea.height <= 0) return
                     const p = mapToItem(imageArea, mouse.x, mouse.y)
                     root.positionRequested(startCrop.x + (p.x-startPointer.x)*root.sourceSize.width/imageArea.width,
                                            startCrop.y + (p.y-startPointer.y)*root.sourceSize.height/imageArea.height)
+                }
+                onCanceled: revision = -1
+                onReleased: revision = -1
+            }
+            Repeater {
+                model: 4
+                delegate: Item {
+                    id: handle
+                    required property int index
+                    objectName: "nkshotVideoCropHandle_" + index
+                    readonly property bool leftSide: index % 2 === 0
+                    readonly property bool topSide: index < 2
+                    // Keep the full hit target inside the displayed image, even at its edges.
+                    x: Math.max(-frame.x, Math.min(imageArea.width - frame.x - width,
+                        (leftSide ? 0 : frame.width) - width / 2))
+                    y: Math.max(-frame.y, Math.min(imageArea.height - frame.y - height,
+                        (topSide ? 0 : frame.height) - height / 2))
+                    width: 24; height: 24
+                    visible: root.freeResize && root.interactive
+                    Rectangle {
+                        x: Math.max(0, Math.min(handle.width - width, (handle.leftSide ? 0 : frame.width) - handle.x - width / 2))
+                        y: Math.max(0, Math.min(handle.height - height, (handle.topSide ? 0 : frame.height) - handle.y - height / 2))
+                        width: 9; height: 9; radius: 2
+                        color: "white"; border.color: "#606060"
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: handle.visible && root.interactive
+                        cursorShape: handle.leftSide === handle.topSide ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+                        property point startPointer
+                        property rect startCrop
+                        property int revision: -1
+                        onPressed: mouse => {
+                            root.forceActiveFocus(Qt.MouseFocusReason)
+                            startPointer = mapToItem(imageArea, mouse.x, mouse.y)
+                            startCrop = root.cropRect
+                            revision = root.gestureRevision
+                        }
+                        onPositionChanged: mouse => {
+                            if (!pressed || revision !== root.gestureRevision || imageArea.width <= 0 || imageArea.height <= 0) return
+                            const p = mapToItem(imageArea, mouse.x, mouse.y)
+                            root.resizeCorner(startCrop, handle.leftSide, handle.topSide,
+                                (p.x - startPointer.x) * root.sourceSize.width / imageArea.width,
+                                (p.y - startPointer.y) * root.sourceSize.height / imageArea.height)
+                        }
+                        onCanceled: revision = -1
+                        onReleased: revision = -1
+                    }
                 }
             }
         }

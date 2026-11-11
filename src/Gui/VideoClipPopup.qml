@@ -389,8 +389,8 @@ QQC.Popup {
                 id: cropChoice
                 objectName: "nkshotClipCropAspect"
                 Layout.fillWidth: true
-                model: [i18nc("@item", "Original frame"), "1:1", "9:16", "16:9"]
-                readonly property var values: ["original", "square", "portrait", "wide"]
+                model: [i18nc("@item", "Original frame"), "1:1", "9:16", "16:9", i18nc("@item", "Free")]
+                readonly property var values: ["original", "square", "portrait", "wide", "free"]
                 currentIndex: Math.max(0, values.indexOf(root.job.cropAspect))
                 enabled: root.job.ready && root.job.cropAvailable && !root.locked
                 implicitHeight: 32
@@ -404,7 +404,7 @@ QQC.Popup {
             SolidButton {
                 objectName: "nkshotClipCenterCrop"
                 text: i18nc("@action", "Center")
-                enabled: root.job.ready && !root.locked && root.job.cropAspect !== "original" && !root.job.cropCentered
+                enabled: root.job.ready && !root.locked && !root.editingPrivacy && root.job.cropAspect !== "original" && !root.job.cropCentered
                 onClicked: {root.stopPreview(); root.job.resetCropPosition()}
             }
         }
@@ -511,6 +511,15 @@ QQC.Popup {
             color: Kos.AppTheme.mutedText
         }
             }
+        }
+        QQC.Label {
+            objectName: "nkshotClipFreeCropHint"
+            Layout.fillWidth: true
+            visible: root.job.ready && root.job.cropAspect === "free" && !root.editingPrivacy && !root.detailsVisible
+            text: i18nc("@info", "Drag corners to resize · Arrows move · Ctrl+arrows resize")
+            wrapMode: Text.Wrap
+            font: root.font
+            color: Kos.AppTheme.mutedText
         }
         QQC.Label {
             Layout.fillWidth: true

@@ -4,6 +4,7 @@
 #include "WindowOwnershipUiChecks.h"
 #include "ImageExportUiChecks.h"
 #include "VideoAnnotationsUiChecks.h"
+#include "FreeCropUiChecks.h"
 #include "SpectacleCore.h"
 #include "RecentMediaModel.h"
 #include "Platforms/ImagePlatform.h"
@@ -13,6 +14,7 @@
 #include "Gui/ImageCopyEditor.h"
 #include <QColorDialog>
 #include <QInputMethodEvent>
+#include <QWheelEvent>
 #include <QKeyEvent>
 #include <QVideoSink>
 #include <QProcess>
@@ -420,24 +422,41 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         return player&&recording->property("hasContent").toBool();},15000))return fail(QStringLiteral("Imported MP4 did not really decode in Qt"));
     const auto click=[&](const QString &name) {
         QQuickItem *item=nullptr;
-        if(!QTest::qWaitFor([&]{item=visual(viewer()->contentItem(),name);return item&&item->isVisible()&&item->isEnabled();},1500))return false;
+        if(!QTest::qWaitFor([&]{item=visual(viewer()->contentItem(),name);return item&&item->isVisible()&&item->isEnabled();},1500)) {
+            qWarning()<<"Actual click control unavailable"<<name<<item<<"visible"<<(item&&item->isVisible())<<"enabled"<<(item&&item->isEnabled());return false;
+        }
         auto scroll=visual(viewer()->contentItem(),QStringLiteral("nkshotClipDetailScroll"));
         bool inside=false;for(auto parent=item->parentItem();parent;parent=parent->parentItem())if(parent==scroll)inside=true;
         if(scroll&&inside) {
-            const QRectF bounds(scroll->mapToScene(QPointF()),scroll->size());
-            const QRectF target(item->mapToScene(QPointF()),item->size());
-            if(!bounds.adjusted(-0.5,-0.5,0.5,0.5).contains(target)) {
+            const auto bounds=[&]{return QRectF(scroll->mapToScene(QPointF()),scroll->size()).adjusted(-0.5,-0.5,0.5,0.5);};
+            const auto target=[&]{return QRectF(item->mapToScene(QPointF()),item->size());};
+            // Exercise real scrolling. ScrollView.contentHeight need not equal
+            // its internal Flickable extent, so do not compute a thumb target
+            // from that value (it can be zero or stale during layout).
+            for(int attempt=0;attempt<12&&!bounds().contains(target());++attempt) {
+                const auto at=scroll->mapToScene(QPointF(scroll->width()/2,scroll->height()/2));
+                const int direction=target().bottom()>bounds().bottom()?-120:120;
+                QWheelEvent wheel(at,viewer()->mapToGlobal(at.toPoint()),QPoint(),QPoint(0,direction),Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);
+                QCoreApplication::sendEvent(viewer(),&wheel);QTest::qWait(100);
+            }
+            // Offscreen mouse-oriented ScrollViews can decline wheel events.
+            // Drag their actual thumb in small steps, rechecking scene geometry.
+            for(int attempt=0;attempt<12&&!bounds().contains(target());++attempt) {
                 auto bar=visual(viewer()->contentItem(),QStringLiteral("nkshotClipDetailScrollbar"));
-                if(!bar||!bar->isVisible())return false;
-                const qreal pos=bar->property("position").toReal(), size=bar->property("size").toReal();
-                const qreal content=scroll->property("contentHeight").toReal();
-                if(content<=0)return false;
-                const qreal desired=qBound(0.,pos+(target.top()-bounds.top()-2)/content,qMax(0.,1.-size));
-                const auto from=bar->mapToScene(QPointF(bar->width()/2,(pos+size/2)*bar->height())).toPoint();
-                const auto to=bar->mapToScene(QPointF(bar->width()/2,(desired+size/2)*bar->height())).toPoint();
+                if(!bar||!bar->isVisible())break;
+                const qreal pos=bar->property("position").toReal(),extent=bar->property("size").toReal();
+                const qreal delta=target().bottom()>bounds().bottom()?0.10:-0.10;
+                const qreal desired=qBound(0.,pos+delta,qMax(0.,1.-extent));
+                const auto from=bar->mapToScene(QPointF(bar->width()/2,(pos+extent/2)*bar->height())).toPoint();
+                const auto to=bar->mapToScene(QPointF(bar->width()/2,(desired+extent/2)*bar->height())).toPoint();
+                QTest::mouseMove(viewer(),from);QTest::qWait(30);
                 QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,from);
-                QTest::mouseMove(viewer(),to,100);QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,to);QTest::qWait(150);
-                if(!bounds.adjusted(-0.5,-0.5,0.5,0.5).contains(QRectF(item->mapToScene(QPointF()),item->size())))return false;
+                for(int step=1;step<=5;++step)QTest::mouseMove(viewer(),from+(to-from)*step/5,20);
+                QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,to);QTest::qWait(120);
+            }
+            if(!bounds().contains(target())) {
+                qWarning()<<"Actual detail scroll did not expose control"<<name<<"target"<<target()<<"viewport"<<bounds();
+                return false;
             }
         }
         for(auto parent=item->parentItem();parent;parent=parent->parentItem())
@@ -818,7 +837,8 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     const bool speedExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SPEED_CLIP");
     const bool resolutionExport=qEnvironmentVariableIsSet("NKSHOT_TEST_RESOLUTION_CLIP");
     const bool silentExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SILENT_CLIP");
-    const bool cropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
+    const bool freeCropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_FREE_CROP");
+    const bool cropExport=freeCropExport||qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
     const bool privacyExport=qEnvironmentVariableIsSet("NKSHOT_TEST_PRIVACY_CLIP");
     QRect expectedPrivacy;
     const bool annotationExport=qEnvironmentVariableIsSet("NKSHOT_TEST_ANNOTATION_CLIP");
@@ -845,8 +865,9 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             return fail(QStringLiteral("Silent export option did not update actual job"));
     }
     if(cropExport) {
-        if(!job->property("cropAvailable").toBool()||job->property("cropAspect").toString()!=QStringLiteral("original")
-            ||!click(QStringLiteral("nkshotClipCropAspect")))return fail(QStringLiteral("Crop preset unavailable/default incorrect"));
+        if(!job->property("cropAvailable").toBool())return fail(QStringLiteral("Crop backend unavailable: ready=%1 busy=%2 source=%3x%4").arg(job->property("ready").toBool()).arg(job->property("busy").toBool()).arg(job->property("sourceSize").toSize().width()).arg(job->property("sourceSize").toSize().height()));
+        if(job->property("cropAspect").toString()!=QStringLiteral("original"))return fail(QStringLiteral("Crop initial aspect is %1, expected original").arg(job->property("cropAspect").toString()));
+        if(!click(QStringLiteral("nkshotClipCropAspect")))return fail(QStringLiteral("Crop ratio control not reachable by actual scrolling/click"));
         QTest::keyClick(viewer(),Qt::Key_Home);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Return);
         if(!QTest::qWaitFor([&]{return job->property("cropAspect").toString()==QStringLiteral("portrait");},1000))
             return fail(QStringLiteral("Actual center-crop choice did not reach encoder"));
@@ -857,7 +878,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!overlay||!frame||!overlay->isVisible()||expectedCrop.width()>=sourceSize.width()||expectedCrop.height()!=sourceSize.height()
             ||!QTest::qWaitFor([&]{return frame->height()>10&&qAbs(frame->width()/frame->height()-qreal(expectedCrop.width())/expectedCrop.height())<.01;},1000)
             ||!capture(QStringLiteral(".crop-options.png")))return fail(QStringLiteral("Crop preview does not reflect export geometry"));
-        if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP")) {
+        if(!freeCropExport&&qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP")) {
             const auto center=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
             QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,center);
             for(int i=1;i<=6;++i)QTest::mouseMove(viewer(),center+QPoint(i*3,0),20);
@@ -885,12 +906,17 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             if(!capture(QStringLiteral(".reframe-options.png")))return fail(QStringLiteral("Reframed preview evidence failed"));
         }
     }
+    if(freeCropExport) {
+        QString freeFailure;
+        if(!FreeCropUiChecks::run(application,viewer(),job,screenshot,&freeFailure))return fail(freeFailure);
+        expectedCrop=job->property("cropRect").toRect();
+    }
     auto cancelControl=visual(viewer()->contentItem(),QStringLiteral("nkshotClipCancel"));
     auto previewControl=visual(viewer()->contentItem(),QStringLiteral("nkshotSoftwareVideoPreview"));
     if(!cancelControl||!previewControl||previewControl->height()<50
         ||cancelControl->mapToScene(QPointF(0,cancelControl->height())).y()>viewer()->height()
         ||!click(QStringLiteral("nkshotClipDetails")))return fail(QStringLiteral("Details hides preview or cancel in the real window"));
-    if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP")) {
+    if(!freeCropExport&&qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP")) {
         QTest::qWait(150);
         auto frame=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoCropFrame"));
         if(!frame)return fail(QStringLiteral("Collapsed crop frame missing"));
@@ -967,6 +993,10 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         ||!capture(QStringLiteral(".clip.png"))||!click(QStringLiteral("nkshotClipExport"))
         ||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
         return fail(QStringLiteral("Imported MP4 clip time inputs/Save dialog failed"));
+    if(freeCropExport) {
+        QString freeFailure;
+        if(!FreeCropUiChecks::checkLocked(viewer(),job,&freeFailure))return fail(freeFailure);
+    }
     if(annotationExport) {
         const auto overlay=job->property("annotationOverlay").value<QImage>();
         QMetaObject::invokeMethod(job,"clearAnnotationOverlay");
@@ -992,7 +1022,9 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     }
     if(cropExport) {
         // An asynchronous dialog must not export a different crop than requested.
-        if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
+        if(freeCropExport)
+            QMetaObject::invokeMethod(job,"setCropRect",Q_ARG(int,expectedCrop.x()),Q_ARG(int,expectedCrop.y()),Q_ARG(int,expectedCrop.width()-2),Q_ARG(int,expectedCrop.height()));
+        else if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
             QMetaObject::invokeMethod(job,"setCropPosition",Q_ARG(int,expectedCrop.x()+2),Q_ARG(int,expectedCrop.y()));
         else job->setProperty("cropAspect",QStringLiteral("square"));
         const auto stale=fixtures.filePath(QStringLiteral("stale-crop.mp4"));
@@ -1000,8 +1032,10 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500))return fail(QStringLiteral("Crop-race dialog did not settle"));
         if(QFileInfo::exists(stale)||job->property("busy").toBool()||!job->property("outputUrl").toUrl().isEmpty())
             return fail(QStringLiteral("Changed crop was exported from an obsolete save dialog"));
-        job->setProperty("cropAspect",QStringLiteral("portrait"));
-        if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
+        if(freeCropExport)
+            QMetaObject::invokeMethod(job,"setCropRect",Q_ARG(int,expectedCrop.x()),Q_ARG(int,expectedCrop.y()),Q_ARG(int,expectedCrop.width()),Q_ARG(int,expectedCrop.height()));
+        else job->setProperty("cropAspect",QStringLiteral("portrait"));
+        if(!freeCropExport&&qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
             QMetaObject::invokeMethod(job,"setCropPosition",Q_ARG(int,expectedCrop.x()),Q_ARG(int,expectedCrop.y()));
         if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
             return fail(QStringLiteral("Crop export did not recover after stale dialog"));
@@ -1026,11 +1060,31 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     }
     const qint64 expectedDuration=job->property("outputDurationMs").toLongLong();
     const QSize expectedOutput=job->property("outputSize").toSize();
+    bool freeBusyObserved=false;
+    QString freeBusyFailure;
+    QTimer freeBusyProbe;
+    freeBusyProbe.setInterval(1);
+    if(freeCropExport) {
+        QObject::connect(&freeBusyProbe,&QTimer::timeout,&freeBusyProbe,[&] {
+            if(!job->property("busy").toBool())return;
+            freeBusyProbe.stop();freeBusyObserved=true;
+            auto overlay=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoCropOverlay"));
+            const auto frozen=job->property("cropRect").toRect();
+            if(!overlay||overlay->property("interactive").toBool())freeBusyFailure=QStringLiteral("Free crop remained interactive during real encoding");
+            QMetaObject::invokeMethod(job,"setCropRect",Q_ARG(int,frozen.x()),Q_ARG(int,frozen.y()),Q_ARG(int,frozen.width()-2),Q_ARG(int,frozen.height()));
+            QMetaObject::invokeMethod(job,"setCropPosition",Q_ARG(int,frozen.x()+2),Q_ARG(int,frozen.y()));
+            if(job->property("cropRect").toRect()!=frozen)freeBusyFailure=QStringLiteral("Busy encoder accepted changed free crop geometry");
+        });
+        freeBusyProbe.start();
+    }
     const auto clip=fixtures.filePath(QStringLiteral("imported ' clip.mp4"));
     if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),clip)
         ||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("outputUrl").toUrl()==QUrl::fromLocalFile(clip);},30000)
         ||bytes(clip).isEmpty()||bytes(movie)!=movieBytes||!sourcesIntact()||core->currentVideo()!=QUrl::fromLocalFile(movie))
         return fail(QStringLiteral("Real imported MP4 clip export/source isolation failed"));
+    freeBusyProbe.stop();
+    if(freeCropExport&&(!freeBusyObserved||!freeBusyFailure.isEmpty()))
+        return fail(freeBusyFailure.isEmpty()?QStringLiteral("Free crop encoder lock was not observed"):freeBusyFailure);
     if(speedExport) {
         QProcess probe;probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-show_entries"),QStringLiteral("format=duration"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
         if(!probe.waitForFinished(10000)||probe.exitCode()!=0||qAbs(probe.readAllStandardOutput().trimmed().toDouble()*1000-expectedDuration)>250)

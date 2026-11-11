@@ -108,6 +108,10 @@ FocusScope {
         anchors.fill: videoOutput
         visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.cropAspect !== "original" && !root.captureActive
         interactive: visible && !clipPopup.locked && !clipPopup.editingPrivacy
+        freeResize: contextWindow.clipJob.cropAspect === "free"
+        onRectRequested: (x, y, width, height) => {
+            clipPopup.stopPreview(); contextWindow.clipJob.setCropRect(x, y, width, height)
+        }
         onPositionRequested: (x, y) => {clipPopup.stopPreview(); contextWindow.clipJob.setCropPosition(x, y)}
         onCenterRequested: {clipPopup.stopPreview(); contextWindow.clipJob.resetCropPosition()}
         sourceSize: contextWindow.clipJob.sourceSize
