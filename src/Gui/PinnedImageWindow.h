@@ -3,6 +3,8 @@
 #include <QQuickView>
 #include <QImage>
 #include <QPointer>
+#include <QVariantList>
+#include "Imaging/LocalTextExtraction.h"
 #include <atomic>
 #include <memory>
 
@@ -10,6 +12,12 @@
 class PinnedImageWindow : public QQuickView
 {
     Q_OBJECT
+    Q_PROPERTY(bool textSelectionActive READ textSelectionActive NOTIFY textSelectionActiveChanged)
+    Q_PROPERTY(QVariantList textWords READ textWords NOTIFY textWordsChanged)
+    Q_PROPERTY(QString selectedText READ selectedText NOTIFY textSelectionChanged)
+    Q_PROPERTY(int selectionFirst READ selectionFirst NOTIFY textSelectionChanged)
+    Q_PROPERTY(int selectionLast READ selectionLast NOTIFY textSelectionChanged)
+    Q_PROPERTY(int activeWord READ activeWord NOTIFY textSelectionChanged)
     Q_PROPERTY(bool extractingText READ extractingText NOTIFY extractingTextChanged)
     Q_PROPERTY(QUrl imageSource READ imageSource CONSTANT)
     Q_PROPERTY(QSize snapshotSize READ snapshotSize CONSTANT)
@@ -22,12 +30,27 @@ public:
     const QImage &snapshot() const { return m_image; }
     bool stayOnTop() const { return flags().testFlag(Qt::WindowStaysOnTopHint); }
     void setStayOnTop(bool value);
-    bool extractingText() const {return m_extractingText;}
+    bool extractingText() const {return m_extractingText || m_inlineBusy;}
     Q_INVOKABLE void extractText(const QString &language = QString());
     Q_INVOKABLE void extractTextArea(const QRect &area);
+    bool textSelectionActive() const { return m_textSelectionActive; }
+    QVariantList textWords() const;
+    QString selectedText() const;
+    int selectionFirst() const { return qMin(m_anchorWord, m_activeWord); }
+    int selectionLast() const { return qMax(m_anchorWord, m_activeWord); }
+    int activeWord() const { return m_activeWord; }
+    Q_INVOKABLE void selectTextOnImage();
+    Q_INVOKABLE void cancelTextSelection();
+    Q_INVOKABLE void selectWordAt(qreal x, qreal y, bool extend = false);
+    Q_INVOKABLE void moveTextSelection(int direction, bool extend = false);
+    Q_INVOKABLE void selectAllText();
+    Q_INVOKABLE void copySelectedText();
     Q_INVOKABLE void copyImage();
     Q_INVOKABLE void saveAs();
 Q_SIGNALS:
+    void textSelectionActiveChanged();
+    void textWordsChanged();
+    void textSelectionChanged();
     void extractingTextChanged();
     void textExtractionStatus(const QString &message);
     void stayOnTopChanged();
@@ -38,6 +61,14 @@ protected:
 private:
     void showExtractedText(const QString &text);
     void extractTextRegion(const QRect &area, const QString &language);
+    void setWordSelection(int index, bool extend);
+    QVector<NkShot::Imaging::TextWord> m_words;
+    bool m_textSelectionActive = false;
+    bool m_inlineBusy = false;
+    int m_anchorWord = -1;
+    int m_activeWord = -1;
+    quint64 m_inlineGeneration = 0;
+    std::shared_ptr<std::atomic_bool> m_inlineCancelled;
     QRect m_pendingArea;
     QString m_pendingText;
     QStringList m_pendingLanguages;

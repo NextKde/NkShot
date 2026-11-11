@@ -18,6 +18,7 @@
 #include <QShortcut>
 #include <QQuickItem>
 #include <KLocalizedString>
+#include <cmath>
 
 namespace {
 class SnapshotProvider final : public QQuickImageProvider {
@@ -52,10 +53,11 @@ PinnedImageWindow::PinnedImageWindow(const QImage &image, QQmlEngine *engine)
     const auto fitted = m_image.size().scaled(QSize(qMin(720, available.width() - 80), qMin(480, available.height() - 120)), Qt::KeepAspectRatio);
     resize(qMax(300, fitted.width() + 24), qMax(220, fitted.height() + 72));
     new QShortcut(QKeySequence::SaveAs, this, this, &PinnedImageWindow::saveAs);
-    new QShortcut(QKeySequence::Copy, this, this, &PinnedImageWindow::copyImage);
+    new QShortcut(QKeySequence::Copy, this, this, [this] { if (m_textSelectionActive) copySelectedText(); else copyImage(); });
     new QShortcut(QKeySequence::Close, this, this, &PinnedImageWindow::close);
     new QShortcut(QKeySequence(Qt::Key_Escape), this, this, [this] {
-        if (rootObject() && rootObject()->property("selectingArea").toBool())
+        if (m_textSelectionActive) cancelTextSelection();
+        else if (rootObject() && rootObject()->property("selectingArea").toBool())
             QMetaObject::invokeMethod(rootObject(), "cancelArea");
         else close();
     });
@@ -66,6 +68,7 @@ PinnedImageWindow::PinnedImageWindow(const QImage &image, QQmlEngine *engine)
 PinnedImageWindow::~PinnedImageWindow()
 {
     if(m_ocrCancelled) m_ocrCancelled->store(true);
+    if(m_inlineCancelled) m_inlineCancelled->store(true);
     delete m_saveDialog;
     if (m_sharedEngine) m_sharedEngine->removeImageProvider(m_providerId);
 }
@@ -127,7 +130,11 @@ bool PinnedImageWindow::event(QEvent *event)
 {
     const auto type = event->type();
     const bool result = QQuickView::event(event);
-    if (type == QEvent::Hide && rootObject()) QMetaObject::invokeMethod(rootObject(), "cancelArea");
+    if (type == QEvent::Hide || type == QEvent::Close
+        || (type == QEvent::WindowStateChange && visibility() == QWindow::Minimized)) {
+        cancelTextSelection();
+        if (rootObject()) QMetaObject::invokeMethod(rootObject(), "cancelArea");
+    }
     if (type == QEvent::Close && event->isAccepted()) {m_closing=true;if(m_ocrCancelled)m_ocrCancelled->store(true);deleteLater();}
     return result;
 }
@@ -153,7 +160,8 @@ void PinnedImageWindow::extractTextArea(const QRect &area)
 
 void PinnedImageWindow::extractTextRegion(const QRect &area, const QString &language)
 {
-    if(m_extractingText || m_closing) return;
+    if(extractingText() || m_closing) return;
+    cancelTextSelection();
     // Bound the region before allocating its independent crop, not only in OCR.
     if (area.width() > 8192 || area.height() > 32000 || qint64(area.width()) * area.height() > 20000000) {
         Q_EMIT textExtractionStatus(i18nc("@info", "This area is too large for text extraction. Select a smaller area."));
@@ -211,4 +219,121 @@ void PinnedImageWindow::showExtractedText(const QString &text)
     }
     textWindow->setScreen(screen());textWindow->show();textWindow->requestActivate();
     Q_EMIT textExtractionStatus(i18nc("@info","Text ready. Select, copy or save it in the text window."));
+}
+
+
+QVariantList PinnedImageWindow::textWords() const
+{
+    QVariantList list;
+    list.reserve(m_words.size());
+    for (const auto &word : m_words)
+        list.append(QVariantMap{{QStringLiteral("text"), word.text}, {QStringLiteral("bounds"), word.bounds}});
+    return list;
+}
+
+QString PinnedImageWindow::selectedText() const
+{
+    return NkShot::Imaging::selectedWordText(m_words, selectionFirst(), selectionLast());
+}
+
+void PinnedImageWindow::cancelTextSelection()
+{
+    ++m_inlineGeneration;
+    if (m_inlineCancelled) m_inlineCancelled->store(true);
+    const bool active = m_textSelectionActive;
+    m_textSelectionActive = false;
+    m_words.clear();
+    m_anchorWord = m_activeWord = -1;
+    if (active) {
+        Q_EMIT textSelectionActiveChanged();
+        Q_EMIT textWordsChanged();
+        Q_EMIT textSelectionChanged();
+        Q_EMIT textExtractionStatus(QString());
+    }
+}
+
+void PinnedImageWindow::selectTextOnImage()
+{
+    if (extractingText() || m_closing || !isVisible() || visibility() == QWindow::Minimized) return;
+    cancelTextSelection();
+    if (rootObject()) QMetaObject::invokeMethod(rootObject(), "cancelArea");
+    m_pendingText.clear(); m_pendingLanguages.clear();
+    auto languages = Settings::ocrLanguages();
+    if (languages.isEmpty()) languages = {QStringLiteral("eng")};
+    m_textSelectionActive = true;
+    m_inlineBusy = true;
+    m_inlineCancelled = std::make_shared<std::atomic_bool>(false);
+    const auto cancelled = m_inlineCancelled;
+    const auto generation = m_inlineGeneration;
+    Q_EMIT textSelectionActiveChanged();
+    Q_EMIT extractingTextChanged();
+    Q_EMIT textExtractionStatus(QString());
+    const auto image = m_image;
+    QtConcurrent::run([image, languages, cancelled] { return NkShot::Imaging::extractLocalText(image, languages, cancelled); })
+        .then(this, [this, cancelled, generation](const NkShot::Imaging::TextExtractionResult &result) {
+            m_inlineBusy = false;
+            Q_EMIT extractingTextChanged();
+            if (m_closing || cancelled->load() || generation != m_inlineGeneration || !m_textSelectionActive) return;
+            if (!isVisible() || visibility() == QWindow::Minimized) { cancelTextSelection(); return; }
+            using Error = NkShot::Imaging::TextExtractionError;
+            if (result.error != Error::None || result.words.isEmpty() || !result.wordsComplete) {
+                cancelTextSelection();
+                const auto message = result.error == Error::Unavailable || result.error == Error::InvalidLanguage
+                    ? i18nc("@info", "The configured OCR language data is unavailable. Check OCR languages in Options.")
+                    : result.error == Error::InvalidInput
+                    ? i18nc("@info", "This image is too large for text selection. Read a smaller area instead.")
+                    : result.error != Error::None
+                    ? i18nc("@info", "Text selection failed or timed out. Try again shortly.")
+                    : result.text.isEmpty()
+                    ? i18nc("@info", "No text was found. The image and clipboard are unchanged.")
+                    : i18nc("@info", "Text could not be aligned for selection. Use Read whole image or select an area.");
+                Q_EMIT textExtractionStatus(message);
+                return;
+            }
+            m_words = result.words;
+            Q_EMIT textWordsChanged();
+            Q_EMIT textSelectionChanged();
+        });
+}
+
+void PinnedImageWindow::setWordSelection(int index, bool extend)
+{
+    if (!m_textSelectionActive || index < 0 || index >= m_words.size()) return;
+    if (!extend || m_anchorWord < 0) m_anchorWord = index;
+    m_activeWord = index;
+    Q_EMIT textSelectionChanged();
+}
+
+void PinnedImageWindow::selectWordAt(qreal x, qreal y, bool extend)
+{
+    if (!std::isfinite(x) || !std::isfinite(y) || !m_textSelectionActive) return;
+    for (int i = 0; i < m_words.size(); ++i) {
+        if (QRectF(m_words[i].bounds).contains(QPointF(x, y))) { setWordSelection(i, extend); return; }
+    }
+    if (!extend) { m_anchorWord = m_activeWord = -1; Q_EMIT textSelectionChanged(); }
+}
+
+void PinnedImageWindow::moveTextSelection(int direction, bool extend)
+{
+    if (m_words.isEmpty()) return;
+    int index = m_activeWord;
+    if (direction == -2) index = 0;
+    else if (direction == 2) index = m_words.size() - 1;
+    else index = index < 0 ? 0 : qBound(0, index + (direction < 0 ? -1 : 1), int(m_words.size()) - 1);
+    setWordSelection(index, extend);
+}
+
+void PinnedImageWindow::selectAllText()
+{
+    if (!m_textSelectionActive || m_words.isEmpty()) return;
+    m_anchorWord = 0; m_activeWord = m_words.size() - 1;
+    Q_EMIT textSelectionChanged();
+}
+
+void PinnedImageWindow::copySelectedText()
+{
+    const auto text = selectedText();
+    if (!m_textSelectionActive || text.isEmpty()) return;
+    QApplication::clipboard()->setText(text);
+    Q_EMIT textExtractionStatus(i18nc("@info", "Selected text copied"));
 }

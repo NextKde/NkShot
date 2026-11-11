@@ -86,6 +86,144 @@ static bool samePixels(const QImage &a, const QImage &b)
 }
 
 
+
+static void runInlineTextChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
+{
+    const auto fail = [&](const char *step) { qCritical() << "Inline text failure:" << step; application.exit(250); };
+    const auto configured = Settings::ocrLanguages();
+    const auto restore = qScopeGuard([configured] { Settings::setOcrLanguages(configured); });
+    const bool chinese = qEnvironmentVariableIsSet("NKSHOT_TEST_WORDS_CHINESE");
+    const bool blank = qEnvironmentVariableIsSet("NKSHOT_TEST_WORDS_BLANK");
+    const bool missing = qEnvironmentVariableIsSet("NKSHOT_TEST_WORDS_MISSING");
+    Settings::setOcrLanguages({missing ? QStringLiteral("nkshot_missing_model") : chinese ? QStringLiteral("chi_sim") : QStringLiteral("eng")});
+    auto document = SpectacleCore::instance()->annotationDocument();
+    const auto original = document->renderToImage();
+    const auto depth = document->undoStackDepth();
+    QImage fixture(1200, 500, QImage::Format_ARGB32); fixture.fill(Qt::white); fixture.setDevicePixelRatio(2);
+    if (!blank) {
+        QPainter painter(&fixture); painter.scale(0.5, 0.5);
+        QFont font(chinese ? QStringLiteral("Noto Sans CJK SC") : QStringLiteral("DejaVu Sans")); font.setPixelSize(68); painter.setFont(font); painter.setPen(Qt::black);
+        painter.drawText(QRect(40, 45, 1120, 150), Qt::AlignCenter, chinese ? QStringLiteral("中文截图编辑 12345") : QStringLiteral("ALPHA BETA GAMMA"));
+        painter.drawText(QRect(40, 260, 1120, 150), Qt::AlignCenter, chinese ? QStringLiteral("第二行识别 67890") : QStringLiteral("DELTA EPSILON ZETA"));
+    }
+    QPointer<PinnedImageWindow> pin = new PinnedImageWindow(fixture, viewer->engine());
+    pin->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_WORDS_COMPACT") ? QSize(260, 180) : QSize(820, 500));
+    pin->show(); pin->requestActivate(); QTest::qWait(200);
+    QSignalSpy statuses(pin, &PinnedImageWindow::textExtractionStatus);
+    const auto click = [&](const char *name) {
+        auto item = visualItem(pin->contentItem(), QString::fromLatin1(name));
+        if (!item || !item->isVisible() || !item->isEnabled()) return false;
+        QTest::mouseClick(pin, Qt::LeftButton, Qt::NoModifier, item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint());
+        return true;
+    };
+    QApplication::clipboard()->setText(QStringLiteral("untouched"));
+    if (!click("nkshotPinExtractText")) { fail("menu button"); return; }
+    QTest::qWait(100);
+    if (!click("nkshotPinSelectText") || !pin->textSelectionActive() || !pin->extractingText()) { fail("inline action"); return; }
+    pin->selectTextOnImage(); // Coalesce while recognition is active.
+    if (!QTest::qWaitFor([&] { return !pin->extractingText(); }, 15000)) { fail("recognition timeout"); return; }
+    if (blank || missing) {
+        const auto message = statuses.isEmpty() ? QString() : statuses.last().first().toString();
+        if (pin->textSelectionActive() || !pin->textWords().isEmpty() || !message.contains(missing ? QStringLiteral("unavailable") : QStringLiteral("No text"))
+            || QApplication::clipboard()->text() != QStringLiteral("untouched")) { fail("failure boundary"); return; }
+        QTest::qWait(100); if (!pin->grabWindow().save(destination)) { fail("failure capture"); return; }
+        pin->close(); application.exit(0); return;
+    }
+    const auto words = pin->textWords();
+    auto viewport = visualItem(pin->contentItem(), QStringLiteral("nkshotPinViewport"));
+    auto snapshot = visualItem(pin->contentItem(), QStringLiteral("nkshotPinSnapshot"));
+    auto preview = visualItem(pin->contentItem(), QStringLiteral("nkshotPinSelectedText"));
+    auto copyText = visualItem(pin->contentItem(), QStringLiteral("nkshotPinCopyText"));
+    if (!pin->textSelectionActive() || words.size() < 4 || !viewport || !snapshot || !preview || !copyText || copyText->isEnabled()
+        || preview->property("textFormat").toInt() != 0 || !viewport->hasActiveFocus()) { fail("ready state"); return; }
+    QTest::keyClick(pin, Qt::Key_C, Qt::ControlModifier);
+    if (QApplication::clipboard()->text() != QStringLiteral("untouched")) { fail("empty text copy"); return; }
+    const auto pointForWord = [&](int index) {
+        const auto box = words[index].toMap().value(QStringLiteral("bounds")).toRect();
+        return snapshot->mapToScene(QPointF(box.center()) * viewport->property("imageScale").toReal()).toPoint();
+    };
+    QTest::mouseClick(pin, Qt::LeftButton, Qt::NoModifier, pointForWord(0));
+    if (pin->selectedText() != words[0].toMap().value(QStringLiteral("text")).toString() || QApplication::clipboard()->text() != QStringLiteral("untouched")) { fail("first word"); return; }
+    QTest::mouseClick(pin, Qt::LeftButton, Qt::ShiftModifier, pointForWord(2));
+    if (pin->selectionFirst() != 0 || pin->selectionLast() != 2) { fail("shift range"); return; }
+    QTest::mousePress(pin, Qt::LeftButton, Qt::NoModifier, pointForWord(2));
+    QTest::mouseMove(pin, pointForWord(0), 60); QTest::mouseRelease(pin, Qt::LeftButton, Qt::NoModifier, pointForWord(0));
+    if (pin->selectionFirst() != 0 || pin->selectionLast() != 2) { fail("reverse drag"); return; }
+    QTest::keyClick(pin, Qt::Key_End, Qt::ShiftModifier);
+    if (pin->selectionLast() != words.size()-1 || !pin->selectedText().contains(u'\n')) { fail("multi-line keyboard range"); return; }
+    QTest::keyClick(pin, Qt::Key_A, Qt::ControlModifier);
+    const auto all = pin->selectedText();
+    auto normalized = all.simplified(); if (chinese) normalized.remove(u' ');
+    if (normalized != (chinese ? QStringLiteral("中文截图编辑12345第二行识别67890") : QStringLiteral("ALPHA BETA GAMMA DELTA EPSILON ZETA"))) { qWarning() << all; fail("selected text order"); return; }
+    if (!click("nkshotPinCopyText") || QApplication::clipboard()->text() != all) { fail("explicit text copy"); return; }
+    QTest::keyClick(pin, Qt::Key_C, Qt::ControlModifier);
+    if (QApplication::clipboard()->text() != all) { fail("text shortcut"); return; }
+    if (!click("nkshotPinCopy") || !samePixels(QApplication::clipboard()->image(), fixture) || pin->selectedText() != all) { fail("separate image copy"); return; }
+    QTest::qWait(100);
+    if (!pin->grabWindow().save(destination + QStringLiteral(".all.png"))) { fail("all capture"); return; }
+    // Save As in text mode still exports the complete immutable source image.
+    QTemporaryDir folder;
+    const auto output = folder.filePath(QStringLiteral("pin.png"));
+    pin->saveAs(); QTest::qWait(100);
+    QPointer<QFileDialog> saveDialog;
+    for (auto widget : QApplication::topLevelWidgets())
+        if (widget->objectName() == QStringLiteral("nkshotPinSaveDialog")) saveDialog = qobject_cast<QFileDialog *>(widget);
+    auto filename = saveDialog ? saveDialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+    if (!folder.isValid() || !filename) { fail("image save dialog"); return; }
+    filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, output);
+    if (!QTest::qWaitFor([&] { return saveDialog->selectedFiles() == QStringList{output}; }, 1000)
+        || !QMetaObject::invokeMethod(saveDialog, "accept")
+        || !QTest::qWaitFor([&] { return saveDialog.isNull(); }, 1000)
+        || !samePixels(QImage(output), fixture) || !pin->textSelectionActive()) { fail("image export in text mode"); return; }
+    pin->requestActivate(); QTest::qWait(50);
+    // Zoom/pan does not alter source word bounds; keyboard selection reveals its word.
+    QTest::keyClick(pin, Qt::Key_1, Qt::ControlModifier); QTest::qWait(80);
+    viewport->setProperty("contentX", 150); viewport->setProperty("contentY", 0);
+    const QPoint wheelPoint = viewport->mapToScene(QPointF(viewport->width()/2, viewport->height()/2)).toPoint();
+    QWheelEvent scroll(wheelPoint, pin->mapToGlobal(wheelPoint), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(pin, &scroll); QTest::qWait(50);
+    if (viewport->property("contentY").toReal() <= 0) { fail("plain wheel scrolling"); return; }
+    viewport->forceActiveFocus(); QTest::keyClick(pin, Qt::Key_Home); QTest::qWait(80);
+    if (pin->selectionFirst() != 0 || pin->selectionLast() != 0 || pin->textWords() != words) { fail("zoom / metadata preservation"); return; }
+    if (!viewport->mapRectToScene(QRectF(0, 0, viewport->width(), viewport->height())).contains(pointForWord(0))) { fail("Home reveals first word"); return; }
+    QTest::keyClick(pin, Qt::Key_Right, Qt::ShiftModifier);
+    if (pin->selectionFirst() != 0 || pin->selectionLast() != 1) { fail("arrow extension"); return; }
+    const auto visiblePoint = pointForWord(1);
+    if (!viewport->mapRectToScene(QRectF(0, 0, viewport->width(), viewport->height())).contains(visiblePoint)) { fail("keyboard reveal"); return; }
+    QTest::mouseClick(pin, Qt::LeftButton, Qt::NoModifier, visiblePoint);
+    if (pin->selectionFirst() != 1 || pin->selectionLast() != 1) { fail("panned hit mapping"); return; }
+    QTest::keyClick(pin, Qt::Key_0, Qt::ControlModifier); QTest::qWait(80);
+    QTest::mouseClick(pin, Qt::LeftButton, Qt::NoModifier, pointForWord(0));
+    QTest::mouseClick(pin, Qt::LeftButton, Qt::ShiftModifier, pointForWord(2));
+    if (!pin->grabWindow().save(destination)) { fail("selection capture"); return; }
+    // Tab must allow returning to the image after using a footer action.
+    click("nkshotPinCopyText");
+    bool focused = false;
+    for (int i = 0; i < 12 && !focused; ++i) { QTest::keyClick(pin, Qt::Key_Tab); focused = viewport->hasActiveFocus(); }
+    if (!focused) { fail("Tab return"); return; }
+    QTest::keyClick(pin, Qt::Key_Escape); QTest::qWait(50);
+    if (!pin || !pin->isVisible() || pin->textSelectionActive() || !pin->textWords().isEmpty()) { fail("Escape mode cleanup"); return; }
+    QTest::keyClick(pin, Qt::Key_C, Qt::ControlModifier);
+    if (!samePixels(QApplication::clipboard()->image(), fixture)) { fail("restored image shortcut"); return; }
+    // Cancel and hide/show while work is in flight must invalidate its completion.
+    pin->selectTextOnImage(); pin->cancelTextSelection();
+    if (!QTest::qWaitFor([&] { return !pin->extractingText(); }, 15000) || pin->textSelectionActive() || !pin->textWords().isEmpty()) { fail("cancel late completion"); return; }
+    pin->selectTextOnImage(); pin->hide(); pin->show();
+    if (!QTest::qWaitFor([&] { return !pin->extractingText(); }, 15000) || pin->textSelectionActive() || !pin->textWords().isEmpty()) { fail("hide epoch"); return; }
+    pin->selectTextOnImage();
+    if (!QTest::qWaitFor([&] { return !pin->extractingText(); }, 15000) || !pin->textSelectionActive()) { fail("reopen"); return; }
+    pin->setWindowStates(Qt::WindowMinimized); QTest::qWait(50);
+    if (pin->textSelectionActive()) { fail("minimize cleanup"); return; }
+    pin->setWindowStates(Qt::WindowNoState); pin->show();
+    if (!samePixels(fixture, pin->snapshot()) || !samePixels(original, document->renderToImage()) || depth != document->undoStackDepth()) { fail("immutable source"); return; }
+    pin->selectTextOnImage(); pin->close(); QTest::qWait(200);
+    if (pin) { fail("close during work"); return; }
+    QThreadPool::globalInstance()->waitForDone(); QTest::qWait(30);
+    for (auto window : QGuiApplication::allWindows()) if (qobject_cast<OcrTextWindow *>(window)) { fail("unexpected result window"); return; }
+    qInfo() << "Inline OCR word selection, order, explicit text/image copy, DPR/zoom/pan, keyboard and cancellation tests passed";
+    application.exit(0);
+}
+
 void installUiCaptureHook(QApplication &application)
 {
     const QString destination = qEnvironmentVariable("NKSHOT_TEST_UI_CAPTURE");
@@ -93,7 +231,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS") || qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -251,6 +389,7 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS")) { runInlineTextChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU")) {
                 if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU_VIDEO")) SpectacleCore::instance()->setVideoMode(true);
                 auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));

@@ -9,7 +9,7 @@ QQC.Pane {
     property bool selectingArea: false
     property rect selectedArea: Qt.rect(0, 0, 0, 0)
     function cancelArea() { textMenu.close(); selectingArea = false; selectedArea = Qt.rect(0, 0, 0, 0) }
-    function beginArea() { selectedArea = Qt.rect(0, 0, 0, 0); selectingArea = true; saveStatus.text = "" }
+    function beginArea() { pinnedWindow.cancelTextSelection(); selectedArea = Qt.rect(0, 0, 0, 0); selectingArea = true; saveStatus.text = "" }
     padding: 12
     palette.windowText: Kos.AppTheme.paletteText
     palette.text: Kos.AppTheme.paletteText
@@ -58,7 +58,7 @@ QQC.Pane {
                 id: copyButton
                 objectName: "nkshotPinCopy"
                 property bool copied: false
-                text: copied ? i18nc("@info", "Copied") : i18nc("@action", "Copy")
+                text: copied ? i18nc("@info", "Copied") : pinnedWindow.textSelectionActive ? i18nc("@action", "Copy image") : i18nc("@action", "Copy")
                 icon.name: copied ? "dialog-ok" : "edit-copy"
                 display: root.width < 500 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
                 Connections {
@@ -82,6 +82,7 @@ QQC.Pane {
                 QQC.Menu {
                     id: textMenu
                     QQC.MenuItem { objectName: "nkshotPinReadWhole"; text: i18nc("@action", "Read whole image"); onTriggered: { root.cancelArea(); pinnedWindow.extractText() } }
+                    QQC.MenuItem { objectName: "nkshotPinSelectText"; text: i18nc("@action", "Select text on image"); onTriggered: { root.cancelArea(); pinnedWindow.selectTextOnImage() } }
                     QQC.MenuItem { objectName: "nkshotPinChooseArea"; text: i18nc("@action", "Select an area…"); onTriggered: root.beginArea() }
                 }
                 QQC.BusyIndicator {anchors.centerIn: parent; width: 20; height: 20; running: pinnedWindow.extractingText; visible: running}
@@ -124,7 +125,53 @@ QQC.Pane {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            interactive: !root.selectingArea
+            interactive: !root.selectingArea && !pinnedWindow.textSelectionActive
+            activeFocusOnTab: true
+            Rectangle {
+                parent: viewport
+                anchors.fill: parent
+                z: 3
+                visible: pinnedWindow.textSelectionActive && viewport.activeFocus
+                color: "transparent"
+                border.color: Kos.AppTheme.accent
+                border.width: 1
+            }
+            Accessible.role: Accessible.Canvas
+            Accessible.name: pinnedWindow.textSelectionActive ? i18nc("@info", "Recognized image text") : i18nc("@info", "Pinned image")
+            Accessible.description: !pinnedWindow.textSelectionActive ? i18nc("@info", "Use zoom shortcuts or scroll to read the image.") : pinnedWindow.selectedText.length ? pinnedWindow.selectedText : i18nc("@info", "Use arrow keys to select a word, Shift to extend, and Ctrl+C to copy text.")
+            Keys.onPressed: event => {
+                if (!pinnedWindow.textSelectionActive || pinnedWindow.extractingText) return
+                const extend = (event.modifiers & Qt.ShiftModifier) !== 0
+                if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) pinnedWindow.moveTextSelection(-1, extend)
+                else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) pinnedWindow.moveTextSelection(1, extend)
+                else if (event.key === Qt.Key_Home) pinnedWindow.moveTextSelection(-2, extend)
+                else if (event.key === Qt.Key_End) pinnedWindow.moveTextSelection(2, extend)
+                else if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) pinnedWindow.selectAllText()
+                else return
+                event.accepted = true
+            }
+            function revealActiveWord() {
+                const index = pinnedWindow.activeWord
+                const words = pinnedWindow.textWords
+                if (!pinnedWindow.textSelectionActive || index < 0 || index >= words.length) return
+                const box = words[index].bounds
+                const left = snapshot.x + box.x * imageScale
+                const top = snapshot.y + box.y * imageScale
+                const right = left + box.width * imageScale
+                const bottom = top + box.height * imageScale
+                if (right - left > width) contentX = (left + right - width) / 2
+                else if (left < contentX) contentX = left
+                else if (right > contentX + width) contentX = right - width
+                if (bottom - top > height) contentY = (top + bottom - height) / 2
+                else if (top < contentY) contentY = top
+                else if (bottom > contentY + height) contentY = bottom - height
+                clampPosition()
+            }
+            Connections {
+                target: pinnedWindow
+                function onTextWordsChanged() { if (pinnedWindow.textSelectionActive && pinnedWindow.textWords.length) viewport.forceActiveFocus() }
+                function onTextSelectionChanged() { viewport.revealActiveWord() }
+            }
             boundsBehavior: Flickable.StopAtBounds
             property bool fitMode: true
             property bool widthMode: false
@@ -168,6 +215,32 @@ QQC.Pane {
                 height: pinnedWindow.snapshotSize.height * viewport.imageScale
                 source: pinnedWindow.imageSource
                 smooth: viewport.imageScale < 1
+                Repeater {
+                    model: pinnedWindow.textWords
+                    Rectangle {
+                        required property var modelData
+                        required property int index
+                        readonly property bool selectedWord: index >= pinnedWindow.selectionFirst && index <= pinnedWindow.selectionLast && pinnedWindow.selectionFirst >= 0
+                        x: modelData.bounds.x * viewport.imageScale
+                        y: modelData.bounds.y * viewport.imageScale
+                        width: modelData.bounds.width * viewport.imageScale
+                        height: modelData.bounds.height * viewport.imageScale
+                        color: selectedWord ? "#343b82f6" : "transparent"
+                        border.width: selectedWord ? 1 : 0
+                        border.color: Kos.AppTheme.accent
+                        Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Kos.AppTheme.accent; opacity: 0.45; visible: !parent.selectedWord }
+                    }
+                }
+                MouseArea {
+                    objectName: "nkshotPinWordSurface"
+                    anchors.fill: parent
+                    enabled: pinnedWindow.textSelectionActive && !pinnedWindow.extractingText
+                    cursorShape: Qt.IBeamCursor
+                    preventStealing: true
+                    onPressed: mouse => { viewport.forceActiveFocus(); pinnedWindow.selectWordAt(mouse.x / viewport.imageScale, mouse.y / viewport.imageScale, (mouse.modifiers & Qt.ShiftModifier) !== 0) }
+                    onPositionChanged: mouse => { if (pressed) pinnedWindow.selectWordAt(mouse.x / viewport.imageScale, mouse.y / viewport.imageScale, true) }
+                    onReleased: mouse => pinnedWindow.selectWordAt(mouse.x / viewport.imageScale, mouse.y / viewport.imageScale, true)
+                }
                 Rectangle {
                     visible: root.selectingArea && root.selectedArea.width > 0
                     x: root.selectedArea.x * viewport.imageScale
@@ -199,6 +272,17 @@ QQC.Pane {
             }
             QQC.ScrollBar.vertical: QQC.ScrollBar {policy: viewport.contentHeight > viewport.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff}
             QQC.ScrollBar.horizontal: QQC.ScrollBar {policy: viewport.contentWidth > viewport.width ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff}
+            WheelHandler {
+                target: null
+                enabled: pinnedWindow.textSelectionActive
+                acceptedModifiers: Qt.NoModifier
+                onWheel: event => {
+                    viewport.contentX -= event.pixelDelta.x !== 0 ? event.pixelDelta.x : event.angleDelta.x / 3
+                    viewport.contentY -= event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y / 3
+                    viewport.clampPosition()
+                    event.accepted = true
+                }
+            }
             WheelHandler {
                 target: null
                 acceptedModifiers: Qt.ControlModifier
@@ -234,8 +318,32 @@ QQC.Pane {
                 }
             }
         }
+        ColumnLayout {
+            visible: pinnedWindow.textSelectionActive
+            Layout.fillWidth: true
+            Layout.minimumHeight: 48
+            Layout.maximumHeight: 48
+            spacing: 4
+            QQC.Label {
+                objectName: "nkshotPinSelectedText"
+                Layout.fillWidth: true
+                text: pinnedWindow.extractingText ? i18nc("@info", "Reading text locally…")
+                    : pinnedWindow.selectedText.length ? pinnedWindow.selectedText.replace(/\n/g, " · ")
+                    : i18nc("@info", "Click or drag across words · Shift extends")
+                textFormat: Text.PlainText
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                font.pixelSize: 11
+                color: Kos.AppTheme.paletteText
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                PinButton { objectName: "nkshotPinEndText"; implicitHeight: 28; text: pinnedWindow.extractingText ? i18nc("@action", "Cancel") : i18nc("@action", "Done"); onClicked: pinnedWindow.cancelTextSelection() }
+                PinButton { objectName: "nkshotPinCopyText"; implicitHeight: 28; text: i18nc("@action", "Copy text"); selected: true; enabled: pinnedWindow.selectedText.length > 0; onClicked: pinnedWindow.copySelectedText() }
+            }
+        }
         RowLayout {
-            visible: !root.selectingArea
+            visible: !root.selectingArea && !pinnedWindow.textSelectionActive
             Layout.alignment: Qt.AlignHCenter
             Layout.minimumHeight: 48
             Layout.maximumHeight: 48

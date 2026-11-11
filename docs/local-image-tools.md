@@ -215,8 +215,8 @@ remain attached to source pixels when zoom changes. The stable contextual footer
 is mouse-only; keyboard rectangle creation is not implemented. Panning is suspended only
 while selecting; cancel restores normal reading. Hiding the pin clears selection.
 
-Copy, Ctrl+C and PNG Save As always use the complete immutable pin, including
-while selecting. The editor and undo history are untouched. Regions are rounded
+In image and area modes, Copy, Ctrl+C and PNG Save As use the complete immutable
+pin, including while drawing a rectangle. The editor and undo history are untouched. Regions are rounded
 outward to physical pixels, clamped to the source bounds and rejected below two
 pixels in either dimension. Source DPR does not alter crop coordinates. Area OCR
 uses the same bounded local Tesseract helper as whole-image recognition. Hidden whole-image
@@ -227,3 +227,41 @@ work and suppresses late result windows. No screenshot data is transmitted.
 
 This is rectangle-only OCR, not inline recognized-word highlighting, word-level
 selection, a destructive crop or a native KDE/GPU/high-DPI acceptance claim.
+
+
+## Select recognized words on a pin (070)
+
+Extract text → Select text on image recognizes locally and underlines recognized
+words in the original pin. Click a word, drag between words, or Shift-click to
+extend a contiguous range in OCR reading order. The compact footer previews the
+selected plain text and provides Copy text and Done. It replaces the zoom-button
+footer rather than adding another permanent toolbar. Merely recognizing or
+selecting never changes the clipboard, pixels or editing history.
+
+Focus the image (click or Tab) to navigate: Left/Up select the previous logical
+word, Right/Down the next, Home/End the first/last, and Shift extends the range.
+Ctrl+A selects all recognized words. In this mode only, Ctrl+C copies selected
+text; with no selection it does nothing. The top Copy image button and PNG Save
+As still use the entire original image. Done or Escape leaves word mode and
+restores Ctrl+C image copy. Another Escape closes the pin.
+
+Zoom shortcuts and Ctrl+wheel remain available. Ordinary mouse-wheel or trackpad
+scrolling moves the image while word dragging selects text. Keyboard navigation
+reveals the active word; oversized boxes are centered in the viewport. Word boxes
+stay attached to physical source pixels across zoom, pan and image DPR. Drag-edge
+autoscroll, character-level selection and geometric up/down-line navigation are
+not implemented. Chinese selection follows Tesseract token boundaries, not an
+assumption that every character is a separate word.
+
+Recognition retains Tesseract's logical word order and its exact line spacing.
+Complete metadata must reconstruct the existing full-text result, so ambiguous
+alignment is rejected rather than shown as partial success. Selectable metadata
+is limited to 2,000 words, 1,024 UTF-16 units per word and 128 Ki UTF-16 units in
+total. Existing image/OCR bounds also apply. If word alignment is unavailable,
+use Read whole image or Select an area; the ordinary text reader remains usable.
+Recognized markup, commands and URLs are literal text, never interpreted.
+
+Cancel, hide, minimize and close invalidate asynchronous word requests. A late
+completion cannot reopen the mode after hiding and showing the pin. This is local
+word-range selection, not full system Live Text parity, OCR accuracy certification,
+native screen capture, touch/trackpad acceptance or GPU/monitor-DPI validation.

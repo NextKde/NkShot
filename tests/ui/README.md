@@ -339,3 +339,28 @@ result copy/UTF-8 export, history/pixel isolation, hidden delivery and close-dur
 work checks also run. Combine with PIN_TEXT_CHINESE, PIN_TEXT_COMPACT (true 260×180) and DARK.
 Whole-image PIN_TEXT now clicks its menu item rather than assuming the icon starts
 recognition. Software window tests are not native desktop acceptance.
+
+
+### Inline OCR word selection (070)
+
+`NKSHOT_TEST_PIN_WORDS=1` generates a DPR=2 two-line fixture and clicks the actual
+Select text on image menu action. Add `NKSHOT_TEST_WORDS_CHINESE=1`,
+`NKSHOT_TEST_WORDS_COMPACT=1` (260×180), or `NKSHOT_TEST_DARK=1`. BLANK/MISSING
+variants use `NKSHOT_TEST_WORDS_BLANK` / `NKSHOT_TEST_WORDS_MISSING` and check
+truthful failures without mode activation or clipboard changes.
+
+The harness verifies physical word hit-testing, Shift ranges/reverse drags,
+logical multi-line order, arrow/Home/End/Ctrl+A and Tab, explicit text copy and
+Ctrl+C, separate whole-image Copy and pixel-equal PNG Save As while in word mode,
+ordinary wheel scrolling, nonzero pan/100% mapping, active-word visibility inside
+the actual viewport, zoom/word-bound preservation and immutable source/history.
+It also checks Escape mode exit and restored image-copy shortcut, cancel while
+recognizing, hide/show before completion, reopen, minimize and close during work.
+The main screenshot shows a selected range; `.all.png` shows whole-text selection.
+
+`local_text_extraction_test` uses real English/Chinese fixtures to verify word
+bounds over source ink, physical DPR/alpha behavior, exact line/word spacing,
+reading order, literal markup serialization and complete-metadata limits. Metadata
+must reconstruct the full OCR text; incomplete/oversized lists are cleared instead
+of presented as successful partial selection. These are synthetic software-window
+checks, not general OCR accuracy, native desktop or GPU acceptance.

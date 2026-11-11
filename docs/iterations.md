@@ -1604,3 +1604,51 @@ Reviewed software-window captures:
 These are synthetic fixtures, not captured desktops. Area creation is mouse-only;
 inline word selection, native compositor focus, GPU rendering and real desktop
 high-DPI acceptance remain outside this stage.
+
+
+## 070 — Select recognized words on immutable pins
+
+The existing text menu now offers Select text on image. Local OCR adds bounded
+physical-pixel word metadata and exact logical separators while retaining the
+existing full-text output. The pin shows quiet word underlines and a highlighted
+selected range; a contextual footer previews literal selected text with Copy text
+and Done. No new top-level toolbar button was added.
+
+Click/drag, Shift-click, arrows, Home/End and Ctrl+A select logical word ranges.
+Ctrl+C is explicitly text-only while the mode is active, with no-selection no-op;
+Copy image and PNG Save As remain full-image operations. Escape leaves the mode
+first. Ordinary wheel/trackpad events scroll while Ctrl+wheel/shortcuts zoom.
+Keyboard navigation reveals active words and centers boxes larger than the viewport.
+
+The metadata helper preserves Tesseract line spacing and Chinese joins rather than
+inserting invented spaces. It caps words/characters and refuses incomplete box
+alignment, while keeping the existing whole-image reader available. Cancellation,
+hide/show, minimize and close invalidate pending requests; recognition or selection
+never copies automatically. Review corrected ambiguous metadata-failure guidance,
+wheel navigation, oversized-box visibility and a dynamic Tab-focus warning.
+
+Synthetic fixtures cover real English/Chinese recognition, geometry/DPR/alpha,
+spacing/order/limits, actual mouse and keyboard selection, explicit copies, PNG
+export, zoom/pan, errors and asynchronous mode cleanup. Screenshots are actual
+software-rendered windows, not captured desktops. Selection is at OCR word/token
+boundaries in logical order; character selection, drag-edge autoscroll, full OS
+Live Text parity and real KDE/GPU acceptance remain open.
+
+Final sequential build passes. CTest passes 15/15; the extraction helper passes
+8/8 with real English and Chinese models; static checks pass 18/18 and whitespace
+checks pass. All six final inline UI variants pass: light, dark, 260×180, Chinese,
+blank and missing-language. No QML binding/type/reference or dynamic Tab-focus
+warnings remain in those runs. Independent baseline checks pass all 12 scenarios
+covering whole-image OCR, zoom, area OCR, PNG Save As and compact color sampling.
+
+Reviewed final software-window captures:
+[light](screenshots/070-words-light.png),
+[dark](screenshots/070-words-dark.png),
+[260×180](screenshots/070-words-compact.png),
+[Chinese](screenshots/070-words-chinese.png),
+[blank](screenshots/070-words-blank.png),
+[missing model](screenshots/070-words-missing.png),
+[all English words](screenshots/070-words-light.png.all.png),
+[all dark words](screenshots/070-words-dark.png.all.png),
+[all compact words](screenshots/070-words-compact.png.all.png) and
+[all Chinese words](screenshots/070-words-chinese.png.all.png).

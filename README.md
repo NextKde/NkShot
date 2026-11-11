@@ -17,7 +17,7 @@ and separate implementation, automated-test and real-KDE acceptance status.
 - Rounded tool-button hover/pressed/selected states and visible keyboard focus.
 - Bottom capture controls separated from the screen edge.
 - Existing Spectacle capture, recording, annotations, exports and shortcuts retained.
-- Local English/Chinese OCR results, text selection/copy and UTF-8 saving, including independent pinned images.
+- Local English/Chinese OCR results, text selection/copy and UTF-8 saving, including independent pinned images and inline OCR word-range selection.
 - Image-local color sampling with pixel loupe, sRGB/alpha values and explicit HEX/RGB copy.
 - Explicit local QR/barcode reading with plain-text results; links and commands are never opened automatically.
 - Separate-image pinning, conservative overlap composition and explicit vertical stacking.
