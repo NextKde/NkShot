@@ -232,15 +232,16 @@ repeat cancellation, and unchanged editor pixels/history. It exits with an error
 if session DBus is connected rather than claiming a live-capture test. Its screenshot
 is the unchanged existing editor, not a rolling-capture demo.
 
-`NKSHOT_TEST_SCROLL_PREVIEW=1` verifies the actual More entry stays hidden by default
-and refuses opening. With `NKSHOT_EXPERIMENTAL_SCROLL=1` it clicks the real entry,
-checks unavailable-state/reuse/disabled actions, Escape/reopen and source isolation.
-This branch requires no session DBus; it never supplies synthetic capture success.
-Use DARK and SCROLL_COMPACT variants. `NKSHOT_TEST_SCROLL_SELECTOR_VISUAL=1` only
-overrides the QML component phase to inspect rectangle drag layout; the C++ phase
-remains Setup, which rejects region acceptance. The `.selector-layout.png` and `.session-layout.png` are layout diagnostics, not
-native capture screenshots. Add SCROLL_VIDEO to confirm the opt-in entry and open
-method remain blocked in video mode.
+`NKSHOT_TEST_SCROLL_PREVIEW=1` verifies the actual More entry is discoverable with
+`NKSHOT_EXPERIMENTAL_SCROLL` unset, clicks the real entry and checks unavailable
+API5 guidance, disabled selection, refused Capture/Finish, no new result pin,
+window reuse, Escape/reopen, source/history/clipboard isolation. Use DARK and
+SCROLL_COMPACT variants. `NKSHOT_TEST_SCROLL_SELECTOR_VISUAL=1` exercises actual
+mouse/key/Tab/Enter/Cancel handlers only after overriding the QML component phase;
+the C++ phase stays Setup and accepts no region/frame. Its captures are selector
+layout/input diagnostics, not native capture screenshots. SCROLL_VIDEO confirms
+the entry and open method remain image-only. No successful native Finish is claimed.
+
 
 The selector diagnostic now exercises real keyboard events: centered seeding,
 move/Shift move, Alt resize, mixed mouse/keyboard adjustment, clamping at all tested

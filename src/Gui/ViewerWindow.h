@@ -25,7 +25,6 @@ class ViewerWindow : public SpectacleWindow
 {
     Q_OBJECT
     Q_PROPERTY(bool scanningCode READ scanningCode NOTIFY scanningCodeChanged)
-    Q_PROPERTY(bool scrollPreviewEnabled READ scrollPreviewEnabled CONSTANT)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
     Q_PROPERTY(QObject *clipJob READ clipJobObject CONSTANT)
@@ -43,7 +42,6 @@ public:
 
     static ViewerWindow *instance();
 
-    bool scrollPreviewEnabled() const;
     Q_INVOKABLE QQuickWindow *openScrollPreview();
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();

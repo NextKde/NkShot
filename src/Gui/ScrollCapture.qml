@@ -32,7 +32,7 @@ Item {
         visible: root.phase !== 1
         spacing: 12
         RowLayout {
-            QQC.Label { text: i18nc("@title", "Scrolling capture"); font.pixelSize: 18; font.bold: true; color: Kos.AppTheme.paletteText }
+            QQC.Label { text: i18nc("@title", "Manual scrolling capture"); font.pixelSize: 18; font.bold: true; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
             QQC.Label { text: i18nc("@info", "Preview"); font.pixelSize: 11; color: Kos.AppTheme.mutedText }
         }

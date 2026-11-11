@@ -311,9 +311,9 @@ EmptyPage {
                     }
                     QQC.MenuItem {
                         objectName: "nkshotScrollPreviewEntry"
-                        visible: contextWindow.scrollPreviewEnabled && !SpectacleCore.videoMode
+                        visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
-                        text: i18nc("@action", "Scrolling capture (preview)…")
+                        text: i18nc("@action", "Manual scrolling capture (preview)…")
                         icon.name: "view-fullscreen"
                         onTriggered: contextWindow.openScrollPreview()
                     }

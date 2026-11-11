@@ -24,7 +24,7 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
       m_controller(new ScrollCaptureController(m_backend,[this](quint64 ticket,QRect rect){return m_backend->request(ticket,m_screen,rect);},[this]{m_backend->cancel();},this))
 {
     setObjectName(QStringLiteral("nkshotScrollPreview"));
-    setTitle(i18nc("@title:window","Scrolling capture • Technical preview"));
+    setTitle(i18nc("@title:window","Manual scrolling capture • Technical preview"));
     setFlags(Qt::Window|Qt::WindowStaysOnTopHint);
     setResizeMode(SizeRootObjectToView); setMinimumSize({360,260}); resize(460,300);
     for(auto screen:QGuiApplication::screens()) {m_screens.append(screen);m_outputs.append(screen->name().isEmpty()?i18nc("@item","Display %1",m_screens.size()):screen->name());}

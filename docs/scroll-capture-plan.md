@@ -1,9 +1,9 @@
 # Rolling capture feasibility and acceptance plan
 
-Current status: [opt-in technical preview](scroll-preview.md) (058 integration,
-059 keyboard refinement) connects the
-selector, panel, controller and API5 adapter. It is default-off and lacks native
-KWin acceptance. Numbered sections below record the evolving implementation;
+Current status: [discoverable manual preview](scroll-preview.md) (079 entry, 058
+integration, 059 keyboard refinement) connects the selector, panel, controller and
+API5 adapter. The entry no longer needs an environment flag; the API5 safety gate
+and missing native KWin acceptance remain. Numbered sections below record the evolving implementation;
 statements about missing UI in 054–057 describe those earlier stages.
 
 ## Inspected source boundary

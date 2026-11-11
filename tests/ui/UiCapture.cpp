@@ -1715,13 +1715,17 @@ void installUiCaptureHook(QApplication &application)
                 QTest::qWait(200);
                 auto entry=visualItem(viewer->contentItem(),QStringLiteral("nkshotScrollPreviewEntry"));
                 if(!entry) {application.exit(189);return;}
-                if(!viewer->scrollPreviewEnabled() || SpectacleCore::instance()->videoMode()) {
+                if(SpectacleCore::instance()->videoMode()) {
                     if(entry->isVisible() || viewer->openScrollPreview()) {application.exit(180);return;}
-                    qInfo() << "NkShot scroll preview remains opt-in and image-only, no unsupported window";
+                    qInfo() << "NkShot manual scroll preview remains image-only; video mode refuses opening";
                     application.exit(0);return;
                 }
                 if(QDBusConnection::sessionBus().isConnected()) {application.exit(181);return;}
-                if(!entry->isVisible()) {application.exit(189);return;}
+                if(!entry->isVisible() || !entry->property("text").toString().contains(QStringLiteral("Manual"))) {application.exit(189);return;}
+                if(!viewer->grabWindow().save(destination+QStringLiteral(".entry.png"))) {application.exit(189);return;}
+                QApplication::clipboard()->setText(QStringLiteral("scroll preview untouched"));
+                const auto pinCount=[] {int count=0;for(auto w:QGuiApplication::allWindows()) if(qobject_cast<PinnedImageWindow *>(w)) ++count;return count;};
+                const int originalPins=pinCount();
                 QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,entry->mapToScene(QPointF(entry->width()/2,entry->height()/2)).toPoint());
                 QPointer<ScrollCaptureWindow> preview;
                 if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows()) if(auto candidate=qobject_cast<ScrollCaptureWindow *>(w)) preview=candidate;return !preview.isNull();},1000)) {application.exit(182);return;}
@@ -1729,11 +1733,17 @@ void installUiCaptureHook(QApplication &application)
                 if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_COMPACT")) preview->resize(360,260);
                 QTest::qWait(250);
                 auto primary=visualItem(preview->contentItem(),QStringLiteral("nkshotScrollPrimary"));
-                if(!primary || primary->isEnabled()) {application.exit(183);return;}
+                if(!primary || primary->isEnabled() || !preview->statusText().contains(QStringLiteral("API 5"))
+                    || !preview->statusText().contains(QStringLiteral("Unavailable"))) {application.exit(183);return;}
                 QTest::mouseClick(preview,Qt::LeftButton,Qt::NoModifier,primary->mapToScene(QPointF(primary->width()/2,primary->height()/2)).toPoint());
                 preview->selectRegion();
-                if(preview->phase()!=0 || preview->frameCount()!=0) {application.exit(184);return;}
-                preview->grabWindow().save(destination);
+                preview->captureNext();
+                preview->finishCapture();
+                QTest::qWait(50);
+                if(preview->phase()!=0 || preview->frameCount()!=0 || preview->busy() || preview->canFinish()
+                    || pinCount()!=originalPins || QApplication::clipboard()->text()!=QStringLiteral("scroll preview untouched")
+                    || !samePixels(original,document->renderToImage()) || depth!=document->undoStackDepth()) {application.exit(184);return;}
+                if(!preview->grabWindow().save(destination)) {application.exit(184);return;}
                 // Visual selector-only exercise: no capability bypass, C++ phase
                 // stays Setup and reject paths cannot accept a region or frame.
                 if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SELECTOR_VISUAL")) {
@@ -1790,12 +1800,13 @@ void installUiCaptureHook(QApplication &application)
                     auto selector=visualItem(preview->contentItem(),QStringLiteral("nkshotScrollSelectionArea"));
                     selector->forceActiveFocus();QTest::keyClick(preview,Qt::Key_Tab);QTest::keyClick(preview,Qt::Key_Return);
                 } else QTest::keyClick(preview,Qt::Key_Escape);
-                if(!QTest::qWaitFor([&]{return preview.isNull();},1000) || !samePixels(original,document->renderToImage()) || depth!=document->undoStackDepth()) {application.exit(186);return;}
+                if(!QTest::qWaitFor([&]{return preview.isNull();},1000) || !samePixels(original,document->renderToImage()) || depth!=document->undoStackDepth()
+                    || pinCount()!=originalPins || QApplication::clipboard()->text()!=QStringLiteral("scroll preview untouched")) {application.exit(186);return;}
                 preview=qobject_cast<ScrollCaptureWindow *>(viewer->openScrollPreview());
                 if(!preview || preview->available()) {application.exit(187);return;}
                 preview->cancelPreview();
                 if(!QTest::qWaitFor([&]{return preview.isNull();},1000)) {application.exit(188);return;}
-                qInfo() << "NkShot opt-in scroll preview unavailable-state/reuse/disabled actions/close/reopen/source isolation passed; selector visuals are not native capture";
+                qInfo() << "NkShot default manual scroll entry, unavailable-state/reuse/rejected capture and Finish/close/reopen/source and clipboard isolation passed; selector input diagnostics are not native capture";
                 application.exit(0);return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_BACKEND_BOUNDARY")) {

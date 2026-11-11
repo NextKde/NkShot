@@ -1,21 +1,19 @@
-# Manual scrolling capture: opt-in technical preview
+# Manual scrolling capture: discoverable technical preview
 
-**Not enabled by default and not yet accepted on a real KDE desktop.** This is an
-integrated implementation to exercise the real selector/session/API5 route, not
-an automatic scrolling feature or a successful cloud capture demonstration.
+**The preview entry is available by default; native KDE capture is not yet accepted.**
+This is the existing integrated selector/session/API5 route, not automatic scrolling
+or a successful cloud capture demonstration.
 
-## Opt in
+## Open the preview
 
-Start a development build explicitly:
+Start NkShot normally. From an existing screenshot's More menu, choose
+**Manual scrolling capture (preview)**. No environment flag is needed. The entry
+is image-mode only. Unsupported desktops can open the panel and read the reason;
+they cannot select a region, capture a frame or produce a result.
 
-```sh
-NKSHOT_EXPERIMENTAL_SCROLL=1 nkshot --new-instance
-```
-
-The new-instance flag avoids reusing a process started without the opt-in.
-From an existing screenshot's More menu, choose **Scrolling capture (preview)**.
-Without that exact opt-in value, the entry is hidden and the open method refuses
-to create a window. Do not enable this variable in packaged defaults yet.
+The user scrolls the target and explicitly captures each next frame. API5 window
+exclusion remains mandatory; making the entry discoverable does not remove that
+safety check or establish native acceptance.
 
 ## Capability and workflow
 
@@ -43,7 +41,8 @@ conservative and may reject ordinary pages with animations or sticky content.
 
 ## What has and has not been checked
 
-Cloud tests cover default-off visibility/method gating, actual opt-in menu opening,
+The focused cloud test path covers default menu opening, image-only gating, rejected
+Capture/Finish and unchanged clipboard/source when unavailable,
 window reuse, unavailable-backend explanation, disabled actions, Escape close and
 reopening, unchanged editor pixels/history, and dark/narrow layouts. A separate
 visual-only test temporarily renders the selector component and drags its rectangle;

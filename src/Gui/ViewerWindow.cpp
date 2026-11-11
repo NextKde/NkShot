@@ -441,10 +441,9 @@ void ViewerWindow::resizeEvent(QResizeEvent *event)
 
 #include "moc_ViewerWindow.cpp"
 
-bool ViewerWindow::scrollPreviewEnabled() const {return qEnvironmentVariable("NKSHOT_EXPERIMENTAL_SCROLL")==QStringLiteral("1");}
 QQuickWindow *ViewerWindow::openScrollPreview()
 {
-    if(!scrollPreviewEnabled() || SpectacleCore::instance()->videoMode()) return nullptr;
+    if(SpectacleCore::instance()->videoMode()) return nullptr;
     if(m_scrollPreview) {
         auto existing=qobject_cast<ScrollCaptureWindow *>(m_scrollPreview.data());
         if(!existing || existing->phase()!=1) {m_scrollPreview->show();m_scrollPreview->requestActivate();}

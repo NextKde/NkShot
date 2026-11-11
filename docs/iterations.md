@@ -2110,3 +2110,34 @@ These show the real restored workbench with a test-induced missing-host warning,
 not a native desktop tray. No personal media is present. Native KDE tray visibility,
 focus and first captured frame exclusion remain unaccepted; registered-host protocol
 state alone cannot prove visible shell controls.
+
+## 079 — discoverable manual scrolling preview
+
+The existing More menu now exposes **Manual scrolling capture (preview)** by
+default in image mode, without an environment flag. The integrated region,
+manual next-frame, stitching and independent pin result workflow is unchanged.
+This is a discoverability release, not an automatic-scroll implementation or a
+claim that native capture is newly accepted. Video mode remains excluded.
+
+The API 5 caller-window-exclusion requirement remains enforced. Unsupported
+machines show a specific explanation and cannot select/capture/Finish a fake
+result. See [workflow and native boundaries](scroll-preview.md).
+
+Focused validation passed after one build: four actual UI variants (default entry,
+dark/360×260 panel, selector input diagnostic, video guard), one real independent
+pin PNG export regression, and all three stitching/session/controller CTests
+(12.17 s). Disabled Select/Capture/Finish cannot produce frames or result pins;
+source pixels, history and clipboard remain unchanged. The selector diagnostic
+exercises real QML mouse/keyboard layout only, not compositor capture. Pin export
+is not evidence of successful native Scroll Finish.
+
+Reviewed actual software windows: [default menu](screenshots/079-menu-entry.png),
+[unavailable panel](screenshots/079-unavailable-light.png), and
+[dark compact panel](screenshots/079-unavailable-dark.png). The menu uses its
+existing width and elides the preview suffix; the full function name remains
+visible and the panel explicitly labels Preview. Images contain only the generated
+presentation053 fixture or application UI, no personal desktop content. Native
+KDE/API5 permissions, window exclusion, real multi-frame Finish and focus remain
+unaccepted. The pin smoke test exits successfully with the existing offscreen
+engine-shutdown diagnostic about two items still being created; no QML binding,
+reference or type errors were observed.
