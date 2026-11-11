@@ -538,6 +538,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
     if (!m_clipJob || m_clipJob->busy() || !m_clipJob->ready() || m_clipSaveDialog
         || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
     const QUrl source = m_clipJob->sourceUrl();
+    const QString format = m_clipJob->outputFormat();
+    const bool gif = format == QStringLiteral("gif");
     const QFileInfo sourceFile(source.toLocalFile());
     auto dialog = new QFileDialog;
     m_clipSaveDialog = dialog;
@@ -546,14 +548,14 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setAcceptMode(QFileDialog::AcceptSave);
     dialog->setFileMode(QFileDialog::AnyFile);
-    dialog->setDefaultSuffix(QStringLiteral("mp4"));
+    dialog->setDefaultSuffix(format);
     dialog->setOption(QFileDialog::DontConfirmOverwrite, true);
-    dialog->setNameFilter(i18nc("@item:inlistbox", "MP4 video (*.mp4)"));
-    dialog->setWindowTitle(i18nc("@title:window", "Export clip as a new MP4"));
+    dialog->setNameFilter(gif ? i18nc("@item:inlistbox", "Animated GIF (*.gif)") : i18nc("@item:inlistbox", "MP4 video (*.mp4)"));
+    dialog->setWindowTitle(gif ? i18nc("@title:window", "Export clip as a new GIF") : i18nc("@title:window", "Export clip as a new MP4"));
     const QString stem = sourceFile.completeBaseName() + QStringLiteral("-clip");
-    QString suggested = sourceFile.dir().filePath(stem + QStringLiteral(".mp4"));
+    QString suggested = sourceFile.dir().filePath(stem + QLatin1Char('.') + format);
     for (int i = 2; QFileInfo::exists(suggested) && i < 1000; ++i)
-        suggested = sourceFile.dir().filePath(stem + QStringLiteral("-%1.mp4").arg(i));
+        suggested = sourceFile.dir().filePath(stem + QStringLiteral("-%1.").arg(i) + format);
     dialog->selectFile(suggested);
     dialog->winId();
     dialog->windowHandle()->setTransientParent(this);
@@ -561,8 +563,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         m_clipSaveDialog = nullptr;
         Q_EMIT choosingClipOutputChanged();
     });
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, startMs, endMs] {
-        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->busy()
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->busy()
             || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
         const auto files = dialog->selectedFiles();
         if (files.size() != 1) return;

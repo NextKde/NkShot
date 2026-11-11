@@ -183,3 +183,15 @@ atomic publication. This is genuine file re-encoding, separate from playback spe
 or mute, and never modifies the recording source. See [supported media, validation
 and safety boundaries](video-clips.md). It does not complete any native capture,
 recording A/V or capture pause/resume acceptance item above.
+
+## Local recording-file GIF Maker (073)
+
+The same clip panel also offers a silent, looping animated GIF preset. It samples
+a user-selected 0.20–15-second interval from the existing narrow local MP4 input
+profile at 10 fps, scales down to at most 640 pixels per side without upscaling, and
+limits output to 20 MiB. Separate palette and encode passes bound buffering; the
+finished GIF is fully decoded for one finite cycle before new-file-only atomic
+publication. Playback settings do not change the export.
+
+This is MP4-file-to-GIF creation, **not** native GIF capture, KWin/PipeWire acceptance,
+audio-device synchronization or GPU certification. See [scope](video-clips.md).

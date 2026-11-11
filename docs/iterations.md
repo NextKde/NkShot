@@ -1753,3 +1753,65 @@ reuse Kos buttons and the existing accent/rail vocabulary.
 Real KDE/KWin capture, microphone/system capture, device A/V synchronization,
 capture pause/resume, native save portals, GPU and high-DPI acceptance remain
 unverified. Reproduction is in [UI test notes](../tests/ui/README.md#local-video-clip-export-072).
+
+## 073 — Make a silent looping GIF from a local recording file
+
+The existing clip panel now has an MP4/GIF selector beside its title. No new
+top-level entry or toolbar was added. GIF is explicitly silent and infinitely
+looping: 10 fps, 0.20–15 seconds, maximum 640-pixel longest side without upscaling,
+and maximum 20 MiB. Over-budget ranges stay visible and require user correction,
+rather than being silently shortened. Preview remains the original source range,
+not a simulated preview of GIF color reduction or silence.
+
+Actual two-pass full-interval palette generation and GIF encoding replace neither
+the source nor existing destinations. Both passes accurately seek to the selected
+start before relative trimming; a clip near a two-hour recording's end does not
+decode the entire prefix twice. Full palette statistics preserve colors appearing
+only at the end. GIF capability checks require GIF/PNG encoders and palette
+filters, independently of MP4's H.264/AAC encoders. Format changes cancel stale
+work and clear its result without discarding the range; Save locks the format and
+uses the correct extension. Finished files are checked and decoded for one finite
+cycle before atomic no-clobber publication.
+
+Verified:
+- Final production build succeeded without warnings. Backend Qt tests pass
+  21/21 with no skips, including real frame delays/loop markers, distinct frames,
+  non-keyframe first/last colors, two-hour tail seeking, downscaling, exact
+  0.20/15.00-second successful boundaries, and a real high-entropy 20 MiB rejection.
+  Palette-stage and second-encode-stage cancellation, source switching/destruction,
+  new-file races, unusual paths and GIF-only capabilities are exercised.
+- Eight final actual Qt UI scenarios pass: GIF light/dark/420×520/long-source
+  limit, plus MP4, silent MP4, missing tools and unsupported input. They cover
+  source-range preview, real GIF save/cancel/target rejection, format switching,
+  2×/mute preference isolation, and actual AnimatedImage decoding, frame
+  progression, infinite loop, pause and resume. The first test run exposed a
+  harness-only Save-dialog destruction wait; production format locking was kept.
+- Independently generated 1280×720 media was exported through the real UI from
+  1.25–4.75 seconds. Independent analysis confirms 35 different 640×360 frames,
+  each 100 ms, total 3.5 seconds, no audio, infinite looping and 902760 bytes.
+  The nearest decoded source matches are first frame 25 (RMSE 2.79) and last
+  frame 93 (RMSE 3.42), substantially better than adjacent frames. Source SHA
+  is unchanged.
+- Full CTest passes 16/16 after the exact-boundary test update; static checks
+  pass 18/18 and whitespace checks pass. Final UI logs have no QML binding,
+  reference or type errors.
+- Fifteen independent playback/animation/OCR/color/save/MP4-export baselines pass.
+  MP4 output independently retains 70 frames/3.5 seconds, correct source frames
+  25/94 and audio pulses at 0.75/1.75/2.75 seconds, with source hash unchanged.
+
+Reviewed real software-window captures:
+[light selection](screenshots/073-gif-light.png),
+[light saved](screenshots/073-gif-light.png.saved.png),
+[dark selection](screenshots/073-gif-dark.png),
+[dark saved](screenshots/073-gif-dark.png.saved.png),
+[420×520 selection](screenshots/073-gif-compact.png),
+[420×520 saved](screenshots/073-gif-compact.png.saved.png),
+[18-second limit](screenshots/073-gif-limit.png.initial-limit.png), and
+[exported GIF playback](screenshots/073-gif-light.png.playback.png).
+Every capture uses generated test patterns, never private user recordings.
+
+This is local MP4-file GIF creation, not native GIF capture. Real KDE/KWin,
+capture audio-device synchronization, native portals, GPU and high-DPI acceptance
+remain open. The shared real probe timeout is tested; the GIF-specific
+five-minute encode/palette timeout itself was not waited out.
+See [scope](video-clips.md) and [reproduction](../tests/ui/README.md#gif-clip-export-073).

@@ -9,6 +9,7 @@
 class QProcess;
 class VideoClipJob : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QString outputFormat READ outputFormat WRITE setOutputFormat NOTIFY changed)
     Q_PROPERTY(QUrl sourceUrl READ sourceUrl NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(bool ready READ ready NOTIFY changed)
@@ -20,6 +21,8 @@ class VideoClipJob : public QObject {
 public:
     explicit VideoClipJob(QObject *parent = nullptr);
     ~VideoClipJob() override;
+    QString outputFormat() const { return m_format; }
+    Q_INVOKABLE void setOutputFormat(const QString &format);
     QUrl sourceUrl() const { return m_source; }
     bool busy() const { return m_busy; }
     bool ready() const { return m_ready; }
@@ -35,23 +38,26 @@ Q_SIGNALS:
     void changed();
     void exported(const QUrl &url);
 private:
-    enum Stage { None, Inspect, Encoders, Encode, Verify, Decode };
+    enum Stage { None, Inspect, Encoders, Filters, Palette, Encode, Verify, Decode };
     void launch(const QString &program, const QStringList &args, Stage stage, int timeoutMs);
     void completed(Stage stage);
+    void launchGifPass(bool palette);
+    QString gifFilter() const;
     void fail(const QString &message);
     void stop();
     void cleanup();
     bool sourceUnchanged() const;
     bool destinationUnchanged() const;
     QUrl m_source, m_output;
-    QString m_ffmpeg, m_ffprobe, m_error, m_temp, m_target;
+    QString m_ffmpeg, m_ffprobe, m_error, m_temp, m_target, m_palette;
+    QString m_format = QStringLiteral("mp4");
     QByteArray m_stdout, m_stderr, m_progressBuffer;
     QPointer<QProcess> m_process;
     QTimer m_timeout;
     quint64 m_epoch = 0;
     Stage m_stage = None;
-    bool m_busy = false, m_ready = false, m_audio = false;
-    qint64 m_duration = 0, m_sourceSize = 0, m_clipDuration = 0;
+    bool m_busy = false, m_ready = false, m_audio = false, m_mediaValid = false;
+    qint64 m_duration = 0, m_sourceSize = 0, m_clipDuration = 0, m_start = 0, m_end = 0;
     QDateTime m_sourceModified;
     quint64 m_sourceDevice=0,m_sourceInode=0;
     qreal m_progress = 0;

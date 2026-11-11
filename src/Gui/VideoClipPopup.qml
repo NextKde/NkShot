@@ -17,7 +17,9 @@ QQC.Popup {
     property url sessionSource
     readonly property int startMs: startTime.value * 10
     readonly property int endMs: endTime.value * 10
-    readonly property bool validRange: job.ready && startMs >= 0 && endMs <= job.durationMs && endMs - startMs >= 100
+    readonly property bool gif: job.outputFormat === "gif"
+    readonly property bool validRange: job.ready && startMs >= 0 && endMs <= job.durationMs
+        && endMs - startMs >= (gif ? 200 : 100) && (!gif || endMs - startMs <= 15000)
     readonly property bool locked: job.busy || contextWindow.choosingClipOutput
     function stopPreview() { previewing = false; player.pause() }
     width: Math.min(420, parent.width - 24)
@@ -36,6 +38,7 @@ QQC.Popup {
         rangeInitialized = false
         startTime.value = 0
         endTime.value = 0
+        job.outputFormat = "mp4"
         contextWindow.prepareClipExport(sourceUrl)
     }
     onClosed: {
@@ -88,12 +91,34 @@ QQC.Popup {
     }
     contentItem: ColumnLayout {
         spacing: 8
-        QQC.Label {
-            text: i18nc("@title", "Export a clip")
-            font.family: root.font.family
-            font.pixelSize: 15
-            font.bold: true
-            color: Kos.AppTheme.paletteText
+        RowLayout {
+            Layout.fillWidth: true
+            QQC.Label {
+                Layout.fillWidth: true
+                text: i18nc("@title", "Export a clip")
+                font.family: root.font.family
+                font.pixelSize: 15
+                font.bold: true
+                color: Kos.AppTheme.paletteText
+            }
+            QQC.ComboBox {
+                id: formatChoice
+                objectName: "nkshotClipFormat"
+                model: ["MP4", "GIF"]
+                currentIndex: root.gif ? 1 : 0
+                enabled: !contextWindow.choosingClipOutput
+                implicitHeight: 28
+                implicitWidth: 82
+                leftPadding: 10
+                rightPadding: 26
+                palette.text: Kos.AppTheme.paletteText
+                palette.buttonText: Kos.AppTheme.paletteText
+                background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 8; elevation: 0}
+                contentItem: QQC.Label {text: formatChoice.displayText; color: Kos.AppTheme.paletteText; verticalAlignment: Text.AlignVCenter}
+                indicator: QQC.Label {text: "⌄"; color: Kos.AppTheme.mutedText; x: formatChoice.width - width - 9; anchors.verticalCenter: parent.verticalCenter}
+                Accessible.name: i18nc("@label", "Clip output format")
+                onActivated: {root.stopPreview(); root.job.outputFormat = currentIndex === 1 ? "gif" : "mp4"}
+            }
         }
         QQC.RangeSlider {
             id: range
@@ -161,13 +186,14 @@ QQC.Popup {
         QQC.Label {
             Layout.fillWidth: true
             color: Kos.AppTheme.mutedText
-            text: root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.job.hasAudio ? i18nc("@info", "Audio included") : i18nc("@info", "No audio track"))
-                : i18nc("@info", "Choose a range of at least 0.10 seconds.")
+            text: root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? i18nc("@info", "Audio included") : i18nc("@info", "No audio track"))
+                : root.gif ? i18nc("@info", "GIF range: 0.20–15 seconds. Shorten or extend the selection.") : i18nc("@info", "Choose a range of at least 0.10 seconds.")
             wrapMode: Text.Wrap
         }
         QQC.Label {
             Layout.fillWidth: true
-            text: i18nc("@info", "New MP4 only · H.264/AAC. Original and playback settings stay unchanged.")
+            text: root.gif ? i18nc("@info", "New GIF · Silent, looping · 10 fps · Up to 640 px / 20 MiB. Original unchanged.")
+                : i18nc("@info", "New MP4 only · H.264/AAC. Original and playback settings stay unchanged.")
             wrapMode: Text.Wrap
             color: Kos.AppTheme.mutedText
             font.pixelSize: 11

@@ -442,3 +442,46 @@ verification, or the new path in `NKSHOT_TEST_CLIP_OUTPUT`. The probe refuses an
 already existing output. All clip variants require the software video preview to
 remain visible, taller than 60 logical pixels, and above the open clip panel,
 including the 420×520 narrow layout.
+
+
+### GIF clip export (073)
+
+Add `NKSHOT_TEST_CLIP_GIF=1` to the 072 clip probe with a generated local MP4
+source. The test clicks the actual format ComboBox, types 1.35–3.15 seconds,
+checks the 0.20-second GIF minimum without silent input clamping, and previews
+the interval above the unobscured panel. Save cancellation retains the range;
+the dialog must use the GIF suffix/filter. A real GIF with spaces/quotes in its
+new filename is exported and inspected for a GIF89a header, infinite-loop
+extension and the 20 MiB size limit.
+
+Format switching clears old status/output while retaining the selected range.
+The probe sets playback to 2× (and mutes an audio-bearing source), but the export
+still has the selected duration’s 10 fps frame count. It rejects an existing
+target without changing its bytes, switches format
+during an active GIF job to cancel it without creating a target, then checks
+explicit Cancel/reopen. The existing Qt AnimatedImage route opens the resulting
+file and must show multiple frames, dimensions no greater than 640 on either
+axis, actual frame advancement, a runtime wrap at the end, stable pause and
+resumption. MP4 playback is restored and source bytes, current video identity,
+clipboard and editor history remain unchanged. This is real local media export,
+not desktop capture or audible/live-device acceptance.
+
+Repeat with `NKSHOT_TEST_DARK=1` and `NKSHOT_TEST_UI_SIZE=420x520`. For the maximum
+range guard, supply the generated 18-second 960×540 source and also set
+`NKSHOT_TEST_CLIP_GIF_LIMIT=1`: the initial full-source range and a typed
+0–16-second GIF must remain unchanged
+in the fields while Export is disabled, and shortening restores export. The
+result must decode at 640×360, preserving aspect ratio while downsizing. The
+main image records range selection; `.limit.png`, `.saved.png`, `.playback.png`
+and optional `.initial-limit.png`/`.long-limit.png` record actual short-limit, success, decoded output
+and long-limit states. Backend tests separately check the 10 fps/100 ms delay,
+15-second ceiling, downscale/no-upscale and encoded image content contracts.
+
+
+Combine `NKSHOT_TEST_CLIP_GIF=1` and `NKSHOT_TEST_CLIP_INDEPENDENT=1` for the
+independently generated 1280×720, 20 fps long-GOP MP4 source. Actual time entry
+selects 1.25–4.75 seconds; the new output in `NKSHOT_TEST_CLIP_OUTPUT` (default
+`/logs/073-independent-export.gif`) is retained for external decoding. The UI
+probe checks GIF metadata and actual Qt decoding at 640×360 with 35 frames,
+then observes looping/pause/resume without changing the source or clipboard.
+External analysis remains responsible for precise frame content and duration.

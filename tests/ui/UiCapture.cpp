@@ -516,6 +516,150 @@ static void runVideoClipChecks(QApplication &application, ViewerWindow *viewer, 
                 << "unsupported playable source:" << unsupportedSource << job->property("error").toString();
         click("nkshotClipCancel"); application.exit(0); return;
     }
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_GIF")) {
+        const auto format = [&](const QString &expected, bool requireActive = false) {
+            // The accepted Save dialog may still await deleteLater after a
+            // synchronous validation failure. Respect its production lock.
+            if (!QTest::qWaitFor([&] {
+                    auto item=visualItem(viewer->contentItem(),QStringLiteral("nkshotClipFormat"));
+                    return !viewer->property("choosingClipOutput").toBool() && item && item->isVisible() && item->isEnabled();
+                },1000)) return false;
+            if ((requireActive && !job->property("busy").toBool()) || !click("nkshotClipFormat")) return false;
+            QTest::keyClick(viewer, expected==QStringLiteral("gif") ? Qt::Key_End : Qt::Key_Home);
+            QTest::keyClick(viewer, Qt::Key_Return);
+            return QTest::qWaitFor([&] { return job->property("outputFormat").toString()==expected
+                && !job->property("busy").toBool() && job->property("ready").toBool(); },15000);
+        };
+        const auto playGif = [&](const QString &output) {
+        recording->setProperty("sourceUrl",QUrl::fromLocalFile(output));
+        auto animated=visualItem(viewer->contentItem(),QStringLiteral("nkshotAnimatedImage"));
+        if (!animated || !QTest::qWaitFor([&] { return recording->property("hasAnimatedImage").toBool()
+            && !recording->property("playbackFailed").toBool() && player->property("source").toUrl().isEmpty(); },10000)) { return false; }
+        const auto size=animated->property("sourceSize").toSize();
+        if (size.isEmpty() || size.width()>640 || size.height()>640 || animated->property("frameCount").toInt()<2) { return false; }
+        if ((independent || qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_GIF_LIMIT")) && size!=QSize(640,360)) return false;
+        if (animated->property("frameCount").toInt()!=(endCs-startCs)/10) return false;
+        if (recording->property("playing").toBool()) QMetaObject::invokeMethod(recording,"togglePlay");
+        if (!QTest::qWaitFor([&] { return !recording->property("playing").toBool(); },1000)) { return false; }
+        QTest::qWait(150); const int paused=animated->property("currentFrame").toInt(); QTest::qWait(250);
+        if (animated->property("currentFrame").toInt()!=paused || !click("nkshotPlaybackToggle")
+            || !QTest::qWaitFor([&] { return recording->property("playing").toBool() && animated->property("currentFrame").toInt()!=paused; },2000)) { return false; }
+        int previous=animated->property("currentFrame").toInt();
+        if (!QTest::qWaitFor([&] { const int current=animated->property("currentFrame").toInt(); const bool wrapped=current<previous; previous=current; return wrapped; },5000)) { return false; }
+        QMetaObject::invokeMethod(recording,"togglePlay");
+        if (!QTest::qWaitFor([&] { return !recording->property("playing").toBool(); },1000)) { return false; }
+        if (!viewer->grabWindow().save(destination+QStringLiteral(".playback.png"))) { return false; }
+        return true;
+        };
+        if (!independent) {
+            if (!click("nkshotPlaybackSettings")) { fail("GIF playback settings"); return; }
+            QTest::qWait(100);
+            if (sourceAudio && !click("nkshotPlaybackMute")) { fail("GIF playback mute"); return; }
+            if (!click("nkshotPlaybackSpeed")) { fail("GIF playback speed"); return; }
+            QTest::keyClick(viewer,Qt::Key_End); QTest::keyClick(viewer,Qt::Key_Return); QTest::qWait(100);
+            if (qAbs(player->property("playbackRate").toReal()-2)>0.01) { fail("GIF 2x preview preference"); return; }
+            QTest::keyClick(viewer,Qt::Key_Escape); QTest::qWait(100);
+        }
+        if (!open() || !job->property("ready").toBool() || job->property("outputFormat").toString()!=QStringLiteral("mp4")
+            || !format(QStringLiteral("gif"))) { fail("GIF initial format selection"); return; }
+        if (independent) {
+            const auto output=qEnvironmentVariable("NKSHOT_TEST_CLIP_OUTPUT",QStringLiteral("/logs/073-independent-export.gif"));
+            if (QFileInfo::exists(output) || !range() || !previewVisible() || !viewer->grabWindow().save(destination)
+                || !choose(output)
+                || !QTest::qWaitFor([&] { return !job->property("busy").toBool() && job->property("outputUrl").toUrl()==QUrl::fromLocalFile(output); },60000)) {
+                qWarning()<<job->property("error"); fail("independent real UI GIF export"); return;
+            }
+            QFile result(output);
+            if (!result.open(QIODevice::ReadOnly)) { fail("independent GIF read"); return; }
+            const auto bytes=result.readAll(); result.close();
+            if (!bytes.startsWith("GIF89a") || !bytes.contains(QByteArray::fromHex("21ff0b4e45545343415045322e300301000000"))
+                || bytes.size()>20*1024*1024 || !viewer->grabWindow().save(destination+QStringLiteral(".saved.png"))
+                || !click("nkshotClipCancel") || !playGif(output)) { fail("independent GIF format/decode/play"); return; }
+            recording->setProperty("sourceUrl",source);
+            if (!originalFile.open(QIODevice::ReadOnly) || originalFile.readAll()!=originalBytes
+                || QApplication::clipboard()->text()!=QStringLiteral("clip export does not copy")
+                || SpectacleCore::instance()->currentVideo()!=originalCurrentVideo
+                || !samePixels(originalImage,document->renderToImage()) || originalDepth!=document->undoStackDepth()) { fail("independent GIF source unchanged"); return; }
+            qInfo()<<"Independent real UI GIF exported 1.25 to 4.75 seconds; Qt decoded 640x360/35 frames and looped/paused/resumed:"<<output;
+            application.exit(0); return;
+        }
+        auto exportButton=visualItem(viewer->contentItem(),QStringLiteral("nkshotClipExport"));
+        auto startField=visualItem(viewer->contentItem(),QStringLiteral("nkshotClipStart"));
+        auto endField=visualItem(viewer->contentItem(),QStringLiteral("nkshotClipEnd"));
+        if (!exportButton || !startField || !endField) { fail("GIF time controls"); return; }
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_GIF_LIMIT")) {
+            if (sourceDuration<16000 || startField->property("value").toInt()!=0
+                || endField->property("value").toInt()!=job->property("durationMs").toLongLong()/10
+                || exportButton->isEnabled() || popup->property("validRange").toBool()
+                || !viewer->grabWindow().save(destination+QStringLiteral(".initial-limit.png"))) { fail("full-source GIF limit preserves requested range"); return; }
+        }
+        if (!range() || !previewVisible()) { fail("GIF typed range and visible preview"); return; }
+        // The 0.20-second GIF minimum is explained without silently changing input.
+        if (!edit("nkshotClipEnd",QStringLiteral("1.45"),145) || exportButton->isEnabled()
+            || popup->property("validRange").toBool() || startField->property("value").toInt()!=135
+            || endField->property("value").toInt()!=145) { fail("short GIF range rejected without clamping"); return; }
+        if (!viewer->grabWindow().save(destination+QStringLiteral(".limit.png")) || !range()) { fail("GIF short limit capture/recovery"); return; }
+        if (qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_GIF_LIMIT")) {
+            if (sourceDuration<16000 || !edit("nkshotClipStart",QStringLiteral("0.00"),0)
+                || !edit("nkshotClipEnd",QStringLiteral("16.00"),1600) || exportButton->isEnabled()
+                || popup->property("validRange").toBool() || endField->property("value").toInt()!=1600
+                || !viewer->grabWindow().save(destination+QStringLiteral(".long-limit.png")) || !range()) { fail("long GIF range rejected without clamping"); return; }
+        }
+        if (!click("nkshotClipPreview")
+            || !QTest::qWaitFor([&] { return recording->property("playing").toBool() && player->property("position").toLongLong()>1400; },2000)
+            || !QTest::qWaitFor([&] { return !recording->property("playing").toBool(); },5000)) { fail("GIF source range preview"); return; }
+        if (!viewer->grabWindow().save(destination) || !click("nkshotClipExport")
+            || !QTest::qWaitFor([&] { return dialog(); },1000)) { fail("GIF Save dialog"); return; }
+        QPointer<QFileDialog> save=dialog();
+        if (save->defaultSuffix()!=QStringLiteral("gif") || !save->selectedNameFilter().contains(QStringLiteral("*.gif"))) { fail("GIF extension/filter"); return; }
+        save->reject();
+        if (!QTest::qWaitFor([&] { return !save; },1000) || job->property("busy").toBool()
+            || !popup->property("opened").toBool() || endField->property("value").toInt()!=315) { fail("GIF Save cancellation"); return; }
+        QTemporaryDir folder;
+        const auto output=folder.filePath(QStringLiteral("clip 'quoted' name.gif"));
+        if (!folder.isValid() || !choose(output)
+            || !QTest::qWaitFor([&] { return !job->property("busy").toBool() && job->property("outputUrl").toUrl()==QUrl::fromLocalFile(output); },60000)) {
+            qWarning()<<job->property("error"); fail("GIF real export"); return;
+        }
+        QFile outputFile(output);
+        if (!outputFile.open(QIODevice::ReadOnly)) { fail("GIF file read"); return; }
+        const auto gifBytes=outputFile.readAll(); outputFile.close();
+        const auto infiniteLoop=QByteArray::fromHex("21ff0b4e45545343415045322e300301000000");
+        if (!gifBytes.startsWith("GIF89a") || !gifBytes.contains(infiniteLoop) || gifBytes.size()>20*1024*1024
+            || recording->property("sourceUrl").toUrl()!=source || !viewer->grabWindow().save(destination+QStringLiteral(".saved.png"))) { fail("GIF output format/size/loop/source isolation"); return; }
+        // Changing output format clears the completed job's UI, not the selected range.
+        if (!format(QStringLiteral("mp4")) || !job->property("outputUrl").toUrl().isEmpty()
+            || !job->property("error").toString().isEmpty() || job->property("progress").toReal()!=0
+            || startField->property("value").toInt()!=135 || endField->property("value").toInt()!=315
+            || !format(QStringLiteral("gif"))) { fail("GIF/MP4 format transition resets status only"); return; }
+        QSignalSpy exported(job,SIGNAL(exported(QUrl)));
+        if (!exported.isValid() || !choose(output)
+            || !QTest::qWaitFor([&] { return !job->property("busy").toBool() && !job->property("error").toString().isEmpty(); },3000)
+            || !exported.isEmpty() || !outputFile.open(QIODevice::ReadOnly) || outputFile.readAll()!=gifBytes) { fail("existing GIF remains unchanged"); return; }
+        outputFile.close();
+        if (!format(QStringLiteral("mp4")) || !job->property("error").toString().isEmpty()
+            || !job->property("outputUrl").toUrl().isEmpty() || !format(QStringLiteral("gif"))) { fail("format switch clears prior error"); return; }
+        const auto formatCancelled=folder.filePath(QStringLiteral("format-cancelled.gif"));
+        if (!choose(formatCancelled) || !job->property("busy").toBool() || !format(QStringLiteral("mp4"),true)
+            || QFileInfo::exists(formatCancelled) || !job->property("outputUrl").toUrl().isEmpty()
+            || !format(QStringLiteral("gif"))) { fail("format switch cancels active GIF export"); return; }
+        const auto cancelled=folder.filePath(QStringLiteral("cancelled.gif"));
+        if (!choose(cancelled) || !job->property("busy").toBool() || !click("nkshotClipCancel")
+            || !QTest::qWaitFor([&] { return !job->property("busy").toBool(); },10000) || QFileInfo::exists(cancelled)) { fail("GIF active cancel"); return; }
+        if (popup->property("opened").toBool()) { click("nkshotClipCancel"); QTest::qWait(100); }
+        if (!open() || job->property("outputFormat").toString()!=QStringLiteral("mp4")
+            || !format(QStringLiteral("gif")) || !range() || !click("nkshotClipCancel")) { fail("GIF cancel/reopen recovery"); return; }
+        if (!playGif(output)) { fail("GIF actual decode/frame/loop/pause/resume"); return; }
+        recording->setProperty("sourceUrl",source);
+        if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool() && !recording->property("hasAnimatedImage").toBool()
+            && player->property("source").toUrl()==source; },15000)
+            || !originalFile.open(QIODevice::ReadOnly) || originalFile.readAll()!=originalBytes
+            || QApplication::clipboard()->text()!=QStringLiteral("clip export does not copy")
+            || SpectacleCore::instance()->currentVideo()!=originalCurrentVideo
+            || !samePixels(originalImage,document->renderToImage()) || originalDepth!=document->undoStackDepth()) { fail("GIF source/editor/clipboard unchanged"); return; }
+        qInfo()<<"GIF clip UI: format/time inputs, minimum gating, visible preview, GIF Save cancel/filter, real new export, format status reset, existing-file rejection, active format-switch/cancel/reopen and actual AnimatedImage frames/loop/pause/resume passed; maximum checked:" << qEnvironmentVariableIsSet("NKSHOT_TEST_CLIP_GIF_LIMIT");
+        application.exit(0); return;
+    }
     if (independent) {
         const auto output = qEnvironmentVariable("NKSHOT_TEST_CLIP_OUTPUT", QStringLiteral("/logs/072-independent-export.mp4"));
         if (QFileInfo::exists(output)) { fail("independent output must be a new path"); return; }

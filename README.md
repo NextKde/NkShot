@@ -92,3 +92,7 @@ An explicit, default-off [technical preview](docs/scroll-preview.md) integrates 
 single-display selector, manual next-frame panel and API5-only KWin backend. It
 has not passed native desktop acceptance; do not treat it as a released scrolling
 feature or enable it in packaging defaults. No automated scrolling is provided.
+
+Local MP4 clips can also be exported as bounded, silent looping GIFs through the
+same contextual panel. See [video clip and GIF scope](docs/video-clips.md); this is
+file post-processing, not completed native recording acceptance.

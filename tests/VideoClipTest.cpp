@@ -35,6 +35,25 @@ class VideoClipTest:public QObject {
         a<<path;QProcess p;p.start(ffmpeg,a);const bool ok=p.waitForFinished(30000)&&p.exitCode()==0;if(!ok)qWarning()<<p.readAllStandardError();return ok;
     }
     QByteArray hash(const QString &p) { QFile f(p);if(!f.open(QIODevice::ReadOnly))return {};return QCryptographicHash::hash(f.readAll(),QCryptographicHash::Sha256); }
+    struct GifDetails {bool valid=false,infinite=false;int width=0,height=0,frames=0;QList<int> delays;};
+    GifDetails gifDetails(const QByteArray &data) {
+        GifDetails out;if(data.size()<13||(!data.startsWith("GIF89a")&&!data.startsWith("GIF87a")))return out;
+        const auto u16=[&](qsizetype at){return int(uchar(data[at]))+256*int(uchar(data[at+1]));};
+        out.width=u16(6);out.height=u16(8);qsizetype pos=13;
+        if(uchar(data[10])&128)pos+=3*(1<<((uchar(data[10])&7)+1));
+        const auto blocks=[&](QByteArray &joined){while(pos<data.size()){const int n=uchar(data[pos++]);if(n==0)return true;if(pos+n>data.size())return false;joined+=data.mid(pos,n);pos+=n;}return false;};
+        QByteArray loopMarker("NETSCAPE2.0");loopMarker.append(QByteArray::fromHex("010000"));
+        while(pos<data.size()) {
+            const int marker=uchar(data[pos++]);
+            if(marker==0x3b){out.valid=out.frames>0&&out.delays.size()==out.frames;return out;}
+            if(marker==0x21){if(pos>=data.size())return {};const int kind=uchar(data[pos++]);QByteArray payload;if(!blocks(payload))return {};
+                if(kind==0xf9){if(payload.size()!=4)return {};out.delays.append(int(uchar(payload[1]))+256*int(uchar(payload[2])));}
+                if(kind==0xff&&payload==loopMarker)out.infinite=true;
+            } else if(marker==0x2c){if(pos+9>data.size())return {};const int flags=uchar(data[pos+8]);pos+=9;if(flags&128)pos+=3*(1<<((flags&7)+1));if(pos>=data.size())return {};pos++;QByteArray pixels;if(!blocks(pixels))return {};++out.frames;}
+            else return {};
+        }
+        return {};
+    }
     bool ready(VideoClipJob &job,const QString &path) {job.inspect(QUrl::fromLocalFile(path));return QTest::qWaitFor([&]{return !job.busy();},20000)&&job.ready();}
 private Q_SLOTS:
     void initTestCase() {
@@ -84,6 +103,99 @@ private Q_SLOTS:
             double sum=0;int n=0;for(int i=int(.68*48000);i<int(.82*48000)&&4*i+4<=pcm.size();++i){float v;std::memcpy(&v,pcm.constData()+4*i,4);sum+=double(v)*v;++n;}
             QVERIFY(n>0);QVERIFY(std::sqrt(sum/n)>.1);
         }
+    }
+    void actualGifFramesTimingAndFormatSwitch() {
+        const auto original=hash(source);VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QCOMPARE(job.outputFormat(),QStringLiteral("gif"));QVERIFY(!job.busy());
+        QVERIFY2(ready(job,source),qPrintable(job.error()));QVERIFY(job.hasAudio());const auto duration=job.durationMs();
+        const auto target=folder.filePath(QStringLiteral("animated ; 中文.gif"));job.exportClip(QUrl::fromLocalFile(target),1350,3150);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QCOMPARE(hash(source),original);
+        QFile file(target);QVERIFY(file.open(QIODevice::ReadOnly));const auto details=gifDetails(file.readAll());QVERIFY(details.valid);QVERIFY(details.infinite);QCOMPARE(details.width,320);QCOMPARE(details.height,180);QCOMPARE(details.frames,18);for(const auto delay:details.delays)QCOMPARE(delay,10);
+        const auto metadata=QJsonDocument::fromJson(execute(ffprobe,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-f"),QStringLiteral("gif"),QStringLiteral("-ignore_loop"),QStringLiteral("1"),QStringLiteral("-show_streams"),QStringLiteral("-show_format"),QStringLiteral("-of"),QStringLiteral("json"),target})).object();
+        QCOMPARE(metadata.value(QStringLiteral("streams")).toArray().size(),1);QCOMPARE(metadata.value(QStringLiteral("streams")).toArray()[0].toObject().value(QStringLiteral("codec_type")).toString(),QStringLiteral("video"));QVERIFY(qAbs(metadata.value(QStringLiteral("format")).toObject().value(QStringLiteral("duration")).toString().toDouble()-1.8)<.01);
+        const auto frames=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-ignore_loop"),QStringLiteral("1"),QStringLiteral("-i"),target,QStringLiteral("-pix_fmt"),QStringLiteral("rgba"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        const int frameBytes=320*180*4;QCOMPARE(frames.size(),18*frameBytes);QVERIFY(frames.left(frameBytes)!=frames.mid(frameBytes,frameBytes));
+        // 30→10 fps picks source frames 42 and 93 for this non-keyframe range.
+        QVERIFY(qAbs(int(uchar(frames[0]))-146)<=2);QVERIFY(qAbs(int(uchar(frames[17*frameBytes]))-91)<=2);
+        job.setOutputFormat(QStringLiteral("mp4"));QVERIFY(job.outputUrl().isEmpty());QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY2(job.ready(),qPrintable(job.error()));QCOMPARE(job.durationMs(),duration);QCOMPARE(job.sourceUrl(),QUrl::fromLocalFile(source));
+        const auto mp4=folder.filePath(QStringLiteral("after-gif.mp4"));job.exportClip(QUrl::fromLocalFile(mp4),1350,3150);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QVERIFY(QFile::exists(mp4));
+    }
+    void gifAccurateSeekNearTwoHourEnd() {
+        const auto longInput=folder.filePath(QStringLiteral("two-hours.mp4"));
+        QProcess remux;remux.start(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-stream_loop"),QStringLiteral("1199"),QStringLiteral("-i"),silent,QStringLiteral("-t"),QStringLiteral("7200"),QStringLiteral("-c"),QStringLiteral("copy"),QStringLiteral("-movflags"),QStringLiteral("+faststart"),longInput});QVERIFY(remux.waitForFinished(30000));QCOMPARE(remux.exitCode(),0);
+        VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY2(ready(job,longInput),qPrintable(job.error()));QCOMPARE(job.durationMs(),qint64(7200000));
+        const auto target=folder.filePath(QStringLiteral("near-end.gif"));job.exportClip(QUrl::fromLocalFile(target),7195350,7197150);
+        bool seekBeforeInput=false;for(auto process:job.findChildren<QProcess *>()) {const auto args=process->arguments();const int seek=args.indexOf(QStringLiteral("-ss")),input=args.indexOf(QStringLiteral("-i"));if(seek>=0&&seek<input&&args.value(seek+1)==QStringLiteral("7195.350"))seekBeforeInput=true;}QVERIFY(seekBeforeInput);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        QFile file(target);QVERIFY(file.open(QIODevice::ReadOnly));const auto details=gifDetails(file.readAll());QVERIFY(details.valid);QCOMPARE(details.frames,18);for(const auto delay:details.delays)QCOMPARE(delay,10);
+        const auto frames=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-ignore_loop"),QStringLiteral("1"),QStringLiteral("-i"),target,QStringLiteral("-pix_fmt"),QStringLiteral("rgba"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        const int frameBytes=320*180*4;QCOMPARE(frames.size(),18*frameBytes);QVERIFY(qAbs(int(uchar(frames[0]))-146)<=2);QVERIFY(qAbs(int(uchar(frames[17*frameBytes]))-91)<=2);
+    }
+    void gifDimensionsLimitsAndNoClobber() {
+        const auto large=folder.filePath(QStringLiteral("large.mp4"));execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-i"),silent,QStringLiteral("-vf"),QStringLiteral("scale=1280:720"),QStringLiteral("-an"),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-threads"),QStringLiteral("2"),large});
+        VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY2(ready(job,large),qPrintable(job.error()));const auto target=folder.filePath(QStringLiteral("scaled.gif"));job.exportClip(QUrl::fromLocalFile(target),0,1000);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        QFile file(target);QVERIFY(file.open(QIODevice::ReadOnly));const auto gif=gifDetails(file.readAll());QVERIFY(gif.valid);QCOMPARE(gif.width,640);QCOMPARE(gif.height,360);QCOMPARE(gif.frames,10);
+        const auto preserved=hash(target);job.exportClip(QUrl::fromLocalFile(target),0,1000);QVERIFY(!job.busy());QVERIFY(!job.error().isEmpty());QCOMPARE(hash(target),preserved);
+        job.exportClip(QUrl::fromLocalFile(folder.filePath(QStringLiteral("too-short.gif"))),0,199);QVERIFY(!job.busy());QVERIFY(!job.error().isEmpty());
+        const auto shortest=folder.filePath(QStringLiteral("minimum-duration.gif"));
+        job.exportClip(QUrl::fromLocalFile(shortest),0,200);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        QFile shortestFile(shortest);QVERIFY(shortestFile.open(QIODevice::ReadOnly));const auto shortestGif=gifDetails(shortestFile.readAll());
+        QVERIFY(shortestGif.valid);QVERIFY(shortestGif.infinite);QCOMPARE(shortestGif.frames,2);QCOMPARE(shortestGif.delays.size(),2);
+        int shortestCentiseconds=0;for(int delay:shortestGif.delays){QCOMPARE(delay,10);shortestCentiseconds+=delay;}QCOMPARE(shortestCentiseconds,20);
+        const auto longInput=folder.filePath(QStringLiteral("long.mp4"));execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-stream_loop"),QStringLiteral("3"),QStringLiteral("-i"),silent,QStringLiteral("-t"),QStringLiteral("18"),QStringLiteral("-c"),QStringLiteral("copy"),longInput});
+        QVERIFY2(ready(job,longInput),qPrintable(job.error()));job.exportClip(QUrl::fromLocalFile(folder.filePath(QStringLiteral("too-long.gif"))),0,16000);QVERIFY(!job.busy());QVERIFY(job.error().contains(QStringLiteral("15 seconds")));
+        const auto longest=folder.filePath(QStringLiteral("maximum-duration.gif"));
+        job.exportClip(QUrl::fromLocalFile(longest),0,15000);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        QFile longestFile(longest);QVERIFY(longestFile.open(QIODevice::ReadOnly));const auto longestGif=gifDetails(longestFile.readAll());
+        QVERIFY(longestGif.valid);QVERIFY(longestGif.infinite);QCOMPARE(longestGif.frames,150);QCOMPARE(longestGif.delays.size(),150);
+        int longestCentiseconds=0;for(int delay:longestGif.delays){QCOMPARE(delay,10);longestCentiseconds+=delay;}QCOMPARE(longestCentiseconds,1500);
+        const auto race=folder.filePath(QStringLiteral("gif-race.gif"));job.exportClip(QUrl::fromLocalFile(race),0,1000);QFile racing(race);QVERIFY(racing.open(QIODevice::WriteOnly));racing.write("keep newer");racing.close();const auto raceHash=hash(race);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY(!job.error().isEmpty());QCOMPARE(hash(race),raceHash);
+    }
+    void gifPaletteCancellationAndSwitch() {
+        VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY(ready(job,source));QSignalSpy done(&job,&VideoClipJob::exported);
+        const auto target=folder.filePath(QStringLiteral("cancel-palette.gif"));job.exportClip(QUrl::fromLocalFile(target),0,6000);QVERIFY(job.busy());
+        QVERIFY(!QDir(folder.path()).entryList({QStringLiteral(".nkshot-clip-palette-*")},QDir::Files|QDir::Hidden).isEmpty());
+        const auto children=job.findChildren<QProcess *>();QVERIFY(!children.isEmpty());bool paletteCommand=false;for(auto process:children)for(const auto &arg:process->arguments())if(arg.contains(QStringLiteral("palettegen=")))paletteCommand=true;QVERIFY(paletteCommand);
+        job.cancel();QVERIFY(!job.busy());QVERIFY(QTest::qWaitFor([&]{return QDir(folder.path()).entryList({QStringLiteral(".nkshot-clip-*")},QDir::Files|QDir::Hidden).isEmpty();},3000));QVERIFY(!QFile::exists(target));QCOMPARE(done.size(),0);
+        job.exportClip(QUrl::fromLocalFile(target),0,6000);QVERIFY(job.busy());job.setOutputFormat(QStringLiteral("mp4"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY(job.ready());QVERIFY(!QFile::exists(target));QCOMPARE(done.size(),0);QVERIFY(job.outputUrl().isEmpty());
+    }
+    void gifSecondPassLifecycle() {
+        for(int operation=0;operation<3;++operation) {
+            auto job=std::make_unique<VideoClipJob>();job->setOutputFormat(QStringLiteral("gif"));QVERIFY(ready(*job,source));
+            const auto target=folder.filePath(QStringLiteral("second-pass-%1.gif").arg(operation));bool acted=false,confirmedPaletteUse=false;
+            auto connection=connect(job.get(),&VideoClipJob::changed,this,[&]{
+                if(acted||!job||!job->busy()||job->progress()<=.35)return;
+                for(auto process:job->findChildren<QProcess *>())for(const auto &arg:process->arguments())if(arg.contains(QStringLiteral("paletteuse=")))confirmedPaletteUse=true;
+                if(!confirmedPaletteUse)return;
+                acted=true;
+                if(operation==0)job->cancel();
+                else if(operation==1)job->inspect(QUrl::fromLocalFile(silent));
+                else QTimer::singleShot(0,this,[&]{job.reset();});
+            });
+            job->exportClip(QUrl::fromLocalFile(target),0,6000);
+            QVERIFY(QTest::qWaitFor([&]{return acted&&(!job||!job->busy());},30000));QVERIFY(confirmedPaletteUse);QVERIFY(!QFile::exists(target));
+            if(operation==1){QVERIFY(job->ready());QCOMPARE(job->sourceUrl(),QUrl::fromLocalFile(silent));}
+            if(operation==2)QVERIFY(!job);else {QVERIFY(job->outputUrl().isEmpty());disconnect(connection);}
+            QVERIFY(QTest::qWaitFor([&]{return QDir(folder.path()).entryList({QStringLiteral(".nkshot-clip-*")},QDir::Files|QDir::Hidden).isEmpty();},3000));
+        }
+    }
+    void gifCapabilitiesIndependentOfMp4Encoders() {
+        const auto oldPath=qgetenv("PATH");const bool hadPath=qEnvironmentVariableIsSet("PATH");
+        const auto oldReal=qgetenv("NKSHOT_TEST_REAL_FFMPEG");const bool hadReal=qEnvironmentVariableIsSet("NKSHOT_TEST_REAL_FFMPEG");
+        const auto restore=qScopeGuard([&]{if(hadPath)qputenv("PATH",oldPath);else qunsetenv("PATH");if(hadReal)qputenv("NKSHOT_TEST_REAL_FFMPEG",oldReal);else qunsetenv("NKSHOT_TEST_REAL_FFMPEG");});
+        const auto bin=folder.filePath(QStringLiteral("gif-tools"));QVERIFY(QDir().mkpath(bin));QFile script(bin+QStringLiteral("/ffmpeg"));QVERIFY(script.open(QIODevice::WriteOnly));
+        script.write("#!/bin/sh\ncase \"$*\" in *-encoders*) printf ' V..... gif encoder\\n V..... png encoder\\n'; exit 0;; *-filters*) printf ' ... palettegen V->V\\n ... paletteuse VV->V\\n'; exit 0;; esac\nexec \"$NKSHOT_TEST_REAL_FFMPEG\" \"$@\"\n");script.close();QVERIFY(script.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
+        QByteArray path=bin.toUtf8();path.append(':');path.append(oldPath);qputenv("PATH",path);qputenv("NKSHOT_TEST_REAL_FFMPEG",ffmpeg.toUtf8());
+        VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY2(ready(job,source),qPrintable(job.error()));
+        const auto target=folder.filePath(QStringLiteral("gif-only-tools.gif"));job.exportClip(QUrl::fromLocalFile(target),1350,3150);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QVERIFY(QFile::exists(target));
+        job.setOutputFormat(QStringLiteral("mp4"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY(!job.ready());QVERIFY(job.error().contains(QStringLiteral("H.264")));
+        job.setOutputFormat(QStringLiteral("gif"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY2(job.ready(),qPrintable(job.error()));QVERIFY(job.error().isEmpty());
+    }
+    void gifByteBudget() {
+        const auto noisy=folder.filePath(QStringLiteral("noise.mp4"));
+        QProcess generate;generate.start(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),QStringLiteral("nullsrc=s=640x640:r=10:d=15,geq=lum='random(1)*255':cb=128:cr=128"),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-pix_fmt"),QStringLiteral("yuv420p"),QStringLiteral("-qp"),QStringLiteral("0"),QStringLiteral("-preset"),QStringLiteral("ultrafast"),QStringLiteral("-threads"),QStringLiteral("2"),noisy});QVERIFY(generate.waitForFinished(30000));QCOMPARE(generate.exitCode(),0);
+        VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY2(ready(job,noisy),qPrintable(job.error()));const auto target=folder.filePath(QStringLiteral("over-budget.gif"));job.exportClip(QUrl::fromLocalFile(target),0,15000);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},60000));QVERIFY2(!job.error().isEmpty(),"High-entropy 640px GIF must exceed the 20 MiB budget");QVERIFY(!QFile::exists(target));QVERIFY(job.outputUrl().isEmpty());
+        QVERIFY(QTest::qWaitFor([&]{return QDir(folder.path()).entryList({QStringLiteral(".nkshot-clip-*")},QDir::Files|QDir::Hidden).isEmpty();},3000));
     }
     void invalidRangesAndSourceAliases() {
         const auto original=hash(source);VideoClipJob job;QVERIFY(ready(job,source));

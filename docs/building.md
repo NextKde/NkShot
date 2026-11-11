@@ -110,7 +110,7 @@ plugin produces a visible playback failure, not a claim that a file was decoded.
 The isolated 049 environment added image-formats/libmng/libwebpdemux from signed
 Debian metadata, without upgrading host packages.
 
-## Optional local video clip export (072)
+## Optional local video clip export (072–073)
 
 Install your distribution's FFmpeg CLI package, including `ffmpeg`, `ffprobe`,
 H.264 `libx264` and AAC encoding, to enable local MP4 clip export. This is a runtime
@@ -120,3 +120,7 @@ clip export explains missing tools or unsupported encoders. The real
 `video_clip_test` requires them and fails clearly when unavailable rather than
 pretending that real media content was validated. The verified isolated toolchain uses
 Debian FFmpeg 9.0.2. See [clip scope and safety](video-clips.md).
+
+GIF export additionally requires FFmpeg’s GIF/PNG encoders and palettegen/paletteuse
+filters. Its capability checks are independent of MP4 H.264/AAC encoders. No new
+application-linked library or automatic installer is introduced.
