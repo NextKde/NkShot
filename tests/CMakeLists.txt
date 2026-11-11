@@ -67,3 +67,8 @@ target_link_libraries(kos_material_probe PRIVATE Qt::Quick Qt::GuiPrivate Kos::U
 ecm_add_test(VerticalStitcherTest.cpp ../src/Imaging/VerticalStitcher.cpp
     TEST_NAME vertical_stitcher_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(vertical_stitcher_test PROPERTIES TIMEOUT 20)
+
+# Reusable immutable image export transforms.
+ecm_add_test(ImageTransformsTest.cpp ../src/Imaging/ImageTransforms.cpp
+    TEST_NAME image_transforms_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(image_transforms_test PROPERTIES TIMEOUT 20)

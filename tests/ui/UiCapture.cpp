@@ -64,7 +64,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -221,6 +221,72 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                document->tool()->setType(AnnotationTool::RectangleTool);
+                document->beginItem({80, 80}); document->continueItem({220, 160}); document->finishItem();
+                const auto original = document->renderToImage();
+                const auto depth = document->undoStackDepth();
+                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                auto popup = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotResizePopup"));
+                auto openResize = [&] {
+                    if (!menu || !popup || !QMetaObject::invokeMethod(menu, "open")) return false;
+                    QTest::qWait(200);
+                    auto entry = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeImageAction"));
+                    if (!entry) return false;
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        entry->mapToScene(QPointF(entry->width()/2, entry->height()/2)).toPoint());
+                    return QTest::qWaitFor([&] { return popup->property("opened").toBool(); }, 1000);
+                };
+                if (!openResize()) { application.exit(140); return; }
+                viewer->grabWindow().save(destination + QStringLiteral(".dialog.png"));
+                QTest::keyClick(viewer, Qt::Key_Escape);
+                if (!QTest::qWaitFor([&] { return !popup->property("visible").toBool(); }, 1000)
+                    || !samePixels(document->renderToImage(), original) || document->undoStackDepth() != depth || !openResize()) {
+                    application.exit(141); return;
+                }
+                auto widthInput = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeWidth"));
+                auto create = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeCreate"));
+                auto field = widthInput ? widthInput->property("contentItem").value<QQuickItem *>() : nullptr;
+                if (!field || !create) { application.exit(142); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, field->mapToScene(QPointF(field->width()/2, field->height()/2)).toPoint());
+                QTest::keyClick(viewer, Qt::Key_A, Qt::ControlModifier);
+                for (char c : QByteArray("320")) QTest::keyClick(viewer, c);
+                QTest::keyClick(viewer, Qt::Key_Tab);
+                if (widthInput->property("value").toInt() != 320) { application.exit(143); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                    create->mapToScene(QPointF(create->width()/2, create->height()/2)).toPoint());
+                QPointer<PinnedImageWindow> preview;
+                if (!QTest::qWaitFor([&] {
+                    for (auto window : QGuiApplication::allWindows()) if (auto pin = qobject_cast<PinnedImageWindow *>(window)) preview = pin;
+                    return preview && !viewer->resizingImage();
+                }, 5000)) { application.exit(144); return; }
+                const auto expected = original.scaled(320, qMax(1, qRound(double(original.height()) * 320 / original.width())), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                if (!samePixels(preview->snapshot(), expected) || !samePixels(document->renderToImage(), original)
+                    || document->undoStackDepth() != depth) { application.exit(145); return; }
+                preview->resize(440, 340); QTest::qWait(200);
+                auto copy = visualItem(preview->contentItem(), QStringLiteral("nkshotPinCopy"));
+                auto save = visualItem(preview->contentItem(), QStringLiteral("nkshotPinSave"));
+                if (!copy || !save) { application.exit(146); return; }
+                QTest::mouseClick(preview, Qt::LeftButton, Qt::NoModifier, copy->mapToScene(QPointF(copy->width()/2, copy->height()/2)).toPoint());
+                if (!samePixels(QApplication::clipboard()->image(), expected)) { application.exit(147); return; }
+                QTest::mouseClick(preview, Qt::LeftButton, Qt::NoModifier, save->mapToScene(QPointF(save->width()/2, save->height()/2)).toPoint());
+                QTest::qWait(200);
+                QFileDialog *dialog = nullptr;
+                for (auto widget : QApplication::topLevelWidgets()) if (widget->objectName() == QStringLiteral("nkshotPinSaveDialog")) dialog = qobject_cast<QFileDialog *>(widget);
+                auto filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+                QTemporaryDir folder; const auto output = folder.filePath(QStringLiteral("resized.png"));
+                if (!filename || !folder.isValid()) { application.exit(148); return; }
+                filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, output);
+                if (!QTest::qWaitFor([&] { return dialog->selectedFiles() == QStringList{output}; }, 1000)
+                    || !QMetaObject::invokeMethod(dialog, "accept")
+                    || !QTest::qWaitFor([&] { return QFileInfo::exists(output); }, 2000)
+                    || !samePixels(QImage(output), expected)) { application.exit(149); return; }
+                QTest::qWait(200);
+                if (!preview->grabWindow().save(destination)) { application.exit(150); return; }
+                qInfo() << "NkShot resize actual menu/cancel/width entry/preview/copy/PNG save and source-history isolation passed";
+                application.exit(0); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK")) {
                 const auto path = qEnvironmentVariable("NKSHOT_TEST_PLAYBACK");

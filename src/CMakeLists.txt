@@ -35,6 +35,7 @@ target_sources(spectacle PRIVATE
     ExportManager.cpp
     Geometry.cpp
     OcrManager.cpp
+    Imaging/ImageTransforms.cpp
     Imaging/VerticalStitcher.cpp
     Gui/SoftwareVideoPreview.cpp
     Gui/SoftwareVideoPreview.h
@@ -198,6 +199,7 @@ qt_target_qml_sources(spectacle
     Gui/RecordingModeButtonsColumn.qml
     Gui/RecordingModeMenuButton.qml
     Gui/RecordingSettingsColumn.qml
+    Gui/ResizeImagePopup.qml
     Gui/RecordingView.qml
     Gui/RecordOptions.qml
     Gui/SaveAction.qml

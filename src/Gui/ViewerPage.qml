@@ -227,6 +227,14 @@ EmptyPage {
                         onTriggered: contextWindow.pinImage()
                     }
                     QQC.MenuItem {
+                        objectName: "nkshotResizeImageAction"
+                        text: contextWindow.resizingImage ? i18nc("@info", "Resizing…") : i18nc("@action", "Resize a copy…")
+                        icon.name: "transform-scale"
+                        icon.color: palette.buttonText
+                        enabled: !SpectacleCore.videoMode && !contextWindow.resizingImage
+                        onTriggered: { resizePopup.sourceSize = contextWindow.imageSnapshotSize(); resizePopup.open() }
+                    }
+                    QQC.MenuItem {
                         objectName: "nkshotCombineImagesAction"
                         text: contextWindow.combiningImages ? i18nc("@action", "Combining images…") : i18nc("@action", "Combine screenshots…")
                         icon.name: "view-preview"
@@ -554,6 +562,11 @@ EmptyPage {
 
             }
         }
+    }
+
+    ResizeImagePopup {
+        id: resizePopup
+        onCreateCopy: (pixelWidth) => contextWindow.resizeImageCopy(pixelWidth)
     }
 
     Shortcut {

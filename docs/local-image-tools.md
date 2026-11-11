@@ -54,3 +54,16 @@ Both leave source files and the current editor untouched, opening a separate
 preview for Copy or Save As. Limits remain 40 megapixels total input/output,
 8192 pixels wide and 32000 pixels tall. Stacking can retain duplicated content;
 use overlap matching instead when duplicates should be removed.
+
+### Resize a sharing copy
+
+More → Resize a copy accepts a physical pixel width and calculates proportional
+height. Create copy snapshots the current image including visible annotations,
+scales it off the UI thread and opens a separate preview for Copy/Save As.
+Original files, current editing pixels and undo history are not replaced. The
+result is a flattened raster copy, not a second editable annotation document.
+
+The pure ImageTransforms helper is independent of capture/UI. It preserves image
+alpha, color-space metadata and device-pixel ratio, rounds height to the nearest
+row and rejects output beyond 8192×32000 bounds or 40 megapixels. This is ordinary
+smooth scaling, not detail reconstruction or AI upscaling.

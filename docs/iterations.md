@@ -989,3 +989,28 @@ light and dark same-window scenarios pass. Reviewed recovered playback in
 [dark](screenshots/050-media-recovery-dark.png). These are actual test-pattern
 frames after recovery, not new interface designs. Desktop capture, audio, GPU,
 format rotation/HDR and performance acceptance remain open.
+
+## 051 — Resize an annotated sharing copy without destructive edits
+
+Add More → Resize a copy: enter physical pixel width, see proportional height,
+and create a separate preview for Copy/Save As. A small reusable ImageTransforms
+helper performs bounded smooth scaling; the actual annotated snapshot is captured
+on the GUI thread and scaled on a worker. The original document, source files
+and undo history are untouched. Shared Kos styling covers the modal, fields and
+primary/secondary actions. Errors report failure rather than producing a bogus
+preview; the busy flag prevents overlapping resize jobs.
+
+Build, CTest 6/6 and static checks 16/16 pass. New core tests verify dimensions,
+alpha, fractional DPR, color profile, output independence and invalid/size limits.
+Actual UI tests click More/Resize, cancel via Escape and reopen, type 320 in the
+width field, create the preview, copy its exact pixels and save a PNG through a
+real widget dialog. Output matches smooth scaling of the annotated snapshot;
+original rendered pixels and undo depth remain unchanged. Light/dark and 640×420
+scenarios pass. Reviewed [light dialog](screenshots/051-resize-dialog-light.png),
+[dark dialog](screenshots/051-resize-dialog-dark.png),
+[compact dialog](screenshots/051-resize-dialog-compact.png) and
+[saved output](screenshots/051-resize-light.png).
+
+This produces an immutable flattened sharing copy, not a new editable annotation
+document. Native portals, overwrite confirmation, large-image memory pressure
+and GPU presentation remain unverified. Enlargement cannot recover lost detail.

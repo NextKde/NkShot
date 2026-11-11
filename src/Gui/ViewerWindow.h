@@ -21,6 +21,7 @@ class ViewerWindowPrivate;
 class ViewerWindow : public SpectacleWindow
 {
     Q_OBJECT
+    Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
 public:
     enum Mode {
@@ -36,10 +37,14 @@ public:
 
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
+    Q_INVOKABLE QSize imageSnapshotSize() const;
+    Q_INVOKABLE void resizeImageCopy(int width);
+    bool resizingImage() const { return m_resizingImage; }
     Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);
     bool combiningImages() const { return m_combiningImages; }
 Q_SIGNALS:
     void combiningImagesChanged();
+    void resizingImageChanged();
 
 protected:
     bool event(QEvent *event) override;
@@ -57,6 +62,7 @@ private:
 
     QPointer<QObject> m_combineDialog;
     bool m_combiningImages = false;
+    bool m_resizingImage = false;
     bool m_pixmapExists = false;
     QPalette::ColorRole m_backgroundColorRole;
     Qt::WindowStates m_oldWindowStates;

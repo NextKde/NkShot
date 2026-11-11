@@ -8,6 +8,7 @@
 #include "ViewerWindow.h"
 #include "PinnedImageWindow.h"
 #include "OcrTextWindow.h"
+#include "Imaging/ImageTransforms.h"
 #include "OcrManager.h"
 #include "Imaging/VerticalStitcher.h"
 #include <QFileDialog>
@@ -100,6 +101,41 @@ QQuickWindow *ViewerWindow::pinImage()
     window->setPosition(position() + QPoint(40, 40));
     window->show();
     return window;
+}
+
+QSize ViewerWindow::imageSnapshotSize() const
+{
+    return SpectacleCore::instance()->annotationDocument()->renderToImage().size();
+}
+void ViewerWindow::resizeImageCopy(int width)
+{
+    if (m_resizingImage || SpectacleCore::instance()->videoMode()) return;
+    const auto snapshot = SpectacleCore::instance()->annotationDocument()->renderToImage();
+    m_resizingImage = true;
+    Q_EMIT resizingImageChanged();
+    auto watcher = new QFutureWatcher<QImage>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
+        const auto image = watcher->result();
+        watcher->deleteLater();
+        m_resizingImage = false;
+        Q_EMIT resizingImageChanged();
+        if (image.isNull()) {
+            InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+                i18nc("@info", "The resized copy could not be created. Choose a smaller valid width. Your original and edits are unchanged."));
+            return;
+        }
+        auto preview = new PinnedImageWindow(image, engine());
+        if (preview->status() != QQuickView::Ready) {
+            delete preview;
+            InlineMessageModel::instance()->push(InlineMessageModel::Error,
+                i18nc("@info", "The resized preview could not be opened. Your original and edits are unchanged."));
+            return;
+        }
+        preview->setTitle(i18nc("@title:window", "Resized Copy — NkShot"));
+        preview->setScreen(screen());
+        preview->show();
+    });
+    watcher->setFuture(QtConcurrent::run([snapshot, width] { return NkShot::Imaging::resizedToWidth(snapshot, width); }));
 }
 
 void ViewerWindow::combineImages(bool stackWithoutOverlap)

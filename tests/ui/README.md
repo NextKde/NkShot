@@ -197,3 +197,10 @@ QTemporaryDir; only that private copy is replaced with valid bytes before an
 actual Retry click. Assertions cover stale frame/error clearing, format isolation,
 animated frames and recovered video frames, and untouched original inputs.
 Transitions assign the view source property; they do not simulate desktop capture.
+
+`NKSHOT_TEST_RESIZE=1` seeds an annotation and drives More/Resize, Escape cancel,
+reopen, typed width, Create copy, clipboard and PNG Save As. It checks exact scaled
+pixels plus untouched source document/undo depth. The dialog is captured alongside
+the output with `.dialog.png`; run DARK and UI_SIZE=640x420 variants. Widget file
+dialogs are used, not native portals. Core image_transforms_test covers alpha,
+DPR/profile, ownership, invalid widths and pixel/height caps.
