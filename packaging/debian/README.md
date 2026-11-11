@@ -53,7 +53,7 @@ package database. Build from the exact published source, not an uncommitted tree
    For the exact 080 source above, use `0.1.0~preview080`. For a later verified
    source revision, choose its own release version and record the actual commit;
    do not reuse `preview080`. Epochs and path/control characters are rejected.
-   The verified 084 preview is documented below; no 085 package is claimed.
+   The verified 084 and 085 previews are documented below; no 086 package is claimed.
 
 Packaging stages CMake install manifests afresh. It does **not** copy the entire
 live prefix, a Python virtual environment, translator models, or UI test harness.
@@ -66,7 +66,7 @@ The 085 packaging source explicitly declares `ffmpeg (>= 7:9.0.2-4)` in Depends:
 Debian's tested official package supplies both `/usr/bin/ffmpeg` and
 `/usr/bin/ffprobe`. Clip/GIF export and MP4 opening launch these via QProcess,
 so ELF dependency scanning alone cannot discover this requirement. This is a
-source-level dependency fix, not a claim that an 085 package has been built.
+dependency fix included in the verified 085 preview documented below.
 
 For the isolated extracted-deb toolchain only, `NKSHOT_PACKAGE_MAP` can point to a
 JSON map of installed file paths to `[package,version]`, derived from the actual
@@ -74,21 +74,22 @@ official .deb archives. This is not a substitute for validating package origins.
 
 ## Install / remove
 
-For the current **084** preview artifact, on the matching test system:
+For the current **085** preview artifact, on the matching test system:
 
 ```
 sha256sum -c SHA256SUMS
-sudo apt install ./nkshot_0.1.0~preview084_amd64.deb ffmpeg
+sudo apt install ./nkshot_0.1.0~preview085_amd64.deb
 nkshot
 # Removal leaves user captures/settings untouched:
 sudo apt remove nkshot
 ```
 
 The already delivered 084 package omitted the explicit FFmpeg CLI dependency.
-Install the official `ffmpeg` package alongside it (as above) for clip/GIF features;
+If using that older artifact, install the official `ffmpeg` package alongside it
+for clip/GIF features;
 its shared-library dependency closure alone does not provide those commands.
-The 084 artifact and checksum are unchanged. The 085 source fixes this omission,
-but there is no newly built 085 package yet.
+The 084 artifact and checksum are unchanged. The 085 package fixes this omission
+with an explicit dependency; apt should resolve the CLI package automatically.
 
 Do not force dependencies or install this package on an older Plasma system.
 `apt` resolving dependencies is a prerequisite, not proof of capture correctness.
@@ -156,4 +157,29 @@ synthetic production-source encoder/muxer fixture is separate evidence, not a
 packaged end-to-end desktop test. Static resumed video may retain the previous
 picture until a fresh eligible timestamped frame arrives. The old 080 package
 remains historical evidence and does not contain the timeline-pause capability.
-No 085 package has been built or validated by this report.
+The later 085 package verification is recorded separately below.
+
+## Verified 085 packaging preview
+
+Source commit: `9857bd8cded84a80fc79ba57612f198b3a6c6eb0`.
+Package: `nkshot_0.1.0~preview085_amd64.deb` (2,692,700 bytes).
+SHA256: `96cfdd94099aad269ef25ef244c0e745d617e19984de2f0d8ffbfb6adeb2a342`.
+
+All 853 published source blobs matched before and after the isolated Release build.
+Tests and the UI capture harness were disabled. The ordered KPipeWire patches and
+frozen private dependencies were verified without modifying the shared prefix.
+Complete extraction, post-extraction ELF dependency closure, strong pause capability
+export/reference, and the probe using the actual packaged library all passed.
+The launcher returned `nkshot 6.8.3` and `--help` succeeded; the Debian package
+version is `0.1.0~preview085`, distinct from that inherited application version.
+
+The archive declares `ffmpeg (>= 7:9.0.2-4)` in Depends. The official Debian archive
+and package mapping confirm that it supplies both `ffmpeg` and `ffprobe`; both
+version commands ran successfully in the matching toolchain. This closes the 084
+CLI dependency omission. Registration remains independent of system Spectacle.
+
+No apt installation/removal transaction, real KDE startup/capture, PipeWire-device
+recording, GPU acceptance, or interactive local-file Open flow through this
+production package was verified. Source-level UI tests do not establish package
+end-to-end acceptance. The 084 native pause/resume limitations above still apply.
+This remains a Debian sid amd64 preview; no 086 package is claimed.

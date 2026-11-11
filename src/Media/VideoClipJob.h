@@ -43,6 +43,7 @@ private:
     void completed(Stage stage);
     void launchGifPass(bool palette);
     QString gifFilter() const;
+    QString webmVideoFilter(int fps) const;
     void fail(const QString &message);
     void stop();
     void cleanup();
@@ -56,6 +57,7 @@ private:
     QTimer m_timeout;
     quint64 m_epoch = 0;
     Stage m_stage = None;
+    bool m_webm = false;
     bool m_busy = false, m_ready = false, m_audio = false, m_mediaValid = false;
     qint64 m_duration = 0, m_sourceSize = 0, m_clipDuration = 0, m_start = 0, m_end = 0;
     QDateTime m_sourceModified;

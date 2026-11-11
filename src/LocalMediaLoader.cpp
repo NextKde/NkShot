@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LocalMediaLoader.h"
+#include "Media/LocalVideoInput.h"
 #include <KLocalizedString>
 #include <QBuffer>
 #include <QFile>
@@ -52,10 +53,6 @@ bool animatedContainer(const QByteArray &bytes) {
     }
     return false;
 }
-QStringList localMovArguments() {
-    return {QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),
-        QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0")};
-}
 struct ImageWork {
     QImage image;
     QString error;
@@ -103,21 +100,26 @@ bool LocalMediaLoader::unchanged() const {
 }
 void LocalMediaLoader::load(const QUrl &url) {
     stop(); m_error.clear(); m_source=QUrl(); m_output.clear(); m_diagnostics.clear();
-    m_durationMs=0; m_audio=false; m_dimensions={}; m_fps=0;
+    m_durationMs=0; m_audio=false; m_dimensions={}; m_fps=0; m_webm=false; m_startSeconds=0;
     if(!url.isValid() || !url.isLocalFile() || !url.host().isEmpty() || url.hasQuery() || url.hasFragment()
         || !QFileInfo(url.toLocalFile()).isAbsolute() || url.toLocalFile().contains(QChar::Null)) {
-        fail(i18nc("@info local media opening error", "Choose a local PNG, JPEG, static WebP or H.264 MP4 file.")); return;
+        fail(i18nc("@info local media opening error", "Choose a local PNG, JPEG, static WebP, H.264 MP4 or VP9 WebM file.")); return;
     }
     // Reject special files before any read. Canonicalization allows a selected
     // symlink, but subsequent identity checks refer to its resolved regular file.
     const auto path=QFileInfo(url.toLocalFile()).canonicalFilePath();
     struct stat st{};
     if(path.isEmpty() || !regular(path,st) || st.st_size>VideoBytes) {
-        fail(i18nc("@info local media opening error", "Choose a readable regular file, up to 64 MiB for images or 256 MiB for MP4.")); return;
+        fail(i18nc("@info local media opening error", "Choose a readable regular file, up to 64 MiB for images or 256 MiB for video.")); return;
     }
     m_source=QUrl::fromLocalFile(path); m_device=st.st_dev; m_inode=st.st_ino;
     m_size=st.st_size; m_modifiedNs=modifiedNs(st);
-    const bool video=QFileInfo(path).suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive)==0;
+    const auto suffix=QFileInfo(path).suffix().toLower();
+    m_webm=suffix==QStringLiteral("webm");
+    const bool video=m_webm || suffix==QStringLiteral("mp4");
+    if(m_webm && !LocalVideoInput::hasWebMDocType(path)) {
+        fail(i18nc("@info local media opening error", "Choose a genuine WebM file. Renamed Matroska files are not supported.")); return;
+    }
     if(!video && st.st_size>ImageBytes) { fail(i18nc("@info local media opening error", "Images must be 64 MiB or smaller.")); return; }
     m_busy=true;
     const auto epoch=m_epoch;
@@ -128,9 +130,9 @@ void LocalMediaLoader::load(const QUrl &url) {
     m_ffmpeg=QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
     const auto probe=QStandardPaths::findExecutable(QStringLiteral("ffprobe"));
     if(m_ffmpeg.isEmpty() || probe.isEmpty()) {
-        fail(i18nc("@info local media opening error", "Opening MP4 needs FFmpeg and ffprobe from your system package manager. No software was installed.")); return;
+        fail(i18nc("@info local media opening error", "Opening video needs FFmpeg and ffprobe from your system package manager. No software was installed.")); return;
     }
-    QStringList args{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-max_alloc"),QStringLiteral("134217728"),QStringLiteral("-threads"),QStringLiteral("2")}; args+=localMovArguments();
+    QStringList args{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-max_alloc"),QStringLiteral("134217728"),QStringLiteral("-threads"),QStringLiteral("2")}; args+=LocalVideoInput::demuxArguments(m_webm ? LocalVideoInput::Container::WebM : LocalVideoInput::Container::Mp4);
     args << QStringLiteral("-show_streams") << QStringLiteral("-show_format") << QStringLiteral("-of") << QStringLiteral("json") << path;
     launch(probe,args,Stage::Probe);
 }
@@ -213,7 +215,7 @@ void LocalMediaLoader::launch(const QString &program,const QStringList &argument
         m_diagnostics+=process->readAllStandardError();
         m_timeout.stop(); m_process=nullptr; process->deleteLater();
         if(code!=0 || status!=QProcess::NormalExit || m_output.size()>1024*1024) {
-            fail(i18nc("@info local media opening error", "The MP4 could not be fully decoded. Choose another local H.264 recording.")); return;
+            fail(i18nc("@info local media opening error", "The video could not be fully decoded. Choose another local H.264 MP4 or VP9 WebM recording.")); return;
         }
         completed(stage);
     });
@@ -228,27 +230,49 @@ void LocalMediaLoader::completed(Stage stage) {
         bool durationOk=false;
         const double duration=format.value(QStringLiteral("duration")).toString().toDouble(&durationOk);
         bool valid=durationOk && std::isfinite(duration) && duration>0 && duration<=600
-            && format.value(QStringLiteral("format_name")).toString().split(u',').contains(QStringLiteral("mp4"));
-        const auto start=format.value(QStringLiteral("start_time")).toString().toDouble();
-        valid=valid && std::isfinite(start) && std::abs(start)<=.001;
+            && format.value(QStringLiteral("format_name")).toString().split(u',').contains(m_webm ? QStringLiteral("webm") : QStringLiteral("mp4"));
+        bool startOk=false;
+        const auto start=format.value(QStringLiteral("start_time")).toString().toDouble(&startOk);
+        m_startSeconds=start;
+        valid=valid && startOk && std::isfinite(start)
+            && (m_webm ? start>=-.080 && start<=.001 : std::abs(start)<=.001);
         int video=0,audio=0;
         for(const auto &item:root.value(QStringLiteral("streams")).toArray()) {
             const auto stream=item.toObject();
             const auto type=stream.value(QStringLiteral("codec_type")).toString();
-            const double offset=stream.value(QStringLiteral("start_time")).toString().toDouble();
-            valid=valid && std::isfinite(offset) && std::abs(offset)<=.001;
+            bool offsetOk=false;
+            const double offset=stream.value(QStringLiteral("start_time")).toString().toDouble(&offsetOk);
+            valid=valid && offsetOk && std::isfinite(offset);
+            if(!m_webm) valid=valid && std::abs(offset)<=.001;
             if(type==QStringLiteral("video")) {
                 ++video;
+                if(m_webm) valid=valid && offset>=-.001 && offset<=.080;
                 m_dimensions={stream.value(QStringLiteral("width")).toInt(),stream.value(QStringLiteral("height")).toInt()};
                 const auto pixel=stream.value(QStringLiteral("pix_fmt")).toString();
                 const auto rate=stream.value(QStringLiteral("avg_frame_rate")).toString().split(u'/');
                 m_fps=rate.size()==2 && rate[1].toDouble()>0 ? rate[0].toDouble()/rate[1].toDouble() : 0;
-                valid=valid && stream.value(QStringLiteral("codec_name")).toString()==QStringLiteral("h264")
-                    && (pixel==QStringLiteral("yuv420p") || pixel==QStringLiteral("yuvj420p"))
+                bool webmRatesValid=true;
+                if(m_webm) {
+                    // KPipeWire emits sparse/VFR WebM. Unknown 0/0 is not a
+                    // malformed file and nominal fps does not imply a CFR count.
+                    for(const auto &key:{QStringLiteral("avg_frame_rate"),QStringLiteral("r_frame_rate")}) {
+                        const auto text=stream.value(key).toString();
+                        if(text.isEmpty() || text==QStringLiteral("0/0")) continue;
+                        const auto parts=text.split(u'/');
+                        bool numeratorOk=false,denominatorOk=false;
+                        const double numerator=parts.value(0).toDouble(&numeratorOk);
+                        const double denominator=parts.value(1).toDouble(&denominatorOk);
+                        if(parts.size()!=2 || !numeratorOk || !denominatorOk || !std::isfinite(numerator)
+                            || !std::isfinite(denominator) || numerator<0 || denominator<=0 || numerator/denominator>60)
+                            webmRatesValid=false;
+                    }
+                }
+                valid=valid && stream.value(QStringLiteral("codec_name")).toString()==(m_webm ? QStringLiteral("vp9") : QStringLiteral("h264"))
+                    && (pixel==QStringLiteral("yuv420p") || (!m_webm && pixel==QStringLiteral("yuvj420p")))
                     && m_dimensions.width()>=2 && m_dimensions.height()>=2 && m_dimensions.width()<=4096 && m_dimensions.height()<=4096
                     && m_dimensions.width()%2==0 && m_dimensions.height()%2==0
                     && qint64(m_dimensions.width())*m_dimensions.height()<=8294400
-                    && std::isfinite(m_fps) && m_fps>0 && m_fps<=60
+                    && (m_webm ? webmRatesValid : std::isfinite(m_fps) && m_fps>0 && m_fps<=60)
                     && stream.value(QStringLiteral("disposition")).toObject().value(QStringLiteral("attached_pic")).toInt()==0;
                 const auto transfer=stream.value(QStringLiteral("color_transfer")).toString();
                 valid=valid && transfer!=QStringLiteral("smpte2084") && transfer!=QStringLiteral("arib-std-b67");
@@ -256,22 +280,29 @@ void LocalMediaLoader::completed(Stage stage) {
                     if(side.toObject().value(QStringLiteral("rotation")).toDouble()!=0) valid=false;
             } else if(type==QStringLiteral("audio")) {
                 ++audio;
+                if(m_webm) valid=valid && offset>=-.080 && offset<=.001;
                 const int channels=stream.value(QStringLiteral("channels")).toInt();
                 const int rate=stream.value(QStringLiteral("sample_rate")).toString().toInt();
-                valid=valid && stream.value(QStringLiteral("codec_name")).toString()==QStringLiteral("aac")
-                    && channels>=1 && channels<=2 && rate>=8000 && rate<=192000;
+                valid=valid && stream.value(QStringLiteral("codec_name")).toString()==(m_webm ? QStringLiteral("opus") : QStringLiteral("aac"))
+                    && channels>=1 && channels<=2 && (m_webm ? rate==48000 : rate>=8000 && rate<=192000);
+                if(m_webm) {
+                    const int padding=stream.value(QStringLiteral("initial_padding")).toInt(0);
+                    valid=valid && padding>=0 && padding<=3840;
+                }
             } else valid=false;
         }
         if(!valid || video!=1 || audio>1) {
-            fail(i18nc("@info local media opening error", "Choose an SDR H.264 MP4 with one video track and optional mono/stereo AAC audio, up to 10 minutes, 60 fps and 4K. Rotated, HDR and extra-track files are not supported yet.")); return;
+            fail(i18nc("@info local media opening error", "Choose an SDR H.264 MP4 with optional AAC audio, or a genuine VP9 WebM with optional Opus audio. Both need one video track and at most one mono/stereo audio track, up to 10 minutes, 60 fps and 4K. Rotated, HDR and extra-track files are not supported yet.")); return;
         }
+        // FFmpeg normalizes negative Opus priming starts when decoding without
+        // copyts. Account for that bounded shift; it is not a zero-start MP4.
         m_audio=audio==1; m_durationMs=qRound64(duration*1000);
         QStringList args{QStringLiteral("-hide_banner"),QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-max_alloc"),QStringLiteral("134217728")};
-        args+=localMovArguments();
+        args+=LocalVideoInput::demuxArguments(m_webm ? LocalVideoInput::Container::WebM : LocalVideoInput::Container::Mp4);
         args<<QStringLiteral("-threads")<<QStringLiteral("2")<<QStringLiteral("-filter_threads")<<QStringLiteral("2")
             <<QStringLiteral("-i")<<m_source.toLocalFile()<<QStringLiteral("-map")<<QStringLiteral("0:v:0")
             <<QStringLiteral("-map")<<QStringLiteral("0:a:0?")<<QStringLiteral("-progress")<<QStringLiteral("pipe:1")
-            <<QStringLiteral("-nostats")<<QStringLiteral("-f")<<QStringLiteral("null")<<QStringLiteral("-");
+            <<QStringLiteral("-nostats")<<QStringLiteral("-fps_mode")<<QStringLiteral("passthrough")<<QStringLiteral("-f")<<QStringLiteral("null")<<QStringLiteral("-");
         launch(m_ffmpeg,args,Stage::Decode); return;
     }
     qint64 frames=0,us=-1;
@@ -279,8 +310,13 @@ void LocalMediaLoader::completed(Stage stage) {
         if(line.startsWith("frame=")) frames=line.mid(6).trimmed().toLongLong();
         if(line.startsWith("out_time_us=")) us=line.mid(12).trimmed().toLongLong();
     }
-    if(frames<1 || frames>36001 || us<0 || std::abs(double(us)/1000-m_durationMs)>qMax(150.,2000./m_fps)) {
-        fail(i18nc("@info local media opening error", "The decoded recording did not match its duration. Choose another MP4.")); return;
+    const double decodedMs=double(us)/1000;
+    const double expectedMs=m_durationMs-(m_webm ? m_startSeconds*1000 : 0);
+    const bool timingValid=m_webm
+        ? decodedMs<=expectedMs+150 && (!m_audio || std::abs(decodedMs-expectedMs)<=150)
+        : std::abs(decodedMs-expectedMs)<=qMax(150.,2000./m_fps);
+    if(frames<1 || frames>36001 || us<0 || !timingValid) {
+        fail(i18nc("@info local media opening error", "The decoded recording did not match its duration. Choose another MP4 or WebM.")); return;
     }
     m_busy=false; m_validated=true;
     const auto epoch=m_epoch; const auto source=m_source; const auto size=m_dimensions;

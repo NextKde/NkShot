@@ -80,6 +80,41 @@ private Q_SLOTS:
         const auto rms=[&](double from,double to){double sum=0;int n=0;for(int i=int(from*48000);i<int(to*48000)&&4*i+4<=pcm.size();++i){float v;std::memcpy(&v,pcm.constData()+4*i,4);sum+=double(v)*v;++n;}return n?std::sqrt(sum/n):0.;};
         QVERIFY(rms(.68,.82)>.15);QVERIFY(rms(.1,.5)<.02);QVERIFY(rms(1.,1.4)<.02);
     }
+    void webmSparseHeldFramesAndOpus_data() {
+        QTest::addColumn<double>("audioOffset");
+        QTest::newRow("normal")<<0.;
+        QTest::newRow("negative-opus")<<-.04;
+    }
+    void webmSparseHeldFramesAndOpus() {
+        QFETCH(double,audioOffset);
+        const QString label=QString::fromLatin1(QTest::currentDataTag());
+        const auto webm=folder.filePath(label+QStringLiteral(" sparse ' 中文.webm"));
+        QProcess encode;
+        encode.start(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-i"),source,
+            QStringLiteral("-vf"),QStringLiteral("select='eq(n,0)+eq(n,60)+eq(n,120)'"),QStringLiteral("-fps_mode"),QStringLiteral("vfr"),
+            QStringLiteral("-c:v"),QStringLiteral("libvpx-vp9"),QStringLiteral("-deadline"),QStringLiteral("realtime"),QStringLiteral("-cpu-used"),QStringLiteral("8"),
+            QStringLiteral("-g"),QStringLiteral("300"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-c:a"),QStringLiteral("libopus"),QStringLiteral("-af"),QStringLiteral("asetpts=PTS+%1/TB").arg(audioOffset),QStringLiteral("-avoid_negative_ts"),QStringLiteral("disabled"),webm});
+        QVERIFY(encode.waitForFinished(30000));QVERIFY2(encode.exitCode()==0,encode.readAllStandardError().constData());
+        const auto original=hash(webm);VideoClipJob job;QVERIFY2(ready(job,webm),qPrintable(job.error()));QVERIFY(job.hasAudio());
+        const auto target=folder.filePath(label+QStringLiteral("-sparse-clip.mp4"));job.exportClip(QUrl::fromLocalFile(target),1350,3150);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        const auto frames=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-xerror"),QStringLiteral("-i"),target,QStringLiteral("-an"),QStringLiteral("-pix_fmt"),QStringLiteral("yuv420p"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        const int bytes=320*180*3/2,count=frames.size()/bytes;QCOMPARE(count,54);
+        QVERIFY(qAbs(int(uchar(frames.at(1000)))-16)<=4); // hold the frame before the requested start
+        QVERIFY(qAbs(int(uchar(frames.at((count-1)*bytes+1000)))-196)<=4);
+        const auto pcm=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),target,QStringLiteral("-vn"),QStringLiteral("-ac"),QStringLiteral("1"),QStringLiteral("-ar"),QStringLiteral("48000"),QStringLiteral("-f"),QStringLiteral("f32le"),QStringLiteral("pipe:1")});
+        const auto rms=[&](double from,double to){double sum=0;int n=0;for(int i=int(from*48000);i<int(to*48000)&&4*i+4<=pcm.size();++i){float v;std::memcpy(&v,pcm.constData()+4*i,4);sum+=double(v)*v;++n;}return n?std::sqrt(sum/n):0.;};
+        int first=-1;for(int i=0;i*4+4<=pcm.size();++i){float v;std::memcpy(&v,pcm.constData()+i*4,4);if(std::abs(v)>.08){first=i;break;}}
+        QVERIFY(first>=0);QVERIFY(qAbs(first/48000.-(.65+audioOffset))<.025);
+        QVERIFY(rms(.68,.78)>.15);QVERIFY(rms(.1,.5)<.02);QVERIFY(rms(1.,1.4)<.02);
+        job.setOutputFormat(QStringLiteral("gif"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());
+        const auto gif=folder.filePath(label+QStringLiteral("-sparse-clip.gif"));job.exportClip(QUrl::fromLocalFile(gif),1350,3150);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        QFile f(gif);QVERIFY(f.open(QIODevice::ReadOnly));const auto detail=gifDetails(f.readAll());QVERIFY(detail.valid&&detail.infinite);QCOMPARE(detail.frames,18);
+        const auto gifFrames=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-ignore_loop"),QStringLiteral("1"),QStringLiteral("-i"),gif,QStringLiteral("-pix_fmt"),QStringLiteral("gray"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        QVERIFY(gifFrames.size()>=320*180*18);QVERIFY(uchar(gifFrames.at(1000))<10);QVERIFY(uchar(gifFrames.at(17*320*180+1000))>190);
+        QCOMPARE(hash(webm),original);
+    }
     void silentShortClip() {
         VideoClipJob job;QVERIFY2(ready(job,silent),qPrintable(job.error()));QVERIFY(!job.hasAudio());
         const auto target=folder.filePath(QStringLiteral("short.mp4"));job.exportClip(QUrl::fromLocalFile(target),1000,1200);

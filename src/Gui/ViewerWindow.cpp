@@ -340,9 +340,9 @@ void ViewerWindow::openMedia()
     dialog->setAcceptMode(QFileDialog::AcceptOpen);
     dialog->setSupportedSchemes({QStringLiteral("file")});
     dialog->setNameFilters({
-        i18nc("@item:inlistbox", "Supported images and short recordings (*.png *.jpg *.jpeg *.webp *.mp4)"),
+        i18nc("@item:inlistbox", "Supported images and short recordings (*.png *.jpg *.jpeg *.webp *.mp4 *.webm)"),
         i18nc("@item:inlistbox", "Images up to 40 megapixels (*.png *.jpg *.jpeg *.webp)"),
-        i18nc("@item:inlistbox", "H.264 MP4 up to 10 minutes / 256 MiB (*.mp4)")});
+        i18nc("@item:inlistbox", "H.264 MP4 / VP9 WebM up to 10 minutes / 256 MiB (*.mp4 *.webm)")});
     dialog->setWindowModality(Qt::ApplicationModal);
     connect(this, &QObject::destroyed, dialog, &QObject::deleteLater);
     connect(dialog, &QFileDialog::finished, this, [this, dialog](int result) {

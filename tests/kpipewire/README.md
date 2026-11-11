@@ -79,3 +79,12 @@ An initial threaded fixture used burst input and blocked the first output packet
 it failed before establishing its gate and was not accepted. The final fixture
 uses normal frame cadence and only gates the final packet, without changing
 production queue handling or weakening frame-count assertions.
+
+## 086 production-encoded WebM fixture
+
+`timeline_pause_test nativeSparseWebmArtifact` runs only the VP9/Opus fixture.
+It feeds synthetic 64×48 RGB frames at 0/2/4 seconds and six seconds of synthetic
+audio through production producer/encoder/muxer code, preserving
+`/logs/086-native-encoded.webm` for the actual Open and clip UI checks. The internal
+filename is historical test nomenclature, not a claim of native PipeWire source
+or device capture. Vendor source and installed libraries are not changed.

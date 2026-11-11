@@ -4,6 +4,7 @@
 #include <QtTest>
 #include <QProcess>
 #include <QTemporaryDir>
+#include <QScopeGuard>
 #include <cmath>
 #include "pipewirerecord_p.h"
 #include "pipewireaudiosourcestream_p.h"
@@ -19,8 +20,9 @@ public:
     mutable Clock::time_point now = Clock::time_point(100s);
     std::chrono::nanoseconds readStep = 0ns;
     bool manualPump = true;
-    explicit FixtureProducer(const QString &path, AudioSources sources = AudioSource::SystemAudio)
-        : PipeWireRecordProduce(PipeWireBaseEncodedStream::H264Main, 0, quint64(-1), 0, {10,1}, path, sources) {}
+    explicit FixtureProducer(const QString &path, AudioSources sources = AudioSource::SystemAudio,
+                             PipeWireBaseEncodedStream::Encoder encoder = PipeWireBaseEncodedStream::H264Main)
+        : PipeWireRecordProduce(encoder, 0, quint64(-1), 0, {10,1}, path, sources) {}
     Clock::time_point monotonicNow() const override { const auto result=now; now+=readStep; return result; }
     void at(std::chrono::nanoseconds t) { now = Clock::time_point(100s + t); }
     bool open() {
@@ -150,6 +152,56 @@ private Q_SLOTS:
         QVERIFY(avcodec_find_encoder_by_name("libx264"));
         QVERIFY(avcodec_find_encoder_by_name("aac"));
         qputenv("KPIPEWIRE_FORCE_ENCODER","libx264");
+    }
+    void nativeSparseWebmArtifact() {
+        QVERIFY(avcodec_find_encoder_by_name("libvpx-vp9"));
+        QVERIFY(avcodec_find_encoder_by_name("libopus"));
+        const auto previous=qgetenv("KPIPEWIRE_FORCE_ENCODER");
+        qputenv("KPIPEWIRE_FORCE_ENCODER","libvpx-vp9");
+        const auto restore=qScopeGuard([&]{qputenv("KPIPEWIRE_FORCE_ENCODER",previous);});
+        const auto path=qEnvironmentVariable("NKSHOT_WEBM_ARTIFACT",QStringLiteral("/logs/086-native-encoded.webm"));
+        QVERIFY(QDir().mkpath(QFileInfo(path).absolutePath()));
+        FixtureProducer producer(path,AudioSource::SystemAudio,PipeWireBaseEncodedStream::VP9);
+        producer.setEncodingPreference(PipeWireBaseEncodedStream::Speed);
+        QVERIFY(producer.open());
+        for(int tick=0;tick<60;++tick) {
+            const auto time=std::chrono::milliseconds(tick*100);
+            producer.at(time+100ms);
+            if(tick==0 || tick==20 || tick==40)
+                producer.video(time,tick==0 ? Qt::red : tick==20 ? Qt::green : Qt::blue);
+            const bool pulse=(tick>=20 && tick<22) || (tick>=40 && tick<42);
+            producer.audio(time,4800,pulse ? 440 : 0);
+        }
+        producer.close();
+        // These are the actual muxer's three sparse frames, not a CLI reencode.
+        const auto pixels=decode(path,true);
+        QCOMPARE(pixels.size(),3*64*48*3);
+        const auto audio=decode(path,false);
+        QVERIFY(std::abs(double(audio.size())/(4*48000)-6.)<.05);
+        const auto rms=[&](double begin,double end) {
+            const int first=int(begin*48000),last=int(end*48000);
+            if(audio.size()<last*4) return 0.;
+            double energy=0;
+            for(int sample=first;sample<last;++sample) {
+                float value; memcpy(&value,audio.constData()+sample*4,4);
+                energy+=double(value)*value;
+            }
+            return std::sqrt(energy/(last-first));
+        };
+        QVERIFY(rms(2.03,2.15)>.1); QVERIFY(rms(4.03,4.15)>.1);
+        QVERIFY(rms(1.,1.8)<.005); QVERIFY(rms(3.,3.8)<.005);
+        QProcess probe;
+        probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-select_streams"),
+            QStringLiteral("v:0"),QStringLiteral("-show_frames"),QStringLiteral("-show_entries"),
+            QStringLiteral("frame=best_effort_timestamp_time"),QStringLiteral("-of"),QStringLiteral("json"),path});
+        QVERIFY(probe.waitForFinished(30000)); QCOMPARE(probe.exitCode(),0);
+        const auto frames=QJsonDocument::fromJson(probe.readAllStandardOutput()).object()[QStringLiteral("frames")].toArray();
+        QCOMPARE(frames.size(),3);
+        for(int index=0;index<3;++index) {
+            const double pts=frames[index].toObject()[QStringLiteral("best_effort_timestamp_time")].toString().toDouble();
+            QVERIFY(std::abs(pts-index*2.)<.01);
+        }
+        qInfo()<<"Production VP9/Opus sparse fixture retained:"<<path;
     }
     void actualBaseAcknowledgementAndStop() {
         ControlStream stream;

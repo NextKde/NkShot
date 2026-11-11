@@ -17,6 +17,7 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFile>
+#include <QFileInfo>
 #include <QDateTime>
 #include <QLineEdit>
 #include <QLineF>
@@ -336,7 +337,8 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             return fail(QStringLiteral("Actual image format open failed: ")+sources[i]);
     }
     if(!capture(QStringLiteral(".image.png")))return fail(QStringLiteral("Image screenshot failed"));
-    if(!qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")&&!qEnvironmentVariableIsSet("NKSHOT_TEST_DARK")) {
+    if(!qEnvironmentVariableIsSet("NKSHOT_TEST_SKIP_LONG_IMAGE")
+        &&!qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")&&!qEnvironmentVariableIsSet("NKSHOT_TEST_DARK")) {
         QImage longPage(1200,16000,QImage::Format_RGB32);longPage.fill(Qt::white);
         QPainter painter(&longPage);auto font=painter.font();font.setPixelSize(38);painter.setFont(font);
         for(int y=0;y<longPage.height();y+=400) {
@@ -359,6 +361,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!capture(QStringLiteral(".long.png")))return fail(QStringLiteral("Long image zoomed evidence failed"));
     }
     const auto movie=qEnvironmentVariable("NKSHOT_TEST_LOCAL_MEDIA_VIDEO",QStringLiteral("/logs/playback062.mp4"));
+    const bool webm=QFileInfo(movie).suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     const auto movieBytes=bytes(movie);
     if(movieBytes.isEmpty())return fail(QStringLiteral("Real synthetic MP4 fixture missing"));
     const auto beforeMovie=document->renderToImage();const auto beforeDepth=document->undoStackDepth();
@@ -378,7 +381,11 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_S,Qt::ControlModifier|Qt::ShiftModifier);
         if(!QTest::qWaitFor([&]{return fileDialog()&&fileDialog()->acceptMode()==QFileDialog::AcceptSave;},2000))
             return fail(QStringLiteral("Imported video actual Save As shortcut failed"));
-        const auto copy=fixtures.filePath(QStringLiteral("whole imported movie copy.mp4"));
+        const auto suffix=QFileInfo(movie).suffix().toLower();
+        const auto defaults=fileDialog()->selectedFiles();
+        if(defaults.isEmpty()||QFileInfo(defaults.first()).suffix().toLower()!=suffix)
+            return fail(QStringLiteral("Whole-video Save As default extension does not match original container"));
+        const auto copy=fixtures.filePath(QStringLiteral("whole imported movie copy.")+suffix);
         if(!choose(fileDialog(),copy)||!QTest::qWaitFor([&]{return !fileDialog()&&core->canOpenMedia()&&bytes(copy)==movieBytes;},10000)
             ||bytes(movie)!=movieBytes||!sourcesIntact())
             return fail(QStringLiteral("Whole-video Save As failed byte-exact copy or moved source"));
@@ -414,6 +421,13 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_Tab);
         return QTest::qWaitFor([&]{return spin->property("value").toInt()==expected;},500);
     };
+    if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
+        return fail(QStringLiteral("Export details could not be opened"));
+    auto cancelControl=visual(viewer()->contentItem(),QStringLiteral("nkshotClipCancel"));
+    auto previewControl=visual(viewer()->contentItem(),QStringLiteral("nkshotSoftwareVideoPreview"));
+    if(!cancelControl||!previewControl||previewControl->height()<50
+        ||cancelControl->mapToScene(QPointF(0,cancelControl->height())).y()>viewer()->height()
+        ||!click(QStringLiteral("nkshotClipDetails")))return fail(QStringLiteral("Details hides preview or cancel in the real window"));
     if(!editRange(QStringLiteral("nkshotClipEnd"),QStringLiteral("3.15"),315)
         ||!editRange(QStringLiteral("nkshotClipStart"),QStringLiteral("1.35"),135)
         ||!capture(QStringLiteral(".clip.png"))||!click(QStringLiteral("nkshotClipExport"))
@@ -427,6 +441,42 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     const auto evidenceClip=screenshot+QStringLiteral(".export-")+QString::number(QDateTime::currentMSecsSinceEpoch())+QStringLiteral(".mp4");
     if(!QFile::copy(clip,evidenceClip))return fail(QStringLiteral("Unable to retain actual export evidence"));
     qInfo()<<"085 actual imported clip artifact"<<evidenceClip;
+    if(webm) {
+        if(!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500)
+            ||!click(QStringLiteral("nkshotClipFormat")))return fail(QStringLiteral("WebM GIF format choice unavailable"));
+        QTest::keyClick(viewer(),Qt::Key_End);QTest::keyClick(viewer(),Qt::Key_Return);
+        if(!QTest::qWaitFor([&]{return job->property("outputFormat").toString()==QStringLiteral("gif")
+                &&job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
+            ||!editRange(QStringLiteral("nkshotClipEnd"),QStringLiteral("3.15"),315)
+            ||!editRange(QStringLiteral("nkshotClipStart"),QStringLiteral("1.35"),135)
+            ||!capture(QStringLiteral(".gif-range.png"))||!click(QStringLiteral("nkshotClipExport"))
+            ||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
+            return fail(QStringLiteral("Actual WebM GIF combo/range/Save failed"));
+        const auto gif=screenshot+QStringLiteral(".export-")+QString::number(QDateTime::currentMSecsSinceEpoch())+QStringLiteral(".gif");
+        if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),gif)
+            ||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("outputUrl").toUrl()==QUrl::fromLocalFile(gif);},30000)
+            ||bytes(gif).isEmpty()||bytes(movie)!=movieBytes||!sourcesIntact())
+            return fail(QStringLiteral("Actual WebM GIF export/source preservation failed"));
+        qInfo()<<"086 actual imported WebM GIF artifact"<<gif;
+        if(!click(QStringLiteral("nkshotClipCancel")))return fail(QStringLiteral("GIF completion panel close failed"));
+        // Load the real exported file in the production reusable player. This
+        // does not import unsupported animation into the image document.
+        recording->setProperty("sourceUrl",QUrl::fromLocalFile(gif));
+        auto animated=recording->findChild<QObject *>(QStringLiteral("nkshotAnimatedImage"));
+        if(!animated||!QTest::qWaitFor([&]{return recording->property("hasAnimatedImage").toBool()
+                &&animated->property("frameCount").toInt()>1;},10000))
+            return fail(QStringLiteral("Actual exported GIF did not decode in AnimatedImage"));
+        if(!recording->property("playing").toBool())QMetaObject::invokeMethod(recording,"togglePlay");
+        const auto frame=animated->property("currentFrame").toInt();
+        if(!QTest::qWaitFor([&]{return animated->property("currentFrame").toInt()!=frame;},2000)
+            ||!capture(QStringLiteral(".gif-playback.png")))return fail(QStringLiteral("Actual exported GIF did not animate"));
+        QMetaObject::invokeMethod(recording,"togglePlay");
+        if(recording->property("playing").toBool())return fail(QStringLiteral("Exported GIF pause failed"));
+        recording->setProperty("sourceUrl",QUrl::fromLocalFile(movie));
+        if(!QTest::qWaitFor([&]{return player->property("hasVideo").toBool();},10000)
+            ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
+            return fail(QStringLiteral("Original WebM playback restore failed"));
+    }
     if(!capture(QString()))return fail(QStringLiteral("Final imported media screenshot failed"));
     qInfo()<<"085 actual dialogs: PNG/JPEG/static WebP, edit replacement cancel/failure, new-copy Save, missing ffprobe recovery, real MP4 Qt playback and clip export passed";
     return true;

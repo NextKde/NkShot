@@ -81,14 +81,14 @@ FocusScope {
         id: videoOutput
         visible: mediaPlayer.hasVideo && GraphicsInfo.api !== GraphicsInfo.Software
         anchors.fill: parent
-        anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 24 : 0
+        anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 20 : 0
         fillMode: VideoOutput.PreserveAspectFit
     }
 
     SoftwareVideoPreview {
         objectName: "nkshotSoftwareVideoPreview"
         anchors.fill: parent
-        anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 24 : 0
+        anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 20 : 0
         sink: videoOutput.videoSink
         active: GraphicsInfo.api === GraphicsInfo.Software && mediaPlayer.hasVideo
         visible: active
@@ -492,10 +492,27 @@ FocusScope {
                 color: Kos.AppTheme.mutedText
             }
             QQC.Button {
+                id: openClipButton
                 objectName: "nkshotOpenClip"
                 Layout.fillWidth: true
                 text: i18nc("@action", "Export a clip…")
                 enabled: mediaPlayer.hasVideo && !SpectacleCore.videoPlatform.isRecording
+                font: Qt.application.font
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                contentItem: QQC.Label {
+                    text: openClipButton.text
+                    font: openClipButton.font
+                    color: Kos.AppTheme.paletteText
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                background: Rectangle {
+                    radius: 9
+                    color: Kos.AppTheme.controlBackground
+                    border.width: openClipButton.visualFocus ? 1 : 0
+                    border.color: Kos.AppTheme.accent
+                    opacity: openClipButton.down ? 0.7 : 1
+                }
                 onClicked: {playbackSettings.close(); clipPopup.open()}
             }
         }

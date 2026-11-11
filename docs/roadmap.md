@@ -118,3 +118,11 @@ One Open workflow now leads into existing annotation, playback and clip/GIF expo
 Imports are validated before confirmed replacement, with source-safe copy defaults.
 Scope is static supported images and short H.264/AAC MP4; [limits](open-local-media.md)
 are explicit. Drag-and-drop, multiple documents and broader formats are not included.
+
+### 086 default recording file loop
+
+Default VP9/Opus WebM now uses Open → playback → source-preserving copy or
+MP4/GIF range export. The contextual clip panel has a timeline-first hierarchy
+with compact precise fields and optional Details. Sparse production-encoded
+synthetic media and actual Qt interaction are tested; native capture and GPU
+visual acceptance are still separate, outstanding work.

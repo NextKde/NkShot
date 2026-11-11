@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LocalMediaLoader.h"
+#include "Media/LocalVideoInput.h"
 #include <QtTest>
 #include <KLocalizedString>
 #include <QTemporaryDir>
@@ -12,6 +13,7 @@
 #include <QCryptographicHash>
 #include <sys/stat.h>
 #include <signal.h>
+#include <cmath>
 using NkShot::LocalMediaLoader;
 class LocalMediaLoaderTest : public QObject {
     Q_OBJECT
@@ -48,6 +50,72 @@ private Q_SLOTS:
         video=directory.filePath(QStringLiteral("recording ; ' 中文.mp4"));
         QVERIFY(run(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),QStringLiteral("testsrc2=s=160x120:r=20:d=1"),
             QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),QStringLiteral("sine=frequency=440:duration=1"),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-pix_fmt"),QStringLiteral("yuv420p"),QStringLiteral("-c:a"),QStringLiteral("aac"),video}));
+    }
+    void webm_data() {
+        QTest::addColumn<bool>("audio"); QTest::addColumn<bool>("sparse"); QTest::addColumn<bool>("negative");
+        QTest::newRow("silent")<<false<<false<<false;
+        QTest::newRow("opus")<<true<<false<<false;
+        QTest::newRow("sparse-audio-six-seconds")<<true<<true<<false;
+        QTest::newRow("negative-opus-start")<<true<<false<<true;
+    }
+    void webm() {
+        QFETCH(bool,audio); QFETCH(bool,sparse); QFETCH(bool,negative);
+        const auto path=directory.filePath(QString::fromLatin1(QTest::currentDataTag())+QStringLiteral(" ; ' 中文.webm"));
+        QStringList args{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-f"),QStringLiteral("lavfi"),
+            QStringLiteral("-i"),sparse ? QStringLiteral("testsrc2=s=160x120:r=10:d=6") : QStringLiteral("testsrc2=s=160x120:r=10:d=1")};
+        if(audio) {
+            if(negative) args<<QStringLiteral("-itsoffset")<<QStringLiteral("-0.04");
+            args<<QStringLiteral("-f")<<QStringLiteral("lavfi")<<QStringLiteral("-i")
+                <<(sparse ? QStringLiteral("sine=frequency=440:duration=6") : QStringLiteral("sine=frequency=440:duration=1"))
+                <<QStringLiteral("-c:a")<<QStringLiteral("libopus");
+        }
+        if(sparse) args<<QStringLiteral("-vf")<<QStringLiteral("select=eq(n\\,0)+eq(n\\,20)+eq(n\\,40)")
+            <<QStringLiteral("-fps_mode")<<QStringLiteral("vfr");
+        args<<QStringLiteral("-c:v")<<QStringLiteral("libvpx-vp9")<<QStringLiteral("-threads")<<QStringLiteral("2")
+            <<QStringLiteral("-avoid_negative_ts")<<QStringLiteral("disabled")<<path;
+        QVERIFY(run(ffmpeg,args));
+        QVERIFY(NkShot::LocalVideoInput::hasWebMDocType(path)); const auto before=hash(path);
+        LocalMediaLoader loader; QSignalSpy result(&loader,&LocalMediaLoader::videoReady);
+        loader.load(QUrl::fromLocalFile(path)); QVERIFY(wait(loader)); QVERIFY2(loader.error().isEmpty(),qPrintable(loader.error()));
+        QCOMPARE(result.size(),1); QCOMPARE(result[0][2].toSize(),QSize(160,120)); QCOMPARE(result[0][3].toBool(),audio);
+        QVERIFY(std::abs(result[0][1].toLongLong()-(sparse ? 6000 : 1000))<=80);
+        QVERIFY(loader.validatedSourceUnchanged()); QCOMPARE(hash(path),before);
+        // Real WebM is cancelled while a deliberately slow probe is pending.
+        const auto folder=directory.filePath(QStringLiteral("webm-slow-")+QString::fromLatin1(QTest::currentDataTag()));
+        fakeProbe(folder,"exec /bin/sleep 99\n");
+        const auto old=qgetenv("PATH"); QByteArray env=folder.toUtf8();env+=':';env+=old;
+        qputenv("PATH",env);auto restore=qScopeGuard([&]{qputenv("PATH",old);});
+        loader.load(QUrl::fromLocalFile(path)); QVERIFY(loader.busy()); loader.cancel();
+        QTest::qWait(50); QCOMPARE(result.size(),1); QVERIFY(!loader.validatedSourceUnchanged());
+    }
+    void webmContainerAndCodecRejections() {
+        const auto disguised=directory.filePath(QStringLiteral("matroska-renamed.webm"));
+        QVERIFY(run(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),
+            QStringLiteral("testsrc2=s=32x32:r=10:d=1"),QStringLiteral("-c:v"),QStringLiteral("libvpx-vp9"),
+            QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-f"),QStringLiteral("matroska"),disguised}));
+        QVERIFY(!NkShot::LocalVideoInput::hasWebMDocType(disguised));
+        LocalMediaLoader loader; QSignalSpy result(&loader,&LocalMediaLoader::videoReady);
+        loader.load(QUrl::fromLocalFile(disguised)); QVERIFY(wait(loader)); QVERIFY(!loader.error().isEmpty()); QVERIFY(result.isEmpty());
+        const auto vp8=directory.filePath(QStringLiteral("vp8.webm"));
+        QVERIFY(run(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),
+            QStringLiteral("testsrc2=s=32x32:r=10:d=1"),QStringLiteral("-c:v"),QStringLiteral("libvpx"),QStringLiteral("-threads"),QStringLiteral("2"),vp8}));
+        QVERIFY(NkShot::LocalVideoInput::hasWebMDocType(vp8));
+        loader.load(QUrl::fromLocalFile(vp8)); QVERIFY(wait(loader)); QVERIFY(!loader.error().isEmpty()); QVERIFY(result.isEmpty());
+        const auto extra=directory.filePath(QStringLiteral("extra-tracks.webm"));
+        QVERIFY(run(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),
+            QStringLiteral("testsrc2=s=32x32:r=10:d=1"),QStringLiteral("-map"),QStringLiteral("0:v"),QStringLiteral("-map"),QStringLiteral("0:v"),
+            QStringLiteral("-c:v"),QStringLiteral("libvpx-vp9"),QStringLiteral("-threads"),QStringLiteral("2"),extra}));
+        QVERIFY(NkShot::LocalVideoInput::hasWebMDocType(extra));
+        loader.load(QUrl::fromLocalFile(extra)); QVERIFY(wait(loader)); QVERIFY(!loader.error().isEmpty()); QVERIFY(result.isEmpty());
+        const auto malformed=directory.filePath(QStringLiteral("invalid-ebml.webm"));
+        // Unknown-size header, substring-only DocType and duplicate DocType must
+        // fail before a demuxer is launched; no extension-based trust.
+        for(const QByteArray &bytes:{QByteArray::fromHex("1a45dfa3ff4282847765626d"),QByteArray("junk webm"),
+            QByteArray::fromHex("1a45dfa38e4282847765626d4282847765626d")}) {
+            QFile file(malformed); QVERIFY(file.open(QIODevice::WriteOnly)); file.write(bytes);file.close();
+            QVERIFY(!NkShot::LocalVideoInput::hasWebMDocType(malformed));
+            loader.load(QUrl::fromLocalFile(malformed)); QVERIFY(wait(loader)); QVERIFY(!loader.error().isEmpty()); QVERIFY(result.isEmpty());
+        }
     }
     void stillImages_data() {
         QTest::addColumn<QByteArray>("format");

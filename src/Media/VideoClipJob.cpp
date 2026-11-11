@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "VideoClipJob.h"
+#include "LocalVideoInput.h"
 #include <QProcess>
 #include <QStandardPaths>
 #include <QFileInfo>
@@ -14,39 +15,48 @@
 #include <unistd.h>
 
 namespace {
-QStringList probeArgs(const QString &path) {
-    return {QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-protocol_whitelist"), QStringLiteral("file"),
-        QStringLiteral("-f"), QStringLiteral("mov"), QStringLiteral("-enable_drefs"), QStringLiteral("0"), QStringLiteral("-use_absolute_path"), QStringLiteral("0"), QStringLiteral("-show_streams"), QStringLiteral("-show_format"), QStringLiteral("-of"), QStringLiteral("json"), path};
+QStringList probeArgs(const QString &path, bool webm=false) {
+    QStringList args{QStringLiteral("-v"), QStringLiteral("error")};
+    args += NkShot::LocalVideoInput::demuxArguments(webm ? NkShot::LocalVideoInput::Container::WebM : NkShot::LocalVideoInput::Container::Mp4);
+    args << QStringLiteral("-show_streams") << QStringLiteral("-show_format") << QStringLiteral("-of") << QStringLiteral("json") << path;
+    return args;
 }
 struct Media { bool valid=false; bool audio=false; qint64 duration=0; int width=0,height=0,audioRate=0; qreal frameMs=0; };
-Media parseMedia(const QByteArray &data) {
+Media parseMedia(const QByteArray &data, bool webm=false) {
     const auto doc=QJsonDocument::fromJson(data); if(!doc.isObject()) return {};
     const auto root=doc.object(); const auto format=root.value(QStringLiteral("format")).toObject();
-    if(!format.value(QStringLiteral("format_name")).toString().split(u',').contains(QStringLiteral("mp4"))) return {};
+    if(!format.value(QStringLiteral("format_name")).toString().split(u',').contains(webm ? QStringLiteral("webm") : QStringLiteral("mp4"))) return {};
     const double duration=format.value(QStringLiteral("duration")).toString().toDouble();
-    if(!std::isfinite(duration)||duration<=0||duration>7200) return {};
-    if(qAbs(format.value(QStringLiteral("start_time")).toString().toDouble())>0.001) return {};
+    if(!std::isfinite(duration)||duration<=0||duration>(webm?600:7200)) return {};
+    bool startOk=false;const double start=format.value(QStringLiteral("start_time")).toString().toDouble(&startOk);
+    if(!startOk || !std::isfinite(start) || (webm ? start<-.080 || start>.001 : qAbs(start)>.001)) return {};
     int video=0,audio=0; Media out;
     for(const auto &value:root.value(QStringLiteral("streams")).toArray()) {
         const auto s=value.toObject();
-        if(qAbs(s.value(QStringLiteral("start_time")).toString().toDouble())>0.001) return {};
+        bool streamStartOk=false;const double streamStart=s.value(QStringLiteral("start_time")).toString().toDouble(&streamStartOk);
+        if(!streamStartOk || !std::isfinite(streamStart) || (!webm && qAbs(streamStart)>.001)) return {};
         const auto type=s.value(QStringLiteral("codec_type")).toString();
         if(type==QStringLiteral("video")) {
-            ++video; out.width=s.value(QStringLiteral("width")).toInt(); out.height=s.value(QStringLiteral("height")).toInt();
-            if(s.value(QStringLiteral("codec_name")).toString()!=QStringLiteral("h264") || out.width<2||out.height<2||out.width>4096||out.height>4096||out.width%2||out.height%2) return {};
+            ++video; if(webm && (streamStart<-.001 || streamStart>.080))return {}; out.width=s.value(QStringLiteral("width")).toInt(); out.height=s.value(QStringLiteral("height")).toInt();
+            if(s.value(QStringLiteral("codec_name")).toString()!=(webm ? QStringLiteral("vp9") : QStringLiteral("h264")) || out.width<2||out.height<2||out.width>4096||out.height>4096||out.width%2||out.height%2) return {};
             const auto pixel=s.value(QStringLiteral("pix_fmt")).toString();
-            if(pixel!=QStringLiteral("yuv420p")&&pixel!=QStringLiteral("yuvj420p")) return {};
+            if(pixel!=QStringLiteral("yuv420p")&&(webm||pixel!=QStringLiteral("yuvj420p"))) return {};
             if(s.value(QStringLiteral("disposition")).toObject().value(QStringLiteral("attached_pic")).toInt()) return {};
             for(const auto &side:s.value(QStringLiteral("side_data_list")).toArray())
                 if(side.toObject().contains(QStringLiteral("rotation")) && side.toObject().value(QStringLiteral("rotation")).toDouble()!=0) return {};
             const auto transfer=s.value(QStringLiteral("color_transfer")).toString();
             if(transfer==QStringLiteral("smpte2084")||transfer==QStringLiteral("arib-std-b67")) return {};
             const auto rate=s.value(QStringLiteral("avg_frame_rate")).toString().split(u'/');
-            if(rate.size()!=2 || rate[1].toDouble()<=0 || rate[0].toDouble()/rate[1].toDouble()<=0 || rate[0].toDouble()/rate[1].toDouble()>120) return {};
-            out.frameMs=1000*rate[1].toDouble()/rate[0].toDouble();
+            const double fps=rate.size()==2&&rate[1].toDouble()>0 ? rate[0].toDouble()/rate[1].toDouble() : 0;
+            if(!std::isfinite(fps)||fps>(webm?60:120)||(!webm&&fps<=0))return {};
+            out.frameMs=webm ? 1000./30 : 1000./fps;
         } else if(type==QStringLiteral("audio")) {
-            ++audio;out.audioRate=s.value(QStringLiteral("sample_rate")).toString().toInt();
-            if(out.audioRate<1||out.audioRate>192000)return {};
+            ++audio;
+            const int padding=s.value(QStringLiteral("initial_padding")).toInt();
+            if(webm&&(padding<0||padding>3840))return {};
+            if(webm && (streamStart<-.080 || streamStart>.001 || s.value(QStringLiteral("codec_name")).toString()!=QStringLiteral("opus")))return {};
+            out.audioRate=s.value(QStringLiteral("sample_rate")).toString().toInt();
+            if(out.audioRate<1||out.audioRate>192000||(webm&&out.audioRate!=48000))return {};
             if(s.value(QStringLiteral("channels")).toInt()<1||s.value(QStringLiteral("channels")).toInt()>2) return {};
         } else return {}; // No silent loss of subtitle/data/extra streams.
     }
@@ -116,8 +126,9 @@ bool VideoClipJob::destinationUnchanged() const {
 void VideoClipJob::inspect(const QUrl &source) {
     stop();m_ready=false;m_mediaValid=false;m_duration=0;m_audio=false;m_source=QUrl();m_output=QUrl();m_error.clear();m_progress=0;
     const QFileInfo f(source.toLocalFile());
-    if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive)||f.size()<=0||f.size()>qint64(2)*1024*1024*1024) {
-        fail(tr("Choose a readable local MP4 recording, up to 2 GiB. The original is unchanged."));return;
+    m_webm=f.suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
+    if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||(!m_webm&&f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive))||(m_webm&&!NkShot::LocalVideoInput::hasWebMDocType(f.absoluteFilePath()))||f.size()<=0||f.size()>(m_webm?qint64(256)*1024*1024:qint64(2)*1024*1024*1024)) {
+        fail(tr("Choose a readable local MP4 up to 2 GiB or VP9 WebM up to 256 MiB. The original is unchanged."));return;
     }
     m_source=QUrl::fromLocalFile(f.canonicalFilePath());m_sourceSize=f.size();m_sourceModified=f.lastModified();
     struct stat st{};
@@ -125,7 +136,7 @@ void VideoClipJob::inspect(const QUrl &source) {
     m_sourceDevice=st.st_dev;m_sourceInode=st.st_ino;
     m_ffmpeg=QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));m_ffprobe=QStandardPaths::findExecutable(QStringLiteral("ffprobe"));
     if(m_ffmpeg.isEmpty()||m_ffprobe.isEmpty()) {fail(tr("Clip export needs FFmpeg and ffprobe installed by your system package manager. No software was installed."));return;}
-    m_busy=true;const auto epoch=m_epoch;Q_EMIT changed();if(epoch==m_epoch&&m_busy)launch(m_ffprobe,probeArgs(m_source.toLocalFile()),Inspect,15000);
+    m_busy=true;const auto epoch=m_epoch;Q_EMIT changed();if(epoch==m_epoch&&m_busy)launch(m_ffprobe,probeArgs(m_source.toLocalFile(),m_webm),Inspect,15000);
 }
 void VideoClipJob::launch(const QString &program,const QStringList &args,Stage stage,int timeoutMs) {
     m_stage=stage; m_stdout.clear();m_stderr.clear();m_progressBuffer.clear();
@@ -155,8 +166,8 @@ void VideoClipJob::launch(const QString &program,const QStringList &args,Stage s
 void VideoClipJob::completed(Stage stage) {
     if(!sourceUnchanged()){m_ready=false;fail(tr("The source recording changed. Reopen clip export to inspect it again."));return;}
     if(stage==Inspect) {
-        const auto info=parseMedia(m_stdout);
-        if(!info.valid){fail(tr("This clip needs one SDR H.264 video track and at most one mono/stereo audio track in an MP4, with even dimensions up to 4096 pixels and duration up to two hours. Rotated, HDR and extra-track files are not supported yet."));return;}
+        const auto info=parseMedia(m_stdout,m_webm);
+        if(!info.valid){fail(tr("This clip needs one SDR H.264 MP4 or VP9 WebM video track and at most one mono/stereo audio track (Opus for WebM), with even dimensions up to 4096 pixels and duration up to two hours (WebM: ten minutes). Rotated, HDR and extra-track files are not supported yet."));return;}
         m_mediaValid=true;m_duration=info.duration;m_audio=info.audio;m_width=info.width;m_height=info.height;m_frameMs=info.frameMs;
         launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-encoders")},Encoders,15000);
     } else if(stage==Encoders) {
@@ -222,6 +233,15 @@ void VideoClipJob::exportClip(const QUrl &target,qint64 startMs,qint64 endMs) {
     args<<QStringLiteral("-map_metadata")<<QStringLiteral("-1")<<QStringLiteral("-map_chapters")<<QStringLiteral("-1")<<QStringLiteral("-c:v")<<QStringLiteral("libx264")<<QStringLiteral("-preset")<<QStringLiteral("veryfast")<<QStringLiteral("-crf")<<QStringLiteral("20")<<QStringLiteral("-pix_fmt")<<QStringLiteral("yuv420p")<<QStringLiteral("-threads")<<QStringLiteral("2");
     if(m_audio)args<<QStringLiteral("-c:a")<<QStringLiteral("aac")<<QStringLiteral("-b:a")<<QStringLiteral("160k")<<QStringLiteral("-ar")<<QStringLiteral("48000");
     args<<QStringLiteral("-movflags")<<QStringLiteral("+faststart")<<QStringLiteral("-progress")<<QStringLiteral("pipe:1")<<QStringLiteral("-nostats")<<QStringLiteral("-fs")<<QStringLiteral("2147483648")<<QStringLiteral("-f")<<QStringLiteral("mp4")<<m_temp;
+    if(m_webm) {
+        const int inputEnd=args.indexOf(QStringLiteral("-i"));
+        QStringList prefix{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-copyts")};
+        prefix+=NkShot::LocalVideoInput::demuxArguments(NkShot::LocalVideoInput::Container::WebM);
+        prefix<<QStringLiteral("-threads")<<QStringLiteral("2")<<QStringLiteral("-filter_threads")<<QStringLiteral("2");
+        args=prefix+args.mid(inputEnd);
+        args[args.indexOf(QStringLiteral("-vf"))+1]=webmVideoFilter(30);
+        if(m_audio)args[args.indexOf(QStringLiteral("-af"))+1]=QStringLiteral("atrim=start=%1:end=%2,asetpts=PTS-%1/TB,apad=whole_dur=%3").arg(seconds(m_start),seconds(m_end),seconds(m_clipDuration));
+    }
     m_busy=true;const auto epoch=m_epoch;Q_EMIT changed();if(epoch==m_epoch&&m_busy)launch(m_ffmpeg,args,Encode,30*60*1000);
 }
 
@@ -236,10 +256,16 @@ void VideoClipJob::setOutputFormat(const QString &format) {
 }
 QString VideoClipJob::gifFilter() const {
     const double factor=qMin(1.,640./qMax(m_width,m_height));
-    return QStringLiteral("trim=start=0:end=%1,setpts=PTS-STARTPTS,fps=10,scale=%2:%3:flags=lanczos").arg(seconds(m_clipDuration)).arg(qMax(1,qRound(m_width*factor))).arg(qMax(1,qRound(m_height*factor)));
+    const QString range=m_webm ? webmVideoFilter(10) : QStringLiteral("trim=start=0:end=%1,setpts=PTS-STARTPTS,fps=10").arg(seconds(m_clipDuration));
+    return range+QStringLiteral(",scale=%1:%2:flags=lanczos").arg(qMax(1,qRound(m_width*factor))).arg(qMax(1,qRound(m_height*factor)));
 }
 void VideoClipJob::launchGifPass(bool palette) {
     QStringList args{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-filter_complex_threads"),QStringLiteral("2"),QStringLiteral("-ss"),seconds(m_start),QStringLiteral("-accurate_seek"),QStringLiteral("-t"),seconds(m_clipDuration),QStringLiteral("-i"),m_source.toLocalFile()};
+    if(m_webm) {
+        args={QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-copyts")};
+        args+=NkShot::LocalVideoInput::demuxArguments(NkShot::LocalVideoInput::Container::WebM);
+        args<<QStringLiteral("-threads")<<QStringLiteral("2")<<QStringLiteral("-filter_threads")<<QStringLiteral("2")<<QStringLiteral("-filter_complex_threads")<<QStringLiteral("2")<<QStringLiteral("-i")<<m_source.toLocalFile();
+    }
     if(palette) {
         args<<QStringLiteral("-vf")<<(gifFilter()+QStringLiteral(",palettegen=max_colors=256:stats_mode=full:reserve_transparent=0"))<<QStringLiteral("-an")<<QStringLiteral("-frames:v")<<QStringLiteral("1")<<QStringLiteral("-c:v")<<QStringLiteral("png")<<QStringLiteral("-threads")<<QStringLiteral("2")<<QStringLiteral("-update")<<QStringLiteral("1")<<QStringLiteral("-f")<<QStringLiteral("image2");
     } else {
@@ -248,4 +274,12 @@ void VideoClipJob::launchGifPass(bool palette) {
     }
     args<<QStringLiteral("-map_metadata")<<QStringLiteral("-1")<<QStringLiteral("-map_chapters")<<QStringLiteral("-1")<<QStringLiteral("-progress")<<QStringLiteral("pipe:1")<<QStringLiteral("-nostats")<<(palette?m_palette:m_temp);
     launch(m_ffmpeg,args,palette?Palette:Encode,5*60*1000);
+}
+
+QString VideoClipJob::webmVideoFilter(int fps) const {
+    // Decode the prefix deliberately: the last frame before a range may still
+    // be the current desktop image. Never discard it with accurate input seek.
+    // Extend the final held frame, then resample on the common zero timeline.
+    return QStringLiteral("tpad=stop_mode=clone:stop_duration=%1,fps=%2:start_time=0:round=down,trim=start=%3:end=%4,setpts=PTS-%3/TB")
+        .arg(seconds(m_end)).arg(fps).arg(seconds(m_start),seconds(m_end));
 }

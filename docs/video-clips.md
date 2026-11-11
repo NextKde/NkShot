@@ -96,3 +96,19 @@ and [UI test reproduction](../tests/ui/README.md#local-video-clip-export-072).
 The shared real probe-timeout path is tested. The five-minute GIF palette/encode
 timeout itself has not been waited out in acceptance testing; it uses the same
 termination and epoch cleanup mechanism.
+
+## 086 WebM input
+
+The default VP9/Opus WebM recording can now use this same panel without conversion
+in another app. Input is restricted to genuine local WebM, one SDR VP9 track and
+optional mono/stereo Opus, at most ten minutes / 256 MiB. Original MP4 support is
+unchanged. Both formats retain source identity checks, new-file-only publishing,
+cancellation and complete output decoding before success.
+
+WebM may contain sparse desktop updates rather than constant-rate frames. The
+WebM path deliberately decodes the prefix to retain the frame being held at the
+chosen start, resamples onto a common timeline, and then trims. MP4 output uses
+30 fps; GIF uses 10 fps. This can take longer for a late range in a recording;
+existing bounded process deadlines remain in force. No image interpolation or
+input automation is introduced. Opus codec delay is consumed by the decoder;
+audio is not independently zeroed to its first remaining sample.

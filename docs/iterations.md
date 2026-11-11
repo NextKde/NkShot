@@ -2329,3 +2329,37 @@ and Finished-state adapters verify Core gating, not native capture. KDE dialogs,
 real compositor capture, GPU long-image rendering and device A/V remain unverified.
 The packaging notes also document the actually tested 084 package; a new 085
 package is not implied by these source/UI results.
+
+## 086 — Default WebM recording workflow and focused clip UI
+
+The default VP9/Opus WebM format now reopens through Open, plays in the existing
+viewer, saves a byte-preserving `.webm` copy, and exports a selected range to MP4
+or GIF. Input remains local and bounded; genuine WebM DocType is checked rather
+than trusting an extension. Sparse desktop frames and Opus pre-skip are handled
+on a common timeline. WebM MP4 export is explicitly re-encoded at 30 fps; this is
+not lossless cutting or a promise to preserve the source frame rate.
+
+The clip panel now emphasizes the range bar, compact precise time fields and one
+primary Export action. Source-range playback sits beside the range; Details
+contains encoding explanations. Same-size before/after software-rendered images
+show the hierarchy change, not a claim that all application UI or GPU materials
+have been accepted.
+
+Verification: two focused CTest suites passed (23 clip and 18 loader QtTest
+results). The sparse clip case was then tightened to the same non-grid-aligned
+1.35–3.15 s interval for MP4 and GIF; both ordinary and negative-Opus-start rows
+passed (four QtTest results including setup/cleanup). A separate fixture feeds
+synthetic frames/audio through the fixed production producer, VP9/Opus encoders
+and WebM muxer: three frames at 0/2/4 s and six seconds of audio with two pulses.
+Its three QtTest results passed, and that actual output was subsequently opened,
+played, copied and exported by real Qt UI actions. The resulting MP4 decoded to
+54 frames/1.8 s with the correct held first/last colors and pulse near 0.65 s;
+GIF had 18 frames, 100 ms delays and infinite looping. This is a
+**production-encoded synthetic fixture**, not native screen/device capture.
+
+Actual UI tests cover Open/replace/cancel/error preservation, source-copy naming,
+MP4/GIF export, animated GIF playback/pause, range preview and save cancellation.
+The existing MP4 path remains covered. No vendor libraries or security settings
+were changed. Native KDE/KWin, device audio, GPU rendering and real desktop VFR
+capture remain unverified. Packaging documentation records the already-built
+085 package; no 086 package has yet been claimed.

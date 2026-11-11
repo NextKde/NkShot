@@ -1611,7 +1611,7 @@ QUrl SpectacleCore::openedMediaCopyUrl() const
     if (m_openedMediaSource.isEmpty()) return {};
     const QFileInfo input(m_openedMediaSource.toLocalFile());
     return QUrl::fromLocalFile(input.dir().filePath(input.completeBaseName() + QStringLiteral("-copy.")
-        + (m_videoMode ? QStringLiteral("mp4") : QStringLiteral("png"))));
+        + (m_videoMode ? input.suffix().toLower() : QStringLiteral("png"))));
 }
 
 bool SpectacleCore::commitOpenedMedia(const QUrl &source, const QImage &image, bool video)

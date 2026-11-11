@@ -38,12 +38,12 @@ private:
     void completed(Stage stage);
     quint64 m_epoch = 0, m_device = 0, m_inode = 0;
     qint64 m_size = 0, m_modifiedNs = 0;
-    bool m_busy = false, m_audio = false, m_validated = false;
+    bool m_busy = false, m_audio = false, m_validated = false, m_webm = false;
     QString m_error, m_ffmpeg;
     QUrl m_source;
     QSize m_dimensions;
     qint64 m_durationMs = 0;
-    double m_fps = 0;
+    double m_fps = 0, m_startSeconds = 0;
     QPointer<QProcess> m_process;
     QByteArray m_output, m_diagnostics;
     QTimer m_timeout;
