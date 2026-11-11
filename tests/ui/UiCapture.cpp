@@ -15,6 +15,7 @@
 #include <memory>
 #include "Gui/TextContextMenu.h"
 #include <QtTest/QTest>
+#include <QtTest/QSignalSpy>
 #include "SpectacleCore.h"
 #include <KQuickImageEditor/AnnotationDocument>
 #include <KQuickImageEditor/AnnotationTool>
@@ -291,15 +292,58 @@ void installUiCaptureHook(QApplication &application)
                 // stays Setup and reject paths cannot accept a region or frame.
                 if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SELECTOR_VISUAL")) {
                     preview->resize(640,420);preview->rootObject()->setProperty("phase",1);QTest::qWait(150);
+                    auto selector=visualItem(preview->contentItem(),QStringLiteral("nkshotScrollSelectionArea"));
+                    auto confirm=visualItem(preview->contentItem(),QStringLiteral("nkshotScrollConfirmRegion"));
+                    if(!selector || !confirm || confirm->isEnabled()) {application.exit(190);return;}
+                    QTest::keyClick(preview,Qt::Key_Right);
+                    if(selector->property("selectionRect").toRectF()!=QRectF(161,105,320,210)) {qWarning()<<"Selector keyboard seed"<<selector->property("selectionRect")<<selector->hasActiveFocus()<<preview->activeFocusItem();preview->grabWindow().save(destination+QStringLiteral(".keyboard-failure.png"));application.exit(191);return;}
+                    QTest::keyClick(preview,Qt::Key_Down,Qt::AltModifier);
+                    QTest::keyClick(preview,Qt::Key_Left,Qt::ShiftModifier);
+                    if(selector->property("selectionRect").toRectF()!=QRectF(151,105,320,211)) {application.exit(192);return;}
                     QTest::mousePress(preview,Qt::LeftButton,Qt::NoModifier,QPoint(70,120));
                     QTest::mouseMove(preview,QPoint(530,340));QTest::qWait(150);
                     preview->grabWindow().save(destination+QStringLiteral(".selector-layout.png"));
                     QTest::mouseRelease(preview,Qt::LeftButton,Qt::NoModifier,QPoint(530,340));
                     if(preview->phase()!=0 || preview->frameCount()!=0) {application.exit(185);return;}
+                    QTest::keyClick(preview,Qt::Key_Right);
+                    QTest::keyClick(preview,Qt::Key_Down,Qt::ShiftModifier);
+                    QTest::keyClick(preview,Qt::Key_Left,Qt::AltModifier);
+                    QTest::keyClick(preview,Qt::Key_Up,Qt::AltModifier|Qt::ShiftModifier);
+                    if(selector->property("selectionRect").toRectF()!=QRectF(71,130,459,210) || !confirm->isEnabled()) {application.exit(193);return;}
+                    QTest::qWait(150);preview->grabWindow().save(destination+QStringLiteral(".keyboard-layout.png"));
+                    auto cancelRegion=visualItem(preview->contentItem(),QStringLiteral("nkshotScrollSelectorCancel"));
+                    QTest::keyClick(preview,Qt::Key_Tab);
+                    if(!cancelRegion || !cancelRegion->hasActiveFocus()) {application.exit(200);return;}
+                    QTest::keyClick(preview,Qt::Key_Tab);
+                    if(!confirm->hasActiveFocus()) {application.exit(201);return;}
+                    QSignalSpy confirmed(confirm,SIGNAL(clicked()));
+                    QTest::keyClick(preview,Qt::Key_Return);
+                    if(confirmed.count()!=1) {application.exit(202);return;}
+                    QTest::mouseClick(preview,Qt::LeftButton,Qt::NoModifier,confirm->mapToScene(QPointF(confirm->width()/2,confirm->height()/2)).toPoint());
+                    selector->forceActiveFocus();
+                    for(int i=0;i<100;++i) QTest::keyClick(preview,Qt::Key_Right,Qt::ShiftModifier);
+                    if(selector->property("selectionRect").toRectF().right()!=640) {application.exit(194);return;}
+                    for(int i=0;i<100;++i) QTest::keyClick(preview,Qt::Key_Down,Qt::AltModifier|Qt::ShiftModifier);
+                    if(selector->property("selectionRect").toRectF().bottom()!=420) {application.exit(195);return;}
+                    for(int i=0;i<100;++i) QTest::keyClick(preview,Qt::Key_Left,Qt::AltModifier|Qt::ShiftModifier);
+                    for(int i=0;i<100;++i) QTest::keyClick(preview,Qt::Key_Up,Qt::AltModifier|Qt::ShiftModifier);
+                    if(selector->property("selectionRect").toRectF().size()!=QSizeF(1,25)) {application.exit(196);return;}
+                    QTest::keyClick(preview,Qt::Key_Return);
+                    if(preview->phase()!=0 || preview->frameCount()!=0) {application.exit(197);return;}
+                    QTest::mousePress(preview,Qt::LeftButton,Qt::NoModifier,QPoint(70,120));
+                    QTest::mouseMove(preview,QPoint(90,130));QTest::mouseRelease(preview,Qt::LeftButton,Qt::NoModifier,QPoint(90,130));
+                    if(confirm->isEnabled()) {application.exit(198);return;}
+                    QTest::keyClick(preview,Qt::Key_Return);QTest::qWait(150);
+                    preview->grabWindow().save(destination+QStringLiteral(".invalid-region.png"));
+                    if(preview->phase()!=0 || preview->frameCount()!=0) {application.exit(199);return;}
                     preview->resize(360,260);preview->rootObject()->setProperty("phase",2);QTest::qWait(150);
                     preview->grabWindow().save(destination+QStringLiteral(".session-layout.png"));
                 }
-                QTest::keyClick(preview,Qt::Key_Escape);
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SELECTOR_VISUAL")) {
+                    preview->rootObject()->setProperty("phase",1);QTest::qWait(100);
+                    auto selector=visualItem(preview->contentItem(),QStringLiteral("nkshotScrollSelectionArea"));
+                    selector->forceActiveFocus();QTest::keyClick(preview,Qt::Key_Tab);QTest::keyClick(preview,Qt::Key_Return);
+                } else QTest::keyClick(preview,Qt::Key_Escape);
                 if(!QTest::qWaitFor([&]{return preview.isNull();},1000) || !samePixels(original,document->renderToImage()) || depth!=document->undoStackDepth()) {application.exit(186);return;}
                 preview=qobject_cast<ScrollCaptureWindow *>(viewer->openScrollPreview());
                 if(!preview || preview->available()) {application.exit(187);return;}

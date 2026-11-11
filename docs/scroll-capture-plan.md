@@ -1,6 +1,7 @@
 # Rolling capture feasibility and acceptance plan
 
-Current status: [058 opt-in technical preview](scroll-preview.md) connects the
+Current status: [opt-in technical preview](scroll-preview.md) (058 integration,
+059 keyboard refinement) connects the
 selector, panel, controller and API5 adapter. It is default-off and lacks native
 KWin acceptance. Numbered sections below record the evolving implementation;
 statements about missing UI in 054–057 describe those earlier stages.
@@ -218,3 +219,13 @@ Preparation confirmation authorizes the adapter's enforced API5 compositor exclu
 contract, not a timed local repaint assumption. The backend verifies the capability
 again before each actual capture. No production-default entry is enabled; see the
 preview guide for the opt-in route, verified interactions and native test gaps.
+
+## Selector interaction refinement (059)
+
+Drag release now leaves the region editable. A small confirmation bar shows
+physical dimensions and provides Cancel/Use region; arrows move, Alt+arrows resize,
+Shift accelerates, and Enter/Tab activation are wired. Outside-only dimming keeps
+the selected desktop area unobscured. Offscreen Qt tests exercise the actual input
+handlers and limit/focus behavior, while maintaining C++ Setup state and zero real
+frames. Native compositor focus, transparency and screen-reader acceptance remain
+separate gates. This does not enable the feature by default.

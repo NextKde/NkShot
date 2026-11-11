@@ -86,6 +86,7 @@ bool ScrollCaptureWindow::busy() const
     const auto state=m_controller->state();
     return state==ScrollCaptureController::State::WaitingForHidden || state==ScrollCaptureController::State::Capturing;
 }
+qreal ScrollCaptureWindow::selectionScale() const {return m_screen?m_screen->devicePixelRatio():1;}
 int ScrollCaptureWindow::frameCount() const {return m_controller->frameCount();}
 NkShot::Imaging::ScrollOutputLayout ScrollCaptureWindow::currentLayout() const
 {
@@ -102,7 +103,7 @@ void ScrollCaptureWindow::selectRegion()
            && (qobject_cast<ViewerWindow *>(w)||qobject_cast<PinnedImageWindow *>(w)||qobject_cast<OcrTextWindow *>(w))) {m_hidden.append({w,w->visibility()});w->hide();}
     }
     m_phase=1;
-    m_status=i18nc("@info","Drag a region on this display. Esc cancels. Keep fixed headers and changing content outside the region.");
+    m_status=i18nc("@info","Drag a region, then adjust with arrow keys. Alt + arrows resize; Shift moves faster. Enter confirms, Esc cancels.");
     Q_EMIT changed(); hide();
     auto overlay=new QQuickView(m_engine,nullptr);m_overlay=overlay;
     overlay->setObjectName(QStringLiteral("nkshotScrollSelector"));

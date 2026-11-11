@@ -9,6 +9,7 @@ class ScrollCaptureWindow : public QQuickView {
     Q_OBJECT
     Q_PROPERTY(QStringList outputs READ outputs CONSTANT)
     Q_PROPERTY(int outputIndex READ outputIndex WRITE setOutputIndex NOTIFY changed)
+    Q_PROPERTY(qreal selectionScale READ selectionScale NOTIFY changed)
     Q_PROPERTY(int phase READ phase NOTIFY changed)
     Q_PROPERTY(bool available READ available NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
@@ -22,6 +23,7 @@ public:
     QStringList outputs() const { return m_outputs; }
     int outputIndex() const { return m_outputIndex; }
     void setOutputIndex(int index);
+    qreal selectionScale() const;
     int phase() const { return m_phase; }
     bool available() const { return m_available; }
     bool busy() const;

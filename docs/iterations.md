@@ -1238,3 +1238,40 @@ end-to-end scrolling export remain unverified in this socket-restricted cloud.
 Selector keyboard resizing is not implemented. The new [preview guide](scroll-preview.md)
 spells out the explicit opt-in, bounds, workflow and acceptance gaps. Do not promote
 this prototype to a default feature until native testing passes.
+
+
+## 059 — Keyboard-adjustable region selection and explicit confirmation
+
+The default-off scrolling preview now supports mixed mouse/keyboard selection.
+Drag release preserves the rectangle rather than committing immediately. Arrows
+seed/move it; Alt+arrows resize; Shift uses ten-point steps. A compact confirmation
+bar shows physical-pixel dimensions, Cancel and Use region. Enter works for the
+selector and focused action buttons; Tab follows the selector/Cancel/Use region
+path. The overlay dims only outside the region, leaving the chosen area clear.
+Invalid sizes disable confirmation and show the applicable size limits. Accessible
+names/descriptions include position, dimensions and keyboard guidance.
+
+Actual offscreen key tests found an initial read-only QML rect mutation issue:
+seeding worked but the first move did not. It was corrected by computing numeric
+coordinates before writing the endpoints. A missing test-only QSignalSpy include
+was also caught at compile time and fixed before the final build.
+
+Final build, CTest 8/8, static checks 16/16 and whitespace checks pass. Actual UI
+events cover keyboard-only seeding, move/Shift move, Alt resize, mixed drag and
+keyboard adjustment, edge/minimum clamping, Tab focus, Return activation, keyboard
+Cancel, too-small-region disablement, reopening and unchanged source/history.
+Default-off and video-mode gates remain verified; the compact non-selector path
+still checks Escape cancellation.
+
+Reviewed [light keyboard layout](screenshots/059-selector-light.png.keyboard-layout.png),
+[dark keyboard layout](screenshots/059-selector-dark.png.keyboard-layout.png),
+[invalid-size guidance](screenshots/059-selector-light.png.invalid-region.png) and
+[narrow unavailable state](screenshots/059-selector-compact.png). Selection pictures
+are explicitly **layout/input diagnostics**, not desktop captures: the test overrides
+only QML display phase, retains C++ Setup state and accepts zero frames. The clear
+area is the test window's blank background, not a captured desktop image.
+
+No native KWin success, compositor focus/transparency or screen-reader acceptance
+is claimed. The preview remains default-off. The current preview guide replaces
+its former “keyboard resizing not implemented” limitation with the implemented
+controls and remaining native acceptance boundary.

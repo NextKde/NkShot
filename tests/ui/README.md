@@ -241,3 +241,10 @@ overrides the QML component phase to inspect rectangle drag layout; the C++ phas
 remains Setup, which rejects region acceptance. The `.selector-layout.png` and `.session-layout.png` are layout diagnostics, not
 native capture screenshots. Add SCROLL_VIDEO to confirm the opt-in entry and open
 method remain blocked in video mode.
+
+The selector diagnostic now exercises real keyboard events: centered seeding,
+move/Shift move, Alt resize, mixed mouse/keyboard adjustment, clamping at all tested
+edges/minimums, Tab focus to Cancel/Use region, Return activation and keyboard
+cancellation. It verifies too-small regions disable confirmation. `.keyboard-layout.png`
+and `.invalid-region.png` remain layout/input diagnostics, with C++ Setup state and
+zero captured frames throughout. No compositor success is simulated.

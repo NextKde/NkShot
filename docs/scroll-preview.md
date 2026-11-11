@@ -24,8 +24,9 @@ to create a window. Do not enable this variable in packaged defaults yet.
    An unavailable desktop gets an explanation and a disabled Select region button.
 2. Choose one display and Select region. NkShot editor/pin/text windows are hidden
    for access to the target, with their previous visibility state retained.
-3. Drag a region on that display. Esc cancels and restores hidden windows. Keep
-   sticky headers, animation and other changing content outside the region.
+3. Drag a region on that display, then fine-tune it and choose Use region or Enter.
+   Mouse release no longer commits immediately. Esc cancels and restores hidden
+   windows. Keep sticky headers, animation and other changing content outside it.
 4. Choose Capture first. Scroll the target yourself, then Capture next. No wheel
    injection or automatic scrolling happens. Accepted-frame count and failure
    guidance are in the compact panel. Cancellation and timeouts preserve safety.
@@ -54,11 +55,28 @@ actual timer expiry.
 **Not yet verified:** successful KWin capture or caller-window exclusion on native
 hardware; permission-denial UI; real fullscreen selection/focus; display unplug or
 fractional-DPI geometry; hidden-window restoration under native window-management
-rules; end-to-end Finish/export from real scrolling. Selector keyboard resizing is
-not implemented. Panel buttons use normal keyboard focus and Esc is wired for both
-panel and selector, but native accessibility/input acceptance remains pending.
+rules; end-to-end Finish/export from real scrolling. Selector keyboard movement, resizing, Tab focus and explicit confirmation are
+implemented and exercised with offscreen Qt input. Actual native compositor focus
+and screen-reader acceptance remain pending.
 
 The cloud environment has no KWin and forbids Unix socket creation, so even a test
 DBus could not be started. No mock image is routed through the product as a real
 capture. See [source evidence and architecture](scroll-capture-plan.md) and the
 [capability matrix](capability-matrix.md).
+
+## Fine-tuning a region (059)
+
+- Arrow keys move the selection by one logical point. The first arrow seeds a
+  centered region when none exists. Shift + arrows moves ten points.
+- Alt + arrows changes width/height from the bottom/right edges. Add Shift for
+  ten-point size adjustments. Movement and resizing stay inside the display.
+- Physical-pixel dimensions are shown in the floating confirmation bar. Too-small
+  or over-limit regions disable Use region and explain the limits.
+- Tab moves between the selector and Cancel/Use region. Enter activates the
+  focused button or confirms while the selector has focus; Esc always cancels.
+- Mouse drag and keyboard adjustment can be mixed before confirming. Keyboard
+  steps use logical points; the displayed dimensions use the output DPR.
+
+The layout has accessible names/descriptions including position, size and keys.
+That is implementation evidence, not a claim that an actual screen reader or
+native Wayland focus behavior has been certified.
