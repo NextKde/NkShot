@@ -67,3 +67,8 @@ A first burst-input threaded fixture failed to reach its first-packet gate. It w
 replaced with paced input/final-packet gating, without relaxing output assertions
 or changing production drain semantics. These are generated-media and controlled
 platform checks, not a successful desktop/device recording claim.
+
+## 087 focused status UI
+
+See [recording status](recording-status.md) for the pause/finish hierarchy, explicit
+encoder-finalization feedback, reviewed screenshots and verification limits.

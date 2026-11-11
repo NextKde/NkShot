@@ -278,6 +278,11 @@ bool RecordingControlsUiChecks::run(QApplication &application, const QString &sc
         if(!click(QStringLiteral("nkshotRecordingStop"))||probe->stops!=1
             ||probe->recordingState()!=VideoPlatform::RecordingState::Rendering)
             return fail(QStringLiteral("Actual QML Stop while Paused did not finish"));
+        if(!QTest::qWaitFor([&]{return find(QStringLiteral("nkshotRecordingFinalizing"))
+            &&find(QStringLiteral("nkshotRecordingFinalizing"))->isVisible()
+            &&!find(QStringLiteral("nkshotRecordingStop"))->isVisible();},500)
+            ||!shot(QStringLiteral(".finishing.png")))
+            return fail(QStringLiteral("Finalizing did not replace capture actions with safe progress feedback"));
         probe->acknowledge(VideoPlatform::RecordingState::Recording);
         if(probe->isRecording()||core->m_recordingTrayAction->isEnabled()||!invariant())
             return fail(QStringLiteral("Late acknowledgement resurrected stopped UI or altered source"));

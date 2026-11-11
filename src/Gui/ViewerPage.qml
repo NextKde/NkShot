@@ -79,6 +79,9 @@ EmptyPage {
 
     header: QQC.ToolBar {
         id: header
+        visible: !SpectacleCore.videoPlatform.isRecording
+            && SpectacleCore.videoPlatform.recordingState !== VideoPlatform.Rendering
+        height: visible ? implicitHeight : 0
         leftPadding: 12
         rightPadding: 12
         topPadding: 10

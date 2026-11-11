@@ -59,7 +59,7 @@ FocusScope {
         cursorShape: enabled ?
             (pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
             : undefined
-        enabled: root.hasContent && !clipPopup.opened
+        enabled: root.hasContent && !clipPopup.opened && !root.captureActive
         onPositionChanged: {
             contextWindow.startDrag()
         }
@@ -73,13 +73,13 @@ FocusScope {
         objectName: "nkshotAnimatedImage"
         anchors.fill: parent
         source: root.usesAnimatedImage ? root.sourceUrl : ""
-        visible: status === Image.Ready
+        visible: status === Image.Ready && !root.captureActive
         fillMode: Image.PreserveAspectFit
     }
 
     VideoOutput {
         id: videoOutput
-        visible: mediaPlayer.hasVideo && GraphicsInfo.api !== GraphicsInfo.Software
+        visible: mediaPlayer.hasVideo && !root.captureActive && GraphicsInfo.api !== GraphicsInfo.Software
         anchors.fill: parent
         anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 20 : 0
         fillMode: VideoOutput.PreserveAspectFit
@@ -90,7 +90,7 @@ FocusScope {
         anchors.fill: parent
         anchors.bottomMargin: clipPopup.opened ? clipPopup.height + 20 : 0
         sink: videoOutput.videoSink
-        active: GraphicsInfo.api === GraphicsInfo.Software && mediaPlayer.hasVideo
+        active: GraphicsInfo.api === GraphicsInfo.Software && mediaPlayer.hasVideo && !root.captureActive
         visible: active
     }
 
@@ -116,7 +116,7 @@ FocusScope {
     QQC.Pane {
         anchors.centerIn: parent
         width: Math.min(420, parent.width - 24)
-        visible: root.playbackFailed && !SpectacleCore.videoPlatform.isRecording
+        visible: root.playbackFailed && !root.captureActive
         padding: 20
         background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 16; elevation: 0 }
         contentItem: ColumnLayout {
@@ -164,64 +164,118 @@ FocusScope {
         }
     }
 
-    ColumnLayout {
+    // Keep capture controls separate from the editor. During finalization the
+    // encoder still owns its output: never present playback or a saved claim.
+    readonly property bool finalizing: SpectacleCore.videoPlatform.recordingState === VideoPlatform.Rendering
+    readonly property bool captureActive: SpectacleCore.videoPlatform.isRecording || finalizing
+    QQC.Pane {
+        objectName: "nkshotRecordingStatus"
         anchors.centerIn: parent
-        width: Math.min(parent.width - 32, 420)
-        visible: SpectacleCore.videoPlatform.isRecording
-        spacing: 16
-        QQC.Label {
-            Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            text: SpectacleCore.videoPlatform.isPaused ? i18nc("@info", "Recording paused") : i18nc("@info", "Recording")
-            font.family: Qt.application.font.family
-            font.bold: true
-            color: Kos.AppTheme.paletteText
+        width: Math.min(parent.width - 40, 400)
+        padding: 28
+        visible: root.captureActive
+        background: Kos.KosSurface {
+            fillColor: Kos.AppTheme.contentBackground
+            radius: 24
+            elevation: 0
+            strokeWidth: 1
+            strokeColor: Kos.AppTheme.border
         }
-        QQC.Label {
-            Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            text: SpectacleCore.recordedTime
-            font.family: Qt.application.font.family
-            font.pixelSize: 28
-            color: Kos.AppTheme.paletteText
-        }
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 8
-            QQC.Button {
-                id: pauseCapture
-                objectName: "nkshotRecordingPause"
-                enabled: SpectacleCore.videoPlatform.pauseSupported && !SpectacleCore.videoPlatform.pausePending
-                text: SpectacleCore.videoPlatform.pausePending
-                    ? (SpectacleCore.videoPlatform.isPaused ? i18nc("@action", "Resuming…") : i18nc("@action", "Pausing…"))
-                    : (SpectacleCore.videoPlatform.isPaused ? i18nc("@action", "Resume") : i18nc("@action", "Pause"))
-                onClicked: SpectacleCore.toggleRecordingPause()
-                palette.buttonText: Kos.AppTheme.paletteText
-                opacity: enabled ? 1 : 0.45
-                background: Kos.KosSurface {
-                    radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: pauseCapture.hovered; pressed: pauseCapture.down; focused: pauseCapture.visualFocus
+        contentItem: ColumnLayout {
+            spacing: 20
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 8
+                Rectangle {
+                    width: 8; height: 8; radius: 4
+                    color: SpectacleCore.videoPlatform.isPaused || root.finalizing ? Kos.AppTheme.mutedText : "#e44b50"
+                }
+                QQC.Label {
+                    text: root.finalizing ? i18nc("@info", "Finishing recording")
+                        : SpectacleCore.videoPlatform.isPaused ? i18nc("@info", "Recording paused") : i18nc("@info", "Recording")
+                    font.family: Qt.application.font.family
+                    font.pixelSize: Qt.application.font.pixelSize
+                    font.weight: Font.DemiBold
+                    color: Kos.AppTheme.paletteText
                 }
             }
-            QQC.Button {
-                id: stopCapture
-                objectName: "nkshotRecordingStop"
-                text: i18nc("@action", "Stop")
-                onClicked: SpectacleCore.finishRecording()
-                palette.buttonText: Kos.AppTheme.paletteText
-                background: Kos.KosSurface {
-                    radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: stopCapture.hovered; pressed: stopCapture.down; focused: stopCapture.visualFocus
+            QQC.Label {
+                objectName: "nkshotRecordingElapsed"
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: SpectacleCore.recordedTime
+                font.family: Qt.application.font.family
+                font.pixelSize: 44
+                font.weight: Font.Light
+                color: Kos.AppTheme.paletteText
+                Accessible.name: i18nc("@label", "Recorded time: %1", text)
+            }
+            QQC.Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                text: root.finalizing ? i18nc("@info", "Preparing your video for review…")
+                    : SpectacleCore.videoPlatform.isPaused ? i18nc("@info", "Your recording will continue from here.")
+                    : i18nc("@info", "Finish when you are ready to review and trim.")
+                color: Kos.AppTheme.mutedText
+                font: Qt.application.font
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: !root.finalizing
+                spacing: 12
+                QQC.Button {
+                    id: pauseCapture
+                    objectName: "nkshotRecordingPause"
+                    Layout.fillWidth: true
+                    implicitHeight: 44
+                    visible: SpectacleCore.videoPlatform.pauseSupported
+                    enabled: SpectacleCore.videoPlatform.pauseSupported && !SpectacleCore.videoPlatform.pausePending
+                    text: SpectacleCore.videoPlatform.pausePending
+                        ? (SpectacleCore.videoPlatform.isPaused ? i18nc("@action", "Resuming…") : i18nc("@action", "Pausing…"))
+                        : (SpectacleCore.videoPlatform.isPaused ? i18nc("@action", "Resume") : i18nc("@action", "Pause"))
+                    onClicked: SpectacleCore.toggleRecordingPause()
+                    font: Qt.application.font
+                    contentItem: QQC.Label {
+                        text: pauseCapture.text; font: pauseCapture.font
+                        color: Kos.AppTheme.paletteText
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                    opacity: enabled ? 1 : 0.45
+                    background: Kos.KosSurface {
+                        fillColor: Kos.AppTheme.controlBackground
+                        radius: 12; elevation: 0; strokeWidth: 0
+                        hovered: pauseCapture.hovered; pressed: pauseCapture.down; focused: pauseCapture.visualFocus
+                    }
+                }
+                QQC.Button {
+                    id: stopCapture
+                    objectName: "nkshotRecordingStop"
+                    Layout.fillWidth: true
+                    implicitHeight: 44
+                    text: i18nc("@action", "Finish recording")
+                    onClicked: SpectacleCore.finishRecording()
+                    font: Qt.application.font
+                    contentItem: QQC.Label {
+                        text: stopCapture.text; font: stopCapture.font
+                        color: Kos.AppTheme.accentText
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Kos.KosSurface {
+                        fillColor: Kos.AppTheme.accent
+                        radius: 12; elevation: 0; strokeWidth: 0
+                        hovered: stopCapture.hovered; pressed: stopCapture.down; focused: stopCapture.visualFocus
+                    }
                 }
             }
-        }
-        QQC.Label {
-            Layout.fillWidth: true
-            visible: !SpectacleCore.videoPlatform.pauseSupported
-            wrapMode: Text.Wrap
-            horizontalAlignment: Text.AlignHCenter
-            text: i18nc("@info", "Safe audio/video pause is unavailable in this recording backend.")
-            color: Kos.AppTheme.mutedText
+            QQC.BusyIndicator {
+                objectName: "nkshotRecordingFinalizing"
+                Layout.alignment: Qt.AlignHCenter
+                visible: root.finalizing
+                running: visible
+                implicitWidth: 28; implicitHeight: 28
+                Accessible.name: i18nc("@info", "Finishing recording")
+            }
         }
     }
 
@@ -238,7 +292,7 @@ FocusScope {
         width: root.hasAnimatedImage ? implicitWidth : parent.width - anchors.margins * 2
         visible: false
         opacity: 0
-        enabled: root.hasContent && !clipPopup.opened
+        enabled: root.hasContent && !clipPopup.opened && !root.captureActive
         contentItem: RowLayout {
             spacing: parent.spacing
             TtToolButton {
