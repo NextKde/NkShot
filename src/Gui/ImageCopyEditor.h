@@ -11,9 +11,11 @@ class QWidget;
 class ImageCopyEditor : public QQuickView {
     Q_OBJECT
     Q_PROPERTY(AnnotationDocument *document READ document CONSTANT)
+    Q_PROPERTY(bool annotationMode READ annotationMode CONSTANT)
 public:
-    ImageCopyEditor(const QImage &image, QQmlEngine *engine);
+    ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool annotationMode = false);
     ~ImageCopyEditor() override;
+    bool annotationMode() const { return m_annotationMode; }
     AnnotationDocument *document() { return m_document; }
     Q_INVOKABLE void copyImage();
     Q_INVOKABLE void saveAs();
@@ -24,15 +26,20 @@ public:
     Q_INVOKABLE qreal dprRound(qreal value) const { return qRound(value * devicePixelRatio()) / devicePixelRatio(); }
 Q_SIGNALS:
     void imageCopied();
+    void annotationsCommitted(const QImage &image);
     void saveFinished(const QString &message, bool success);
 protected:
     bool event(QEvent *event) override;
 private:
     void prepareDialog(QWidget *dialog);
+    bool commitAnnotations();
     AnnotationDocument *m_document;
     QPointer<QWidget> m_optionsDialog;
     QPointer<QMessageBox> m_closeDialog;
     QPointer<QFileDialog> m_saveDialog;
     QImage m_savedImage;
+    const bool m_annotationMode;
+    QImage m_referenceImage;
+    QImage m_referenceCanvas;
     bool m_acceptClose = false;
 };

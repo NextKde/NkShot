@@ -20,13 +20,40 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 
-ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine) : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this))
+ImageCopyEditor::ImageCopyEditor(const QImage &image, QQmlEngine *engine, bool annotationMode)
+    : QQuickView(engine, nullptr), m_document(new AnnotationDocument(this)), m_annotationMode(annotationMode)
 {
     setObjectName(QStringLiteral("nkshotImageCopyEditor"));
-    setTitle(i18nc("@title:window", "Edit image copy — NkShot"));
+    setTitle(m_annotationMode ? i18nc("@title:window", "Video annotations — NkShot")
+                             : i18nc("@title:window", "Edit image copy — NkShot"));
     setMinimumSize({400, 400});
     setResizeMode(SizeRootObjectToView);
-    m_document->setBaseImage(image.copy());
+    auto reference = image.copy();
+    if (m_annotationMode) reference.setDevicePixelRatio(1);
+    m_document->setBaseImage(reference);
+    if (m_annotationMode) {
+        // The reference frame is never part of the committed overlay.
+        m_referenceImage = m_document->baseImage();
+        m_document->renderToImage(); // Populate the document's base/annotation caches.
+        m_referenceCanvas = m_document->canvasBaseImage();
+        connect(m_document->tool(), &AnnotationTool::typeChanged, this, [this] {
+            switch (m_document->tool()->type()) {
+            case AnnotationTool::NoTool:
+            case AnnotationTool::SelectTool:
+            case AnnotationTool::FreehandTool:
+            case AnnotationTool::HighlighterTool:
+            case AnnotationTool::LineTool:
+            case AnnotationTool::ArrowTool:
+            case AnnotationTool::RectangleTool:
+            case AnnotationTool::EllipseTool:
+            case AnnotationTool::TextTool:
+            case AnnotationTool::NumberTool:
+                break;
+            default:
+                m_document->tool()->setType(AnnotationTool::SelectTool);
+            }
+        });
+    }
     m_document->tool()->setType(AnnotationTool::SelectTool);
     auto context = new QQmlContext(engine->rootContext(), this);
     context->setContextProperty(QStringLiteral("copyEditor"), this);
@@ -50,6 +77,7 @@ void ImageCopyEditor::prepareDialog(QWidget *dialog)
 }
 void ImageCopyEditor::copyImage()
 {
+    if (m_annotationMode) return;
     const auto image=m_document->renderToImage();
     if(image.isNull())return;
     QApplication::clipboard()->setImage(image);Q_EMIT imageCopied();
@@ -61,6 +89,7 @@ bool ImageCopyEditor::hasUnsavedChanges() const
 }
 void ImageCopyEditor::saveAs()
 {
+    if (m_annotationMode) return;
     if(m_saveDialog){m_saveDialog->raise();m_saveDialog->activateWindow();return;}
     // Capture exactly the requested revision; never mutate global export settings.
     const QImage snapshot=m_document->renderToImage();
@@ -103,6 +132,7 @@ void ImageCopyEditor::saveAs()
 }
 QQuickWindow *ImageCopyEditor::finishCopy()
 {
+    if (m_annotationMode) { commitAnnotations(); return nullptr; }
     const auto image=m_document->renderToImage();
     if(image.isNull())return nullptr;
     auto result=new PinnedImageWindow(image,engine());
@@ -111,6 +141,44 @@ QQuickWindow *ImageCopyEditor::finishCopy()
     result->setTitle(i18nc("@title:window", "Edited image copy — NkShot"));
     result->setScreen(screen());result->setPosition(position()+QPoint(30,30));result->show();
     m_acceptClose=true;close();return result;
+}
+bool ImageCopyEditor::commitAnnotations()
+{
+    if (!m_annotationMode) return false;
+    if (m_optionsDialog) { m_optionsDialog->raise(); return false; }
+    // Window-close must commit pending text/options just like the Done action.
+    if (rootObject()) QMetaObject::invokeMethod(rootObject(), "commitOptions");
+    m_document->selectedItemWrapper()->commitChanges();
+    m_document->renderToImage(); // annotationsImage() alone returns the lazy cache.
+    const QRectF expected(QPointF(0, 0), QSizeF(m_referenceImage.size()));
+    if (m_referenceImage.isNull() || m_document->canvasRect() != expected
+        || !m_document->transform().isIdentity() || m_document->imageDpr() != 1
+        || m_document->baseImage() != m_referenceImage
+        || m_document->canvasBaseImage() != m_referenceCanvas) {
+        Q_EMIT saveFinished(i18nc("@info", "Video annotations must keep the original frame size and pixels. Undo image changes before returning."), false);
+        return false;
+    }
+    auto overlay = m_document->annotationsImage().copy();
+    if (!overlay.isNull() && (overlay.size() != m_referenceImage.size() || !overlay.hasAlphaChannel())) {
+        Q_EMIT saveFinished(i18nc("@info", "The transparent annotation layer could not be prepared."), false);
+        return false;
+    }
+    if (!overlay.isNull()) {
+        overlay = overlay.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        overlay.setDevicePixelRatio(1);
+        bool visibleMark = false;
+        for (int y = 0; y < overlay.height() && !visibleMark; ++y) {
+            const auto row = reinterpret_cast<const QRgb *>(overlay.constScanLine(y));
+            for (int x = 0; x < overlay.width(); ++x) {
+                if (qAlpha(row[x])) { visibleMark = true; break; }
+            }
+        }
+        if (!visibleMark) overlay = QImage();
+    }
+    // Hide, do not delete: reopening this export keeps editable marks and undo.
+    hide();
+    Q_EMIT annotationsCommitted(overlay);
+    return true;
 }
 void ImageCopyEditor::showColorDialog(int option)
 {
@@ -153,6 +221,11 @@ void ImageCopyEditor::showFontDialog()
 }
 bool ImageCopyEditor::event(QEvent *event)
 {
+    if (event->type() == QEvent::Close && m_annotationMode) {
+        static_cast<QCloseEvent *>(event)->ignore();
+        commitAnnotations();
+        return true;
+    }
     if(event->type()==QEvent::Close&&m_saveDialog){
         static_cast<QCloseEvent *>(event)->ignore();m_saveDialog->raise();return true;
     }

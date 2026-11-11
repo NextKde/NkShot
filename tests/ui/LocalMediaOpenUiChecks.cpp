@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Actual local-file dialogs and decoders, using generated nonpersonal fixtures.
 #include "LocalMediaOpenUiChecks.h"
+#include "VideoAnnotationsUiChecks.h"
 #include "SpectacleCore.h"
 #include "RecentMediaModel.h"
 #include "Platforms/ImagePlatform.h"
@@ -169,7 +170,12 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     };
     const auto open=[&] {
         viewer()->show();viewer()->requestActivate();
-        if(!QTest::qWaitFor([&]{return QGuiApplication::focusWindow()==viewer();},1500)) {
+        if(!QTest::qWaitFor([&]{
+            if(QGuiApplication::focusWindow()==viewer())return true;
+            // A just-closed native/widget dialog can clear focus after the first
+            // activation request. Repeat the supported request while it settles.
+            viewer()->requestActivate();return false;
+        },1500)) {
             qWarning()<<"Open shortcut focus unavailable"<<QGuiApplication::focusWindow()<<viewer()
                 <<"core allowed"<<core->canOpenMedia()<<"viewer allowed"<<viewer()->canOpenMedia()
                 <<"opening"<<viewer()->property("openingMedia")<<"modal"<<QApplication::activeModalWidget();
@@ -627,6 +633,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     const bool cropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
     const bool privacyExport=qEnvironmentVariableIsSet("NKSHOT_TEST_PRIVACY_CLIP");
     QRect expectedPrivacy;
+    const bool annotationExport=qEnvironmentVariableIsSet("NKSHOT_TEST_ANNOTATION_CLIP");
     QRect expectedCrop;
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
         return fail(QStringLiteral("Export details could not be opened"));
@@ -714,7 +721,15 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_Left);
         if(job->property("privacyRect").toRect().x()!=moved.x()-2)return fail(QStringLiteral("Privacy keyboard move failed"));
         QTest::keyClick(viewer(),Qt::Key_Right,Qt::ControlModifier|Qt::ShiftModifier);
-        if(job->property("privacyRect").toRect().width()!=moved.width()+10)return fail(QStringLiteral("Privacy keyboard resize failed"));
+        const auto resized = job->property("privacyRect").toRect();
+        const auto expectedWidth = qMin(moved.width() + 10, job->property("sourceSize").toSize().width() - resized.x()) & ~1;
+        if (resized.width() != expectedWidth) return fail(QStringLiteral("Privacy keyboard resize failed"));
+        // A reframed preview may drag to the source edge. Make room through real
+        // keyboard movement before asserting the corner can grow in both axes.
+        for (int i = 0; i < 80 && job->property("privacyRect").toRect().x() > 20; ++i)
+            QTest::keyClick(viewer(), Qt::Key_Left, Qt::ShiftModifier);
+        for (int i = 0; i < 80 && job->property("privacyRect").toRect().y() > 20; ++i)
+            QTest::keyClick(viewer(), Qt::Key_Up, Qt::ShiftModifier);
         auto handle=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoPrivacyHandle_3"));
         if(!handle)return fail(QStringLiteral("Privacy corner missing"));
         const auto beforeResize=job->property("privacyRect").toRect();
@@ -741,11 +756,25 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||job->property("privacyRect").toRect()!=expectedPrivacy||!capture(QStringLiteral(".privacy.png")))
             return fail(QStringLiteral("Privacy toggle lost region or failed to hide preview"));
     }
+    if(annotationExport) {
+        const auto error=runVideoAnnotationsUiChecks(viewer(),sink,screenshot);
+        if(!error.isEmpty())return fail(error);
+    }
     if(!editRange(QStringLiteral("nkshotClipEnd"),QStringLiteral("3.15"),315)
         ||!editRange(QStringLiteral("nkshotClipStart"),QStringLiteral("1.35"),135)
         ||!capture(QStringLiteral(".clip.png"))||!click(QStringLiteral("nkshotClipExport"))
         ||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
         return fail(QStringLiteral("Imported MP4 clip time inputs/Save dialog failed"));
+    if(annotationExport) {
+        const auto overlay=job->property("annotationOverlay").value<QImage>();
+        QMetaObject::invokeMethod(job,"clearAnnotationOverlay");
+        const auto stale=fixtures.filePath(QStringLiteral("stale-annotations.mp4"));
+        if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
+            ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500)
+            ||QFileInfo::exists(stale)||job->property("busy").toBool())return fail(QStringLiteral("Stale annotation settings reached encoder"));
+        QMetaObject::invokeMethod(job,"setAnnotationOverlay",Q_ARG(QImage,overlay));
+        if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))return fail(QStringLiteral("Annotation save race did not recover"));
+    }
     if(privacyExport) {
         QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()+2),Q_ARG(int,expectedPrivacy.y()),
             Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
@@ -803,6 +832,18 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(image.isNull()||protectedArea.width()<8||protectedArea.height()<8)return fail(QStringLiteral("Privacy output region missing"));
         const auto color=image.pixelColor(protectedArea.center());
         if(color.red()>20||color.green()>20||color.blue()>20)return fail(QStringLiteral("Actual UI export did not bake opaque black privacy cover"));
+    }
+    if(annotationExport) {
+        const auto overlay=job->property("annotationOverlay").value<QImage>();QPoint marked(-1,-1);
+        for(int y=4;y<overlay.height()-4&&marked.x()<0;y+=2)for(int x=4;x<overlay.width()-4;x+=2){
+            const QPoint p(x,y);if(qAlpha(overlay.pixel(p))>250&&(!cropExport||expectedCrop.contains(p))&&(!privacyExport||!expectedPrivacy.contains(p))){marked=p;break;}
+        }
+        const auto decoded=fixtures.filePath(QStringLiteral("annotations-decoded.png"));
+        QProcess decode;decode.start(QStringLiteral("ffmpeg"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),clip,QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-threads"),QStringLiteral("1"),decoded});
+        if(marked.x()<0||!decode.waitForFinished(10000)||decode.exitCode()!=0)return fail(QStringLiteral("Annotated output decode/mark missing"));
+        const QImage image(decoded);if(cropExport)marked-=expectedCrop.topLeft();
+        if(image.isNull()||!image.rect().contains(marked))return fail(QStringLiteral("Annotated output geometry invalid"));
+        const auto color=image.pixelColor(marked);if(color.red()<205||color.green()<205||color.blue()<205)return fail(QStringLiteral("Actual drawn white annotation absent from exported clip"));
     }
     const auto evidenceClip=screenshot+QStringLiteral(".export-")+QString::number(QDateTime::currentMSecsSinceEpoch())+QStringLiteral(".mp4");
     if(!QFile::copy(clip,evidenceClip))return fail(QStringLiteral("Unable to retain actual export evidence"));

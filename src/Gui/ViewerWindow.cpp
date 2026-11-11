@@ -738,9 +738,44 @@ QQuickWindow *ViewerWindow::openColorPicker()
 
 QObject *ViewerWindow::clipJobObject() const { return m_clipJob; }
 
+QQuickWindow *ViewerWindow::editVideoAnnotations(QVideoSink *sink, const QUrl &source)
+{
+    const auto core=SpectacleCore::instance();
+    if(!m_clipJob||!m_clipJob->ready()||m_clipJob->busy()||m_clipSaveDialog||!m_clipJob->annotationAvailable()
+        ||!core->videoMode()||core->videoPlatform()->isRecording()||source.isEmpty()
+        ||source!=core->currentVideo()||source!=m_clipJob->sourceUrl()||!sink)return nullptr;
+    if(m_videoAnnotationEditor){m_videoAnnotationEditor->show();m_videoAnnotationEditor->requestActivate();return m_videoAnnotationEditor;}
+    const auto frame=sink->videoFrame();
+    if(!frame.isValid()||frame.size()!=m_clipJob->sourceSize())return nullptr;
+    auto image=frame.toImage();
+    if(image.isNull()||image.size()!=m_clipJob->sourceSize())return nullptr;
+    image.setDevicePixelRatio(1);
+    auto editor=new ImageCopyEditor(image,engine(),true);
+    if(editor->status()!=QQuickView::Ready){delete editor;return nullptr;}
+    m_videoAnnotationEditor=editor;
+    const auto session=m_annotationSession;
+    connect(editor,&ImageCopyEditor::annotationsCommitted,this,[this,source,session](const QImage &overlay){
+        if(session!=m_annotationSession||!m_clipJob||m_clipJob->sourceUrl()!=source
+            ||SpectacleCore::instance()->currentVideo()!=source||m_clipSaveDialog)return;
+        m_clipJob->setAnnotationOverlay(overlay);
+        requestActivate();
+    });
+    editor->setObjectName(QStringLiteral("nkshotVideoAnnotationEditor"));
+    editor->setTransientParent(this);editor->setModality(Qt::WindowModal);
+    editor->setScreen(screen());editor->setPosition(position()+QPoint(30,30));editor->show();
+    return editor;
+}
+void ViewerWindow::clearVideoAnnotations()
+{
+    if(!m_clipJob||!m_clipJob->ready()||m_clipJob->busy()||m_clipSaveDialog)return;
+    ++m_annotationSession;delete m_videoAnnotationEditor;m_videoAnnotationEditor=nullptr;
+    m_clipJob->clearAnnotationOverlay();
+}
+
 void ViewerWindow::prepareClipExport(const QUrl &source)
 {
     if (!m_clipJob || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
+    ++m_annotationSession;delete m_videoAnnotationEditor;m_videoAnnotationEditor=nullptr;
     m_clipJob->inspect(source);
 }
 
@@ -756,6 +791,7 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
     const QRect cropRect = m_clipJob->cropRect();
     const bool privacyEnabled = m_clipJob->privacyEnabled();
     const QRect privacyRect = m_clipJob->privacyRect();
+    const quint64 annotationRevision = m_clipJob->annotationRevision();
     const QFileInfo sourceFile(source.toLocalFile());
     auto dialog = new QFileDialog;
     m_clipSaveDialog = dialog;
@@ -779,8 +815,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         m_clipSaveDialog = nullptr;
         Q_EMIT choosingClipOutputChanged();
     });
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, includeAudio, cropAspect, cropRect, privacyEnabled, privacyRect, startMs, endMs] {
-        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->privacyEnabled() != privacyEnabled || m_clipJob->privacyRect() != privacyRect || m_clipJob->busy()
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, includeAudio, cropAspect, cropRect, privacyEnabled, privacyRect, annotationRevision, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->privacyEnabled() != privacyEnabled || m_clipJob->privacyRect() != privacyRect || m_clipJob->annotationRevision() != annotationRevision || m_clipJob->busy()
             || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
         const auto files = dialog->selectedFiles();
         if (files.size() != 1) return;
@@ -793,6 +829,7 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
 
 void ViewerWindow::cancelClipExport()
 {
+    ++m_annotationSession;delete m_videoAnnotationEditor;m_videoAnnotationEditor=nullptr;
     if (m_clipSaveDialog) {
         auto dialog = qobject_cast<QFileDialog *>(m_clipSaveDialog.data());
         if (dialog) dialog->reject();

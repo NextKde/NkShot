@@ -14,6 +14,7 @@
 
 class ViewerWindowPrivate;
 class VideoClipJob;
+class ImageCopyEditor;
 class QVideoSink;
 namespace NkShot { class LocalMediaLoader; }
 
@@ -71,6 +72,8 @@ public:
     VideoClipJob *clipJob() const { return m_clipJob; }
     bool choosingClipOutput() const { return !m_clipSaveDialog.isNull(); }
     Q_INVOKABLE void prepareClipExport(const QUrl &source);
+    Q_INVOKABLE QQuickWindow *editVideoAnnotations(QVideoSink *sink, const QUrl &source);
+    Q_INVOKABLE void clearVideoAnnotations();
     Q_INVOKABLE void chooseClipOutput(qint64 startMs, qint64 endMs);
     Q_INVOKABLE void cancelClipExport();
 Q_SIGNALS:
@@ -109,6 +112,8 @@ private:
     QPointer<QObject> m_combineDialog;
     VideoClipJob *m_clipJob = nullptr;
     QPointer<QObject> m_clipSaveDialog;
+    QPointer<ImageCopyEditor> m_videoAnnotationEditor;
+    quint64 m_annotationSession = 0;
     bool m_combiningImages = false;
     bool m_scanningCode = false;
     quint64 m_codeScanEpoch = 0;

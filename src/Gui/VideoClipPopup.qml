@@ -8,6 +8,7 @@ import org.kde.kirigami as Kirigami
 QQC.Popup {
     id: root
     objectName: "nkshotClipPopup"
+    property var videoSink
     property var player
     property url sourceUrl
     readonly property var job: contextWindow.clipJob
@@ -262,6 +263,7 @@ QQC.Popup {
                 color: Kos.AppTheme.mutedText
                 text: (root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
                     : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds."))
+                    + (root.job.hasAnnotationOverlay ? i18nc("@info", " · Annotations") : "")
                     + (root.job.privacyEnabled ? i18nc("@info", " · Privacy cover") : "")
                     + (root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", " · Crop %1 × %2", root.job.cropRect.width, root.job.cropRect.height) : "")
                 wrapMode: Text.Wrap
@@ -277,6 +279,7 @@ QQC.Popup {
         }
         QQC.ScrollView {
             id: detailScroll
+            objectName: "nkshotClipDetailScroll"
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(detailContents.implicitHeight, Math.max(80, contextWindow.height - 440))
             visible: root.detailsVisible
@@ -284,6 +287,7 @@ QQC.Popup {
             contentWidth: availableWidth
             contentHeight: detailContents.implicitHeight
             QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
+            QQC.ScrollBar.vertical.objectName: "nkshotClipDetailScrollbar"
             QQC.ScrollBar.vertical.policy: detailContents.implicitHeight > height ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
             ColumnLayout {
                 id: detailContents
@@ -387,6 +391,26 @@ QQC.Popup {
                 border.color: includeAudio.checked ? Kos.AppTheme.accent : Kos.AppTheme.border
                 opacity: includeAudio.enabled ? 1 : 0.5
                 QQC.Label {anchors.centerIn: parent; text: "✓"; visible: includeAudio.checked; color: Kos.AppTheme.accentText}
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            SolidButton {
+                objectName: "nkshotClipAnnotations"
+                Layout.fillWidth: true
+                text: root.job.hasAnnotationOverlay ? i18nc("@action", "Edit annotations…") : i18nc("@action", "Add annotations…")
+                enabled: root.job.ready && root.job.annotationAvailable && !root.locked
+                onClicked: {
+                    root.stopPreview(); root.editingPrivacy = false; root.detailsVisible = false
+                    contextWindow.editVideoAnnotations(root.videoSink, root.sourceUrl)
+                }
+            }
+            SolidButton {
+                objectName: "nkshotClipClearAnnotations"
+                text: i18nc("@action", "Clear")
+                Accessible.name: i18nc("@action", "Clear video annotations")
+                enabled: root.job.hasAnnotationOverlay && !root.locked
+                onClicked: {root.stopPreview(); contextWindow.clearVideoAnnotations()}
             }
         }
         QQC.Label {

@@ -13,6 +13,7 @@ import org.kde.kquickimageeditor
 Grid {
     id: root
     objectName: "nkshotToolProperties"
+    function rounded(value) { const dpr = Screen.devicePixelRatio || 1; return Math.round(value * dpr) / dpr }
     required property AnnotationDocument editorDocument
     property bool verticalLayout: false
     columns: verticalLayout ? 1 : -1
@@ -238,7 +239,7 @@ Grid {
             rightPadding: spacing
 
             QQC.Label {
-                width: dprRound(implicitWidth)
+                width: root.rounded(implicitWidth)
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18nc("@label:slider strength of effect", "Strength:")
             }
@@ -285,14 +286,14 @@ Grid {
             QQC.Label {
                 leftPadding: root.mirrored ? 0 : parent.spacing
                 rightPadding: root.mirrored ? parent.spacing : 0
-                width: contextWindow.dprRound(implicitWidth)
+                width: root.rounded(implicitWidth)
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Font:")
             }
 
             ToolButton {
                 anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: contextWindow.dprRound(implicitContentWidth)
+                implicitWidth: root.rounded(implicitContentWidth)
                 display: QQC.ToolButton.TextOnly
                 contentItem: QQC.Label {
                     readonly property font currentFont: root.useSelectionOptions ? root.selectedItem.font : root.tool.font
@@ -351,7 +352,7 @@ Grid {
             QQC.Label {
                 leftPadding: root.mirrored ? 0 : parent.spacing
                 rightPadding: root.mirrored ? parent.spacing : 0
-                width: contextWindow.dprRound(implicitWidth)
+                width: root.rounded(implicitWidth)
                 anchors.verticalCenter: parent.verticalCenter
                 text: i18n("Number:")
             }

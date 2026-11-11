@@ -94,6 +94,14 @@ FocusScope {
         visible: active
     }
 
+    ImageOverlayPreview {
+        objectName: "nkshotVideoAnnotationOverlay"
+        anchors.fill: videoOutput
+        visible: clipPopup.opened && contextWindow.clipJob.hasAnnotationOverlay && !root.captureActive
+        image: contextWindow.clipJob.annotationOverlay
+        displayRect: cropOverlay.displayRect
+    }
+
     CropPreviewOverlay {
         id: cropOverlay
         objectName: "nkshotVideoCropOverlay"
@@ -627,6 +635,7 @@ FocusScope {
         }
     }
     VideoClipPopup {
+        videoSink: videoOutput.videoSink
         id: clipPopup
         parent: root
         player: mediaPlayer

@@ -36,17 +36,19 @@ QQC.Pane {
         spacing: 10
         RowLayout {
             Layout.fillWidth: true
-            QQC.Label { visible: root.width >= 480; text: i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
+            QQC.Label { visible: root.width >= 480; text: copyEditor.annotationMode ? i18nc("@title", "Video annotations") : i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
             UndoRedoGroup { editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
-            ActionButton { objectName: "nkshotCopyEditorCopy"; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
-            ActionButton { objectName: "nkshotCopyEditorSave"; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
-            ActionButton { objectName: "nkshotCopyEditorDone"; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
+            ActionButton { objectName: "nkshotCopyEditorCopy"; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
+            ActionButton { objectName: "nkshotCopyEditorSave"; visible: !copyEditor.annotationMode; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+            ActionButton { objectName: "nkshotCopyEditorDone"; primary: copyEditor.annotationMode; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
         }
         QQC.Label {
             id: feedback
             Layout.fillWidth: true
-            text: i18nc("@info", "Edit freely. The original stays unchanged.")
+            text: copyEditor.annotationMode
+                ? i18nc("@info", "Fixed marks for this export. Done or closing keeps them editable here; the original stays unchanged.")
+                : i18nc("@info", "Edit freely. The original stays unchanged.")
             color: Kos.AppTheme.mutedText
             wrapMode: Text.Wrap
             Connections { target: copyEditor; function onSaveFinished(message, success) { feedback.text = message } function onImageCopied() { feedback.text = i18nc("@info", "Edited image copied. Save a PNG or use Done to keep a separate image.") } }
@@ -85,7 +87,7 @@ QQC.Pane {
                     transformOrigin: editor.transformOrigin
                     scale: editor.scale
                     viewport: editor
-                    active: root.document.tool.type === AnnotationTool.CropTool
+                    active: !copyEditor.annotationMode && root.document.tool.type === AnnotationTool.CropTool
                 }
             }
         }
@@ -106,6 +108,7 @@ QQC.Pane {
         }
         AnnotationsToolBarContents {
             editorDocument: root.document
+            annotationOnly: copyEditor.annotationMode
             essentialsOnly: true
             paletteMode: true
             showUndoRedo: false
@@ -114,7 +117,8 @@ QQC.Pane {
             Layout.maximumWidth: root.availableWidth
         }
     }
-    Shortcut { sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
+    Shortcut { enabled: copyEditor.annotationMode; sequence: "Escape"; onActivated: {root.commitOptions(); copyEditor.finishCopy()} }
+    Shortcut { enabled: !copyEditor.annotationMode; sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { enabled: !copyEditor.annotationMode; sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { enabled: !copyEditor.annotationMode; sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
 }

@@ -120,6 +120,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('signal positionRequested', overlay)
         self.assertIn('signal centerRequested', overlay)
 
+    def test_video_annotations_reuse_isolated_editor(self):
+        impl = read('src/Gui/ImageCopyEditor.cpp')
+        self.assertIn('annotationsImage().copy()', impl)
+        self.assertIn('m_document->transform().isIdentity()', impl)
+        self.assertIn('annotationsCommitted(overlay)', impl)
+        toolbar = read('src/Gui/AnnotationsToolBarContents.qml')
+        self.assertIn('property bool annotationOnly: false', toolbar)
+        self.assertIn('m_clipJob->annotationRevision() != annotationRevision', read('src/Gui/ViewerWindow.cpp'))
+        preview = read('src/Gui/ImageOverlayPreview.cpp')
+        self.assertNotIn('SpectacleCore', preview)
+        self.assertNotIn('VideoClipJob', preview)
+
     def test_video_privacy_overlay_is_injected(self):
         overlay = read('src/Gui/PrivacyRegionOverlay.qml')
         self.assertNotIn('SpectacleCore', overlay)

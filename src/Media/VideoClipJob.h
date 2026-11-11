@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include <QObject>
+#include <QImage>
 #include <QUrl>
 #include <QStringList>
 #include <QPointer>
@@ -11,6 +12,10 @@
 class QProcess;
 class VideoClipJob : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool hasAnnotationOverlay READ hasAnnotationOverlay NOTIFY changed)
+    Q_PROPERTY(QImage annotationOverlay READ annotationOverlay NOTIFY changed)
+    Q_PROPERTY(bool annotationAvailable READ annotationAvailable NOTIFY changed)
+    Q_PROPERTY(quint64 annotationRevision READ annotationRevision NOTIFY changed)
     Q_PROPERTY(bool privacyEnabled READ privacyEnabled WRITE setPrivacyEnabled NOTIFY changed)
     Q_PROPERTY(bool privacyAvailable READ privacyAvailable NOTIFY changed)
     Q_PROPERTY(QRect privacyRect READ privacyRect NOTIFY changed)
@@ -32,6 +37,12 @@ class VideoClipJob : public QObject {
 public:
     explicit VideoClipJob(QObject *parent = nullptr);
     ~VideoClipJob() override;
+    bool hasAnnotationOverlay() const { return !m_annotationOverlay.isNull(); }
+    QImage annotationOverlay() const { return m_annotationOverlay; }
+    bool annotationAvailable() const { return cropAvailable() && m_overlayAvailable; }
+    quint64 annotationRevision() const { return m_annotationRevision; }
+    Q_INVOKABLE bool setAnnotationOverlay(const QImage &image);
+    Q_INVOKABLE void clearAnnotationOverlay() { setAnnotationOverlay(QImage()); }
     bool privacyEnabled() const { return m_privacyEnabled; }
     bool privacyAvailable() const { return cropAvailable() && m_drawboxAvailable; }
     QRect privacyRect() const { return m_privacyRect; }
@@ -69,6 +80,8 @@ private:
     void completed(Stage stage);
     void launchGifPass(bool palette);
     QString gifFilter() const;
+    QString annotatedFilter(const QString &time, const QString &tail) const;
+    void appendAnnotationInput(QStringList &args) const;
     QString cropFilter() const;
     QString privacyFilter() const;
     QRect centeredCropRect() const;
@@ -80,6 +93,10 @@ private:
     bool destinationUnchanged() const;
     QUrl m_source, m_output;
     QString m_ffmpeg, m_ffprobe, m_error, m_temp, m_target, m_palette;
+    QImage m_annotationOverlay;
+    quint64 m_annotationRevision = 0;
+    bool m_overlayAvailable = false;
+    QString m_annotationFile;
     bool m_privacyEnabled = false, m_drawboxAvailable = false;
     QRect m_privacyRect;
     QPoint m_cropPosition = QPoint(-1, -1);

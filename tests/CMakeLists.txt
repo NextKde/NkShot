@@ -124,7 +124,7 @@ set_tests_properties(color_sample_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA
 
 # Real local FFmpeg trim/re-encode and atomic output; no desktop capture claim.
 ecm_add_test(VideoClipTest.cpp ../src/Media/VideoClipJob.cpp ../src/Media/VideoClipJob.h
-    TEST_NAME video_clip_test LINK_LIBRARIES Qt::Test Qt::Core)
+    TEST_NAME video_clip_test LINK_LIBRARIES Qt::Test Qt::Core Qt::Gui)
 set_tests_properties(video_clip_test PROPERTIES TIMEOUT 180)
 
 # Portal protocol integration: explicitly supplied private session bus only.

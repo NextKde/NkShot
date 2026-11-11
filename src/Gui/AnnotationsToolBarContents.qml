@@ -15,6 +15,7 @@ ButtonGrid {
     required property AnnotationDocument editorDocument
     property bool paletteMode: false
     property bool essentialsOnly: false
+    property bool annotationOnly: false
     property bool showUndoRedo: true
     property bool showNoneButton: false
     property alias checkedButton: toolGroup.checkedButton
@@ -88,6 +89,7 @@ ButtonGrid {
         icon.color: palette.buttonText
         property string extraHelp: ""
         property bool secondary: false
+        property bool needsBaseImage: false
         property string toolKey: ""
         Shortcut {
             sequence: button.toolKey
@@ -95,7 +97,7 @@ ButtonGrid {
             context: Qt.WindowShortcut
             onActivated: button.clicked()
         }
-        visible: !root.essentialsOnly || !secondary
+        visible: (!root.essentialsOnly || !secondary) && (!root.annotationOnly || !needsBaseImage)
         implicitHeight: root.paletteMode ? 36 : QmlUtils.iconTextButtonHeight
         implicitWidth: root.paletteMode ? 36 : implicitContentWidth + leftPadding + rightPadding
         background: Kos.KosSurface {
@@ -151,6 +153,7 @@ ButtonGrid {
         toolKey: "Alt+1"
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar crop image tool", "Crop")
+        needsBaseImage: true
         icon.name: "transform-crop"
         checked: root.toolType === (root.isFullscreenCapture ? AnnotationTool.NoTool : AnnotationTool.CropTool)
         onClicked: root.tool.type = (root.isFullscreenCapture ? AnnotationTool.NoTool : AnnotationTool.CropTool)
@@ -226,6 +229,7 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar pixelate tool", "Pixelate")
+        needsBaseImage: true
         toolKey: "Alt+6"
         extraHelp: rectangleButton.extraHelp
         icon.name: "pixelate"
@@ -235,6 +239,7 @@ ButtonGrid {
     ToolButton {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar blur tool", "Blur")
+        needsBaseImage: true
         extraHelp: rectangleButton.extraHelp
         secondary: true
         icon.name: "blur"
@@ -276,11 +281,15 @@ ButtonGrid {
         visible: root.essentialsOnly
         implicitHeight: 36
         display: QQC.AbstractButton.IconOnly
-        readonly property var secondaryTools: [AnnotationTool.HighlighterTool, AnnotationTool.LineTool,
-            AnnotationTool.EllipseTool, AnnotationTool.BlurTool, AnnotationTool.NumberTool].concat(root.showNoneButton ? [AnnotationTool.NoTool] : [])
-        readonly property var secondaryIcons: ["draw-highlight", "draw-line", "draw-ellipse", "blur", "draw-number"].concat(root.showNoneButton ? ["transform-browse"] : [])
-        readonly property var secondaryNames: [i18nc("@action", "Highlighter"), i18nc("@action", "Line"),
-            i18nc("@action", "Ellipse"), i18nc("@action", "Blur"), i18nc("@action", "Number")].concat(root.showNoneButton ? [i18nc("@action", "Pan")] : [])
+        readonly property var secondaryTools: [AnnotationTool.HighlighterTool, AnnotationTool.LineTool, AnnotationTool.EllipseTool]
+            .concat(root.annotationOnly ? [] : [AnnotationTool.BlurTool]).concat([AnnotationTool.NumberTool])
+            .concat(root.showNoneButton ? [AnnotationTool.NoTool] : [])
+        readonly property var secondaryIcons: ["draw-highlight", "draw-line", "draw-ellipse"]
+            .concat(root.annotationOnly ? [] : ["blur"]).concat(["draw-number"])
+            .concat(root.showNoneButton ? ["transform-browse"] : [])
+        readonly property var secondaryNames: [i18nc("@action", "Highlighter"), i18nc("@action", "Line"), i18nc("@action", "Ellipse")]
+            .concat(root.annotationOnly ? [] : [i18nc("@action", "Blur")]).concat([i18nc("@action", "Number")])
+            .concat(root.showNoneButton ? [i18nc("@action", "Pan")] : [])
         readonly property int selectedIndex: secondaryTools.indexOf(root.toolType)
         checked: selectedIndex >= 0
         text: selectedIndex >= 0 ? secondaryNames[selectedIndex] : i18nc("@action", "More tools")
@@ -351,6 +360,8 @@ ButtonGrid {
             }
             ExtraMenuItem {
                 objectName: "nkshotSolidCoverPreset"
+                visible: !root.annotationOnly
+                height: visible ? implicitHeight : 0
                 text: i18nc("@action", "Solid cover preset")
                 icon.name: "security-high"
                 icon.color: palette.buttonText
@@ -372,6 +383,8 @@ ButtonGrid {
                         icon.color: palette.buttonText
 
                 objectName: "nkshotExtraBlur"
+                visible: !root.annotationOnly
+                height: visible ? implicitHeight : 0
                 text: i18nc("@action", "Blur")
                 icon.name: "blur"
                 checkable: true
