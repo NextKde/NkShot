@@ -16,6 +16,17 @@ def read(path):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_export_speed_is_separate_from_playback(self):
+        job = read('src/Media/VideoClipJob.h')
+        popup = read('src/Gui/VideoClipPopup.qml')
+        viewer = read('src/Gui/ViewerWindow.cpp')
+        for token in ('exportSpeed', 'outputDurationMs', 'setExportRange'):
+            self.assertIn(token, job)
+        self.assertIn('nkshotClipExportSpeed', popup)
+        self.assertIn('syncExportRange', popup)
+        self.assertIn('exportSpeed', viewer)
+        self.assertNotIn('player.playbackRate =', popup)
+
     def test_mp4_share_resolution_is_export_scoped(self):
         job = read('src/Media/VideoClipJob.h')
         popup = read('src/Gui/VideoClipPopup.qml')

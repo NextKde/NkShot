@@ -634,3 +634,11 @@ Use a landscape 1600×900 MP4 for a real 1280×720 reduction; a 640×360 WebM ch
 no enlargement and the unchanged GIF path. DARK/COMPACT and existing crop/privacy/
 annotation/audio flags apply. Test pointer clicks wait for Flickable movement to
 finish so they activate controls instead of merely stopping kinetic scrolling.
+
+### Export speed (103)
+
+`NKSHOT_TEST_SPEED_CLIP=1` selects actual 2× export in Details, tests a stale
+Save dialog after changing speed, checks the resulting MP4 duration against the
+preview, source preservation and fresh-session reset. Combine with crop/privacy,
+annotation/resolution/silent flags; WebM also exercises actual GIF export. This
+is software-window UI, not native KDE capture acceptance.

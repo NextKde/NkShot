@@ -22,10 +22,16 @@ QQC.Popup {
     readonly property int endMs: endTime.value * 10
     readonly property bool gif: job.outputFormat === "gif"
     readonly property bool resolutionValid: gif || (job.outputSize.width > 0 && job.outputSize.height > 0)
+    readonly property real selectedOutputMs: Math.round((endMs - startMs) / job.exportSpeed)
     readonly property bool validRange: job.ready && resolutionValid && startMs >= 0 && endMs <= job.durationMs
-        && endMs - startMs >= (gif ? 200 : 100) && (!gif || endMs - startMs <= 15000)
+        && selectedOutputMs >= (gif ? 200 : 100) && (!gif || endMs - startMs <= 15000)
     readonly property bool locked: job.busy || contextWindow.choosingClipOutput
     function stopPreview() { previewing = false; player.pause() }
+    function syncExportRange() {
+        if (rangeInitialized && job.ready && !locked) job.setExportRange(startMs, endMs)
+    }
+    onStartMsChanged: syncExportRange()
+    onEndMsChanged: syncExportRange()
     width: Math.min(560, parent.width - 24)
     x: (parent.width - width) / 2
     y: Math.max(12, parent.height - height - 12)
@@ -65,6 +71,7 @@ QQC.Popup {
             if (root.opened && root.job.ready && !root.rangeInitialized) {
                 endTime.value = Math.floor(root.job.durationMs / 10)
                 root.rangeInitialized = true
+                root.syncExportRange()
             }
         }
     }
@@ -263,8 +270,10 @@ QQC.Popup {
                 font: root.font
                 color: Kos.AppTheme.mutedText
                 objectName: "nkshotClipSummary"
-                text: (root.job.ready && !root.resolutionValid ? i18nc("@info", "Choose Original size or change the crop.") : root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
-                    : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds."))
+                text: (root.job.ready && !root.resolutionValid ? i18nc("@info", "Choose Original size or change the crop.") : root.validRange ? i18nc("@info", "%1 · %2", root.job.exportSpeed === 1
+                    ? i18nc("@info", "%1 s", ((root.endMs - root.startMs) / 1000).toFixed(2))
+                    : i18nc("@info", "%1 s export at %2×", (root.job.outputDurationMs / 1000).toFixed(2), root.job.exportSpeed), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
+                    : root.gif ? i18nc("@info", "Select up to 15 source seconds and at least 0.20 seconds after speed-up.") : i18nc("@info", "Select at least 0.10 seconds after speed-up."))
                     + (root.job.hasAnnotationOverlay ? i18nc("@info", " · Annotations") : "")
                     + (root.job.privacyEnabled ? i18nc("@info", " · Privacy cover") : "")
                     + (root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", " · Crop %1 × %2", root.job.cropRect.width, root.job.cropRect.height) : "")
@@ -306,6 +315,39 @@ QQC.Popup {
                 id: detailContents
                 width: detailScroll.availableWidth
                 spacing: 10
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            QQC.Label {text: i18nc("@label", "Export speed"); font: root.font; color: Kos.AppTheme.paletteText}
+            QQC.ComboBox {
+                id: exportSpeedChoice
+                objectName: "nkshotClipExportSpeed"
+                Layout.fillWidth: true
+                model: ["1×", "1.5×", "2×"]
+                readonly property var values: [1, 1.5, 2]
+                currentIndex: Math.max(0, values.indexOf(root.job.exportSpeed))
+                enabled: root.job.ready && !root.locked
+                implicitHeight: 32
+                font: root.font
+                palette.text: Kos.AppTheme.paletteText
+                palette.buttonText: Kos.AppTheme.paletteText
+                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
+                Accessible.name: i18nc("@label", "Exported video speed")
+                onActivated: {root.stopPreview(); root.job.exportSpeed = values[currentIndex]}
+            }
+        }
+        QQC.Label {
+            objectName: "nkshotClipExportSpeedHint"
+            Layout.fillWidth: true
+            visible: root.job.ready
+            text: (root.validRange ? i18nc("@info", "Export: about %1 s. ", (root.job.outputDurationMs / 1000).toFixed(2)) : "")
+                + (root.gif ? i18nc("@info", "GIF stays silent. ")
+                    : root.job.hasAudio && root.job.includeAudio ? i18nc("@info", "Audio keeps its pitch. ") : "")
+                + i18nc("@info", "Only the exported copy changes; preview speed is separate.")
+            wrapMode: Text.Wrap
+            font: root.font
+            color: Kos.AppTheme.mutedText
+        }
         RowLayout {
             Layout.fillWidth: true
             visible: !root.gif

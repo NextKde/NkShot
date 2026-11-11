@@ -650,6 +650,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_Tab);
         return QTest::qWaitFor([&]{return spin->property("value").toInt()==expected;},500);
     };
+    const bool speedExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SPEED_CLIP");
     const bool resolutionExport=qEnvironmentVariableIsSet("NKSHOT_TEST_RESOLUTION_CLIP");
     const bool silentExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SILENT_CLIP");
     const bool cropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
@@ -659,6 +660,12 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     QRect expectedCrop;
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
         return fail(QStringLiteral("Export details could not be opened"));
+    if(speedExport) {
+        if(job->property("exportSpeed").toDouble()!=1.0||!click(QStringLiteral("nkshotClipExportSpeed")))return fail(QStringLiteral("Export speed default/control unavailable"));
+        QTest::keyClick(viewer(),Qt::Key_Home);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Return);
+        if(!QTest::qWaitFor([&]{return job->property("exportSpeed").toDouble()==2.0;},1000)
+            ||!capture(QStringLiteral(".speed-options.png")))return fail(QStringLiteral("Export speed selection did not reach job"));
+    }
     if(resolutionExport) {
         if(job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipResolution")))return fail(QStringLiteral("Resolution default/control unavailable"));
         QTest::keyClick(viewer(),Qt::Key_Home);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Return);
@@ -843,12 +850,27 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         job->setProperty("outputResolution",QStringLiteral("720p"));
         if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))return fail(QStringLiteral("Resolution save did not recover"));
     }
+    if(speedExport) {
+        job->setProperty("exportSpeed",1.5);
+        const auto stale=fixtures.filePath(QStringLiteral("stale-speed.mp4"));
+        if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
+            ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500)
+            ||QFileInfo::exists(stale)||job->property("busy").toBool())return fail(QStringLiteral("Stale speed Save accepted"));
+        job->setProperty("exportSpeed",2.0);
+        if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))return fail(QStringLiteral("Speed save did not recover"));
+    }
+    const qint64 expectedDuration=job->property("outputDurationMs").toLongLong();
     const QSize expectedOutput=job->property("outputSize").toSize();
     const auto clip=fixtures.filePath(QStringLiteral("imported ' clip.mp4"));
     if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),clip)
         ||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("outputUrl").toUrl()==QUrl::fromLocalFile(clip);},30000)
         ||bytes(clip).isEmpty()||bytes(movie)!=movieBytes||!sourcesIntact()||core->currentVideo()!=QUrl::fromLocalFile(movie))
         return fail(QStringLiteral("Real imported MP4 clip export/source isolation failed"));
+    if(speedExport) {
+        QProcess probe;probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-show_entries"),QStringLiteral("format=duration"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
+        if(!probe.waitForFinished(10000)||probe.exitCode()!=0||qAbs(probe.readAllStandardOutput().trimmed().toDouble()*1000-expectedDuration)>250)
+            return fail(QStringLiteral("Actual accelerated MP4 duration does not match preview"));
+    }
     if(silentExport) {
         QProcess probe;probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),
             QStringLiteral("-select_streams"),QStringLiteral("a"),QStringLiteral("-show_entries"),QStringLiteral("stream=index"),
@@ -1029,15 +1051,16 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             return fail(QStringLiteral("Clipboard workflow changed active media/history"));
         clip->setText(clipboard);
     }
-    if(privacyExport||resolutionExport) {
+    if(privacyExport||resolutionExport||speedExport) {
         auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
         if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))return fail(QStringLiteral("Privacy panel close failed"));
         QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
         if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip"))
             ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
-            ||job->property("privacyEnabled").toBool()||job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipCancel")))
+            ||job->property("exportSpeed").toDouble()!=1.0||job->property("privacyEnabled").toBool()||job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipCancel")))
             return fail(QStringLiteral("New export retained an old privacy cover"));
         if(privacyExport)qInfo()<<"097 actual privacy toggle, drag, corner resize, keyboard, save-race, decoded output and fresh-session reset passed";
+        if(speedExport)qInfo()<<"103 actual export speed, duration, stale Save rejection and fresh-session reset passed";
         if(resolutionExport)qInfo()<<"102 actual resolution control, output dimensions, stale Save rejection and fresh-session reset passed";
     }
     if(qEnvironmentVariableIsSet("NKSHOT_TEST_RECENT_MEDIA")) {

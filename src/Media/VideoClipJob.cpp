@@ -132,6 +132,7 @@ bool VideoClipJob::destinationUnchanged() const {
 void VideoClipJob::inspect(const QUrl &source) {
     stop();m_ready=false;m_mediaValid=false;m_encodersChecked=false;m_duration=0;m_audio=false;m_source=QUrl();m_output=QUrl();m_error.clear();m_progress=0;
     if(!m_annotationOverlay.isNull()){m_annotationOverlay=QImage();++m_annotationRevision;}m_overlayAvailable=false;
+    m_exportSpeed=1.;m_atempoAvailable=false;m_start=0;m_end=0;
     m_outputResolution=QStringLiteral("original");
     m_width=0;m_height=0;m_squarePixels=false;m_privacyEnabled=false;m_drawboxAvailable=false;m_privacyRect={};m_cropPosition=QPoint(-1,-1);m_cropAspect=QStringLiteral("original");
     const QFileInfo f(source.toLocalFile());
@@ -177,7 +178,7 @@ void VideoClipJob::completed(Stage stage) {
     if(stage==Inspect) {
         const auto info=parseMedia(m_stdout,m_webm);
         if(!info.valid){fail(tr("This clip needs one SDR H.264 MP4 or VP9 WebM video track and at most one mono/stereo audio track (Opus for WebM), with even dimensions up to 4096 pixels and duration up to two hours (WebM: ten minutes). Rotated, HDR and extra-track files are not supported yet."));return;}
-        m_mediaValid=true;m_squarePixels=info.squarePixels;m_duration=info.duration;m_audio=info.audio;m_width=info.width;m_height=info.height;m_frameMs=info.frameMs;
+        m_mediaValid=true;m_squarePixels=info.squarePixels;m_duration=info.duration;m_audio=info.audio;m_width=info.width;m_height=info.height;m_frameMs=info.frameMs;m_start=0;m_end=m_duration;
         launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-encoders")},Encoders,15000);
     } else if(stage==Encoders) {
         if(m_format==QStringLiteral("gif")) {
@@ -187,6 +188,7 @@ void VideoClipJob::completed(Stage stage) {
         m_encodersChecked=true;m_x264Available=m_stdout.contains(" libx264 ");m_aacAvailable=m_stdout.contains(" aac ");
         launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-filters")},Filters,15000);
     } else if(stage==Filters) {
+        m_atempoAvailable=m_stdout.contains(" atempo ");
         m_overlayAvailable=m_stdout.contains(" overlay ");
         if(!m_annotationOverlay.isNull()&&!m_overlayAvailable){fail(tr("This FFmpeg installation lacks annotation overlay support. Reopen clip export."));return;}
         m_drawboxAvailable=m_stdout.contains(" drawbox ");
@@ -229,7 +231,10 @@ void VideoClipJob::exportClip(const QUrl &target,qint64 startMs,qint64 endMs) {
     if(m_format==QStringLiteral("mp4")&&outputSize().isEmpty()) {
         fail(tr("This aspect ratio cannot be preserved with the selected size preset. Choose Original."));return;
     }
-    if(startMs<0||startMs>m_duration||endMs<startMs||endMs>m_duration||endMs-startMs<(m_format==QStringLiteral("gif")?200:100)){fail(m_format==QStringLiteral("gif")?tr("Choose a GIF range of 0.2–15 seconds inside the recording."):tr("Choose a range of at least 0.1 seconds inside the recording."));return;}
+    if(m_exportSpeed!=1.&&m_format==QStringLiteral("mp4")&&m_audio&&m_includeAudio&&!m_atempoAvailable) {
+        fail(tr("This FFmpeg installation lacks pitch-preserving audio speed support. Choose 1× or remove audio."));return;
+    }
+    if(startMs<0||startMs>m_duration||endMs<startMs||endMs>m_duration||durationForRange(startMs,endMs)<(m_format==QStringLiteral("gif")?200:100)){fail(m_format==QStringLiteral("gif")?tr("Choose a range inside the recording that produces at least 0.2 seconds at this export speed."):tr("Choose a range inside the recording that produces at least 0.1 seconds at this export speed."));return;}
     if(m_format==QStringLiteral("gif")&&endMs-startMs>15000){fail(tr("GIF export is limited to 15 seconds. Choose a shorter range."));return;}
     QFileInfo f(target.toLocalFile());const QFileInfo source(m_source.toLocalFile());
     if(!target.isLocalFile()||!f.isAbsolute()||f.suffix().compare(m_format,Qt::CaseInsensitive)||f.isSymLink()||!f.dir().exists()||(f.exists()&&!f.isFile())||f.absoluteFilePath()==source.absoluteFilePath()||(!f.canonicalFilePath().isEmpty()&&f.canonicalFilePath()==source.canonicalFilePath())) {fail(tr("Choose a new local file with the selected format’s extension, not the original recording."));return;}
@@ -240,7 +245,7 @@ void VideoClipJob::exportClip(const QUrl &target,qint64 startMs,qint64 endMs) {
         fail(tr("Choose a different file, not a hard link to the original recording."));return;
     }
     if(f.exists()){fail(tr("The destination already exists. Choose a new filename."));return;}
-    m_target=f.absoluteFilePath();m_clipDuration=endMs-startMs;m_start=startMs;m_end=endMs;
+    m_target=f.absoluteFilePath();m_start=startMs;m_end=endMs;m_clipDuration=outputDurationMs();
     QTemporaryFile temp(f.dir().filePath(QStringLiteral(".nkshot-clip-XXXXXX.%1").arg(m_format)));temp.setAutoRemove(false);
     if(!temp.open()){fail(tr("A temporary clip cannot be created in this folder."));return;}m_temp=temp.fileName();temp.close();
     if(!m_annotationOverlay.isNull()) {
@@ -269,7 +274,12 @@ void VideoClipJob::exportClip(const QUrl &target,qint64 startMs,qint64 endMs) {
         prefix<<QStringLiteral("-threads")<<QStringLiteral("2")<<QStringLiteral("-filter_threads")<<QStringLiteral("2");
         args=prefix+args.mid(inputEnd);
         args[args.indexOf(QStringLiteral("-vf"))+1]=webmVideoFilter(30);
-        if(m_audio&&m_includeAudio)args[args.indexOf(QStringLiteral("-af"))+1]=QStringLiteral("atrim=start=%1:end=%2,asetpts=PTS-%1/TB,apad=whole_dur=%3").arg(seconds(m_start),seconds(m_end),seconds(m_clipDuration));
+        if(m_audio&&m_includeAudio)args[args.indexOf(QStringLiteral("-af"))+1]=QStringLiteral("atrim=start=%1:end=%2,asetpts=PTS-%1/TB,apad=whole_dur=%3").arg(seconds(m_start),seconds(m_end),seconds(m_end-m_start));
+    }
+    if(m_exportSpeed!=1.) {
+        args[args.indexOf(QStringLiteral("-vf"))+1]+=speedVideoFilter(m_webm?30.:1000./m_frameMs);
+        if(m_audio&&m_includeAudio)args[args.indexOf(QStringLiteral("-af"))+1]+=QStringLiteral(",apad=whole_dur=%1,atrim=duration=%1,atempo=%2,apad=whole_dur=%3,atrim=duration=%3,asetpts=PTS-STARTPTS")
+            .arg(seconds(m_end-m_start),QString::number(m_exportSpeed,'f',1),seconds(m_clipDuration));
     }
     const int vf=args.indexOf(QStringLiteral("-vf"));
     if(m_annotationOverlay.isNull())args[vf+1]+=privacyFilter()+cropFilter()+mp4ScaleFilter();
@@ -295,6 +305,24 @@ void VideoClipJob::setIncludeAudio(bool include) {
         if(!m_ready)m_error=tr("This FFmpeg installation lacks the H.264 or AAC encoder needed for clip export.");
     }
     Q_EMIT changed();
+}
+qint64 VideoClipJob::durationForRange(qint64 startMs,qint64 endMs) const {
+    if(startMs<0||endMs<startMs||endMs>m_duration)return 0;
+    return qRound64(double(endMs-startMs)/m_exportSpeed);
+}
+qint64 VideoClipJob::outputDurationMs() const { return durationForRange(m_start,m_end); }
+void VideoClipJob::setExportRange(qint64 startMs,qint64 endMs) {
+    if(m_busy||!m_ready||startMs<0||endMs<=startMs||endMs>m_duration||(startMs==m_start&&endMs==m_end))return;
+    m_start=startMs;m_end=endMs;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+void VideoClipJob::setExportSpeed(double speed) {
+    if(m_busy||!m_ready||speed==m_exportSpeed||(speed!=1.&&speed!=1.5&&speed!=2.))return;
+    m_exportSpeed=speed;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+QString VideoClipJob::speedVideoFilter(double fps) const {
+    if(m_exportSpeed==1.)return {};
+    return QStringLiteral(",setpts=PTS/%1,tpad=stop_mode=clone:stop_duration=0.2,fps=%2,trim=duration=%3,setpts=PTS-STARTPTS")
+        .arg(QString::number(m_exportSpeed,'f',1),QString::number(fps,'g',12),seconds(m_clipDuration));
 }
 void VideoClipJob::setOutputResolution(const QString &resolution) {
     if(m_busy||!m_ready||resolution==m_outputResolution)return;
@@ -421,12 +449,13 @@ QString VideoClipJob::cropFilter() const {
 QString VideoClipJob::gifFilter() const {
     const auto rect=cropRect();
     const double factor=qMin(1.,640./qMax(rect.width(),rect.height()));
-    const QString range=m_webm ? webmVideoFilter(10) : QStringLiteral("trim=start=0:end=%1,setpts=PTS-STARTPTS,fps=10").arg(seconds(m_clipDuration));
+    const QString range=(m_webm ? webmVideoFilter(m_exportSpeed==1.?10:30) : QStringLiteral("trim=start=0:end=%1,setpts=PTS-STARTPTS").arg(seconds(m_end-m_start))
+        +(m_exportSpeed==1.?QStringLiteral(",fps=10"):QString()))+speedVideoFilter(10);
     const auto tail=privacyFilter()+cropFilter()+QStringLiteral(",scale=%1:%2:flags=lanczos").arg(qMax(1,qRound(rect.width()*factor))).arg(qMax(1,qRound(rect.height()*factor)));
     return m_annotationOverlay.isNull()?range+tail:annotatedFilter(range,tail);
 }
 void VideoClipJob::launchGifPass(bool palette) {
-    QStringList args{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-filter_complex_threads"),QStringLiteral("2"),QStringLiteral("-ss"),seconds(m_start),QStringLiteral("-accurate_seek"),QStringLiteral("-t"),seconds(m_clipDuration),QStringLiteral("-i"),m_source.toLocalFile()};
+    QStringList args{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-filter_complex_threads"),QStringLiteral("2"),QStringLiteral("-ss"),seconds(m_start),QStringLiteral("-accurate_seek"),QStringLiteral("-t"),seconds(m_end-m_start),QStringLiteral("-i"),m_source.toLocalFile()};
     if(m_webm) {
         args={QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-copyts")};
         args+=NkShot::LocalVideoInput::demuxArguments(NkShot::LocalVideoInput::Container::WebM);

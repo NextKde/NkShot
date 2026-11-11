@@ -52,6 +52,8 @@ and the distinction between source checks and native desktop acceptance.
 | AI erase/background removal | Not implemented | No model/provider integration | Not accepted |
 | Local English ↔ Chinese translation (080) | Immutable OCR original alongside local machine translation; explicit copy, original-only text save, cancellation and documented offline installation | Actual-model UI and process-protocol validation recorded in iterations | Quality is not guaranteed; no cloud fallback or automatic model install |
 
+Recording export also offers explicit 1×/1.5×/2× post-processing speed with pitch-preserving MP4 audio and separate output duration; see [export speed](video-export-speed.md). It does not change capture or preview speed.
+
 ## Blocking environment boundary
 
 The cloud workspace has no live Wayland/X11 session, KWin or session DBus. A

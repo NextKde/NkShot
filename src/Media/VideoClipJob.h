@@ -24,6 +24,8 @@ class VideoClipJob : public QObject {
     Q_PROPERTY(QString cropAspect READ cropAspect WRITE setCropAspect NOTIFY changed)
     Q_PROPERTY(QSize sourceSize READ sourceSize NOTIFY changed)
     Q_PROPERTY(QRect cropRect READ cropRect NOTIFY changed)
+    Q_PROPERTY(double exportSpeed READ exportSpeed WRITE setExportSpeed NOTIFY changed)
+    Q_PROPERTY(qint64 outputDurationMs READ outputDurationMs NOTIFY changed)
     Q_PROPERTY(QString outputResolution READ outputResolution WRITE setOutputResolution NOTIFY changed)
     Q_PROPERTY(QSize outputSize READ outputSize NOTIFY changed)
     Q_PROPERTY(QString outputFormat READ outputFormat WRITE setOutputFormat NOTIFY changed)
@@ -58,6 +60,11 @@ public:
     bool cropCentered() const;
     Q_INVOKABLE void setCropPosition(int x, int y);
     Q_INVOKABLE void resetCropPosition();
+    double exportSpeed() const { return m_exportSpeed; }
+    Q_INVOKABLE void setExportSpeed(double speed);
+    qint64 outputDurationMs() const;
+    Q_INVOKABLE qint64 durationForRange(qint64 startMs, qint64 endMs) const;
+    Q_INVOKABLE void setExportRange(qint64 startMs, qint64 endMs);
     QString outputResolution() const { return m_outputResolution; }
     Q_INVOKABLE void setOutputResolution(const QString &resolution);
     QSize outputSize() const;
@@ -84,6 +91,7 @@ private:
     void launch(const QString &program, const QStringList &args, Stage stage, int timeoutMs);
     void completed(Stage stage);
     void launchGifPass(bool palette);
+    QString speedVideoFilter(double fps) const;
     QString mp4ScaleFilter() const;
     QString gifFilter() const;
     QString annotatedFilter(const QString &time, const QString &tail) const;
@@ -114,6 +122,8 @@ private:
     QTimer m_timeout;
     quint64 m_epoch = 0;
     Stage m_stage = None;
+    double m_exportSpeed = 1.0;
+    bool m_atempoAvailable = false;
     bool m_webm = false;
     bool m_squarePixels = false;
     bool m_includeAudio = true, m_encodersChecked = false, m_x264Available = false, m_aacAvailable = false;
