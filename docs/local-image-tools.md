@@ -203,3 +203,27 @@ Closing destroys its snapshot; the next open reads the current edited image.
 Hiding the viewer closes the sampler before capture setup. This is local image
 sampling, not a global desktop eyedropper, monitor-profile accuracy, HDR sampling
 or native high-DPI/GPU acceptance.
+
+## Read a selected area in a pin (069)
+
+The existing Extract text icon now offers **Read whole image** and **Select an
+area…**. Drag across the image, then choose **Read area**. The selection reports
+physical image-pixel dimensions. Recognition starts only on that explicit action;
+selecting, dragging and Cancel never recognize or copy. Escape cancels area mode
+before it can close the pin. Zoom shortcuts stay available, and the selected bounds
+remain attached to source pixels when zoom changes. The stable contextual footer replaces zoom buttons while selecting. Area drawing
+is mouse-only; keyboard rectangle creation is not implemented. Panning is suspended only
+while selecting; cancel restores normal reading. Hiding the pin clears selection.
+
+Copy, Ctrl+C and PNG Save As always use the complete immutable pin, including
+while selecting. The editor and undo history are untouched. Regions are rounded
+outward to physical pixels, clamped to the source bounds and rejected below two
+pixels in either dimension. Source DPR does not alter crop coordinates. Area OCR
+uses the same bounded local Tesseract helper as whole-image recognition. Hidden whole-image
+results are matched to both language and exact crop before reuse. Hidden area
+results are discarded with guidance to select again, rather than showing a popup
+or later substituting area text for a whole-image request. Closing cancels
+work and suppresses late result windows. No screenshot data is transmitted.
+
+This is rectangle-only OCR, not inline recognized-word highlighting, word-level
+selection, a destructive crop or a native KDE/GPU/high-DPI acceptance claim.

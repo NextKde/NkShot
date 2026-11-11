@@ -520,12 +520,15 @@ void installUiCaptureHook(QApplication &application)
                 const auto selected=Settings::ocrLanguages();
                 auto document=SpectacleCore::instance()->annotationDocument();
                 const auto original=document->renderToImage();const auto depth=document->undoStackDepth();
-                QImage fixture(1000,220,QImage::Format_ARGB32);fixture.fill(Qt::white);
-                {QPainter p(&fixture);QFont f(chinese?QStringLiteral("Noto Sans CJK SC"):QStringLiteral("DejaVu Sans"));f.setPixelSize(64);p.setFont(f);p.setPen(Qt::black);p.drawText(fixture.rect(),Qt::AlignCenter,chinese?QStringLiteral("中文截图编辑 12345"):QStringLiteral("HELLO NKSHOT 12345"));}
+                const bool region=qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_AREA");
+                QImage fixture(1000,region?440:220,QImage::Format_ARGB32);fixture.fill(Qt::white);
+                if(region) fixture.setDevicePixelRatio(2.0);
+                {QPainter p(&fixture);QFont f(chinese?QStringLiteral("Noto Sans CJK SC"):QStringLiteral("DejaVu Sans"));f.setPixelSize(64);p.setFont(f);p.setPen(Qt::black);p.scale(region?0.5:1,region?0.5:1);p.drawText(QRect(0,0,1000,220),Qt::AlignCenter,chinese?QStringLiteral("中文截图编辑 12345"):QStringLiteral("HELLO NKSHOT 12345"));}
+                if(region) { QPainter p(&fixture);p.scale(0.5,0.5);QFont f(QStringLiteral("DejaVu Sans"));f.setPixelSize(64);p.setFont(f);p.setPen(Qt::black);p.drawText(QRect(0,240,1000,180),Qt::AlignCenter,QStringLiteral("EXCLUDED LINE")); }
                 if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_BLANK")) fixture.fill(Qt::white);
                 QPointer<PinnedImageWindow> pin=new PinnedImageWindow(fixture,viewer->engine());pin->show();
                 QSignalSpy extractionStatus(pin,&PinnedImageWindow::textExtractionStatus);
-                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_COMPACT")) pin->resize(260,220);
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_COMPACT")) pin->resize(260,region?180:220);
                 QTest::qWait(150);
                 auto extract=visualItem(pin->contentItem(),QStringLiteral("nkshotPinExtractText"));
                 if(!extract || !extract->isVisible()) {application.exit(210);return;}
@@ -536,6 +539,60 @@ void installUiCaptureHook(QApplication &application)
                 }
                 QApplication::clipboard()->setText(QStringLiteral("keep clipboard"));
                 QTest::mouseClick(pin,Qt::LeftButton,Qt::NoModifier,extract->mapToScene(QPointF(extract->width()/2,extract->height()/2)).toPoint());
+                QTest::qWait(100);
+                const auto clickPin = [&](const char *name) {
+                    auto item=visualItem(pin->contentItem(),QString::fromLatin1(name));
+                    if(!item || !item->isVisible()) return false;
+                    QTest::mouseClick(pin,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());
+                    if(QByteArray(name)!="nkshotPinReadArea" && QByteArray(name)!="nkshotPinReadWhole") QTest::qWait(60);
+                    return true;
+                };
+                if(region) {
+                    pin->extractTextArea(QRect());pin->extractTextArea(QRect(-100,-100,20,20));pin->extractTextArea(QRect(10000,10000,20,20));pin->extractTextArea(QRect(0,0,1,100));
+                    if(pin->extractingText()) {application.exit(248);return;}
+                    if(!clickPin("nkshotPinChooseArea") || !pin->rootObject()->property("selectingArea").toBool() || pin->extractingText()) {application.exit(241);return;}
+                    auto readArea=visualItem(pin->contentItem(),QStringLiteral("nkshotPinReadArea"));
+                    if(!readArea || readArea->isEnabled()) {application.exit(242);return;}
+                    pin->requestActivate();QTest::qWait(50);QTest::keyClick(pin,Qt::Key_Escape);QTest::qWait(60);
+                    if(!pin || !pin->isVisible() || pin->rootObject()->property("selectingArea").toBool()) {application.exit(243);return;}
+                    clickPin("nkshotPinExtractText");clickPin("nkshotPinChooseArea");clickPin("nkshotPinCancelArea");
+                    if(pin->rootObject()->property("selectingArea").toBool()) {application.exit(244);return;}
+                    // Zoom before selecting; DPR=2 must not divide physical crop bounds.
+                    clickPin("nkshotPinActualSize");
+                    clickPin("nkshotPinExtractText");clickPin("nkshotPinChooseArea");
+                    auto viewportItem=visualItem(pin->contentItem(),QStringLiteral("nkshotPinViewport"));
+                    auto zoomSnapshot=visualItem(pin->contentItem(),QStringLiteral("nkshotPinSnapshot"));
+                    viewportItem->setProperty("contentX",100);viewportItem->setProperty("contentY",80);QTest::qWait(60);
+                    const auto panStart=viewportItem->mapToScene(QPointF(10,10)).toPoint();
+                    const auto panEnd=viewportItem->mapToScene(QPointF(70,35)).toPoint();
+                    const auto physicalStart=zoomSnapshot->mapFromScene(panStart);
+                    QTest::mousePress(pin,Qt::LeftButton,Qt::NoModifier,panStart);QTest::mouseMove(pin,panEnd,60);QTest::mouseRelease(pin,Qt::LeftButton,Qt::NoModifier,panEnd);QTest::qWait(60);
+                    const auto pannedArea=pin->rootObject()->property("selectedArea").toRect();
+                    if(viewportItem->property("contentX").toReal()<=0 || viewportItem->property("contentY").toReal()<=0 || qAbs(pannedArea.x()-physicalStart.x())>1 || qAbs(pannedArea.y()-physicalStart.y())>1 || pannedArea.width()!=60 || pannedArea.height()!=25) {qWarning()<<"pan mapping"<<pannedArea<<physicalStart;application.exit(253);return;}
+                    pin->hide();QTest::qWait(50);pin->show();pin->requestActivate();QTest::qWait(60);
+                    if(pin->rootObject()->property("selectingArea").toBool() || pin->extractingText()) {application.exit(254);return;}
+                    clickPin("nkshotPinFit");clickPin("nkshotPinExtractText");clickPin("nkshotPinChooseArea");
+                    auto snapshot=visualItem(pin->contentItem(),QStringLiteral("nkshotPinSnapshot"));
+                    const qreal scale=snapshot->width()/1000.0;
+                    const auto start=snapshot->mapToScene(QPointF(10*scale,10*scale)).toPoint();
+                    const auto end=snapshot->mapToScene(QPointF(990*scale,210*scale)).toPoint();
+                    const auto outside=snapshot->mapToScene(QPointF(snapshot->width()+100,snapshot->height()+100)).toPoint();
+                    QTest::mousePress(pin,Qt::LeftButton,Qt::NoModifier,start);QTest::mouseMove(pin,outside,80);QTest::mouseRelease(pin,Qt::LeftButton,Qt::NoModifier,outside);QTest::qWait(60);
+                    const auto clamped=pin->rootObject()->property("selectedArea").toRect();
+                    if(clamped.right()!=999 || clamped.bottom()!=439) {application.exit(252);return;}
+                    // Reverse-direction selection must produce the same physical bounds.
+                    QTest::mousePress(pin,Qt::LeftButton,Qt::NoModifier,end);QTest::mouseMove(pin,start,80);QTest::mouseRelease(pin,Qt::LeftButton,Qt::NoModifier,start);QTest::qWait(100);
+                    const auto area=pin->rootObject()->property("selectedArea").toRect();
+                    if(qAbs(area.x()-10)>3 || qAbs(area.y()-10)>3 || qAbs(area.width()-980)>4 || qAbs(area.height()-200)>4 || !readArea->isEnabled() || pin->extractingText() || QApplication::clipboard()->text()!=QStringLiteral("keep clipboard")) {qWarning()<<"region mismatch"<<area;application.exit(245);return;}
+                    QTest::keyClick(pin,Qt::Key_Plus,Qt::ControlModifier);QTest::qWait(80);
+                    if(pin->rootObject()->property("selectedArea").toRect()!=area) {application.exit(249);return;}
+                    QTest::keyClick(pin,Qt::Key_0,Qt::ControlModifier);QTest::qWait(80);
+                    pin->grabWindow().save(destination+QStringLiteral(".selected.png"));
+                    QTest::keyClick(pin,Qt::Key_C,Qt::ControlModifier);
+                    if(!samePixels(QApplication::clipboard()->image(),fixture)) {application.exit(246);return;}
+                    QApplication::clipboard()->setText(QStringLiteral("keep clipboard"));
+                    clickPin("nkshotPinReadArea");
+                } else if(!clickPin("nkshotPinReadWhole")) {application.exit(247);return;}
                 if(!pin->extractingText()) {application.exit(211);return;}
                 if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_MISSING") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT_BLANK")) {
                     if(!QTest::qWaitFor([&]{return !pin->extractingText();},15000)) {application.exit(228);return;}
@@ -570,12 +627,18 @@ void installUiCaptureHook(QApplication &application)
                 QFile saved(output);if(!saved.open(QIODevice::ReadOnly) || saved.readAll()!=result->recognizedText().toUtf8()) {application.exit(219);return;}
                 result->close();if(!QTest::qWaitFor([&]{return result.isNull();},1000)) {application.exit(220);return;}
                 // Hidden pins must not open a late result over a capture selector.
-                pin->extractText();pin->hide();
+                if(region) pin->extractTextArea(QRect(0,0,1000,220)); else pin->extractText();
+                pin->hide();
                 if(!QTest::qWaitFor([&]{return !pin->extractingText();},15000)) {application.exit(224);return;}
                 for(auto w:QGuiApplication::allWindows()) if(qobject_cast<OcrTextWindow *>(w)) {application.exit(225);return;}
                 pin->show();QTest::qWait(100);pin->extractText();
+                if(region) {
+                    // A whole-image request must never reuse pending text from a crop.
+                    if(!pin->extractingText() || !QTest::qWaitFor([&]{return !pin->extractingText();},15000)) {application.exit(250);return;}
+                }
                 for(auto w:QGuiApplication::allWindows()) if(auto candidate=qobject_cast<OcrTextWindow *>(w)) result=candidate;
                 if(!result || result->recognizedText().isEmpty() || pin->extractingText()) {application.exit(226);return;}
+                if(region && !result->recognizedText().contains(QStringLiteral("EXCLUDED"))) {application.exit(251);return;}
                 result->close();if(!QTest::qWaitFor([&]{return result.isNull();},1000)) {application.exit(227);return;}
                 // An immediate pin close cancels cooperatively and suppresses late UI/clipboard writes.
                 QApplication::clipboard()->setText(QStringLiteral("after close"));

@@ -24,6 +24,7 @@ public:
     void setStayOnTop(bool value);
     bool extractingText() const {return m_extractingText;}
     Q_INVOKABLE void extractText(const QString &language = QString());
+    Q_INVOKABLE void extractTextArea(const QRect &area);
     Q_INVOKABLE void copyImage();
     Q_INVOKABLE void saveAs();
 Q_SIGNALS:
@@ -36,6 +37,8 @@ protected:
     bool event(QEvent *event) override;
 private:
     void showExtractedText(const QString &text);
+    void extractTextRegion(const QRect &area, const QString &language);
+    QRect m_pendingArea;
     QString m_pendingText;
     QStringList m_pendingLanguages;
     bool m_extractingText=false;

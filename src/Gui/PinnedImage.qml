@@ -6,6 +6,10 @@ import Kos.Ui as Kos
 
 QQC.Pane {
     id: root
+    property bool selectingArea: false
+    property rect selectedArea: Qt.rect(0, 0, 0, 0)
+    function cancelArea() { textMenu.close(); selectingArea = false; selectedArea = Qt.rect(0, 0, 0, 0) }
+    function beginArea() { selectedArea = Qt.rect(0, 0, 0, 0); selectingArea = true; saveStatus.text = "" }
     padding: 12
     palette.windowText: Kos.AppTheme.paletteText
     palette.text: Kos.AppTheme.paletteText
@@ -74,7 +78,12 @@ QQC.Pane {
                 display: QQC.AbstractButton.IconOnly
                 icon.name: pinnedWindow.extractingText ? "" : "document-scan"
                 enabled: !pinnedWindow.extractingText
-                onClicked: pinnedWindow.extractText()
+                onClicked: textMenu.popup()
+                QQC.Menu {
+                    id: textMenu
+                    QQC.MenuItem { objectName: "nkshotPinReadWhole"; text: i18nc("@action", "Read whole image"); onTriggered: { root.cancelArea(); pinnedWindow.extractText() } }
+                    QQC.MenuItem { objectName: "nkshotPinChooseArea"; text: i18nc("@action", "Select an area…"); onTriggered: root.beginArea() }
+                }
                 QQC.BusyIndicator {anchors.centerIn: parent; width: 20; height: 20; running: pinnedWindow.extractingText; visible: running}
             }
             PinButton {
@@ -97,8 +106,12 @@ QQC.Pane {
             objectName: "nkshotPinSaveStatus"
             Layout.fillWidth: true
             visible: text.length > 0
-            wrapMode: Text.Wrap
+            elide: Text.ElideRight
+            font.pixelSize: 12
             color: Kos.AppTheme.paletteText
+            QQC.ToolTip.text: text
+            QQC.ToolTip.visible: statusHover.hovered
+            HoverHandler { id: statusHover }
             Connections {
                 target: pinnedWindow
                 function onSaveFinished(message, success) { saveStatus.text = message }
@@ -111,6 +124,7 @@ QQC.Pane {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+            interactive: !root.selectingArea
             boundsBehavior: Flickable.StopAtBounds
             property bool fitMode: true
             property bool widthMode: false
@@ -154,6 +168,34 @@ QQC.Pane {
                 height: pinnedWindow.snapshotSize.height * viewport.imageScale
                 source: pinnedWindow.imageSource
                 smooth: viewport.imageScale < 1
+                Rectangle {
+                    visible: root.selectingArea && root.selectedArea.width > 0
+                    x: root.selectedArea.x * viewport.imageScale
+                    y: root.selectedArea.y * viewport.imageScale
+                    width: root.selectedArea.width * viewport.imageScale
+                    height: root.selectedArea.height * viewport.imageScale
+                    color: "#223b82f6"
+                    border.color: "#3b82f6"
+                    border.width: 2
+                }
+                MouseArea {
+                    objectName: "nkshotPinAreaSurface"
+                    anchors.fill: parent
+                    enabled: root.selectingArea
+                    cursorShape: Qt.CrossCursor
+                    preventStealing: true
+                    property point origin
+                    function pixel(x, y) { return Qt.point(Math.max(0, Math.min(pinnedWindow.snapshotSize.width, x / viewport.imageScale)), Math.max(0, Math.min(pinnedWindow.snapshotSize.height, y / viewport.imageScale))) }
+                    function update(x, y) {
+                        const end = pixel(x, y)
+                        const left = Math.floor(Math.min(origin.x, end.x))
+                        const top = Math.floor(Math.min(origin.y, end.y))
+                        root.selectedArea = Qt.rect(left, top, Math.ceil(Math.max(origin.x, end.x)) - left, Math.ceil(Math.max(origin.y, end.y)) - top)
+                    }
+                    onPressed: mouse => { origin = pixel(mouse.x, mouse.y); update(mouse.x, mouse.y) }
+                    onPositionChanged: mouse => { if (pressed) update(mouse.x, mouse.y) }
+                    onReleased: mouse => update(mouse.x, mouse.y)
+                }
             }
             QQC.ScrollBar.vertical: QQC.ScrollBar {policy: viewport.contentHeight > viewport.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff}
             QQC.ScrollBar.horizontal: QQC.ScrollBar {policy: viewport.contentWidth > viewport.width ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff}
@@ -163,8 +205,40 @@ QQC.Pane {
                 onWheel: event => viewport.zoomTo(viewport.imageScale * Math.pow(1.2, event.angleDelta.y / 120), event.x, event.y)
             }
         }
+        ColumnLayout {
+            visible: root.selectingArea
+            Layout.fillWidth: true
+            Layout.minimumHeight: 48
+            Layout.maximumHeight: 48
+            spacing: 4
+            QQC.Label {
+                Layout.fillWidth: true
+                text: root.selectedArea.width >= 2 && root.selectedArea.height >= 2
+                    ? i18nc("@info", "%1 × %2 px · Local text only", root.selectedArea.width, root.selectedArea.height)
+                    : i18nc("@info", "Drag across text to select an area")
+                color: Kos.AppTheme.paletteText
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: 11
+                elide: Text.ElideRight
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                PinButton { implicitHeight: 28; objectName: "nkshotPinCancelArea"; text: i18nc("@action", "Cancel"); onClicked: root.cancelArea() }
+                PinButton {
+                    objectName: "nkshotPinReadArea"
+                    implicitHeight: 28
+                    text: i18nc("@action", "Read area")
+                    selected: true
+                    enabled: !pinnedWindow.extractingText && root.selectedArea.width >= 2 && root.selectedArea.height >= 2
+                    onClicked: { pinnedWindow.extractTextArea(root.selectedArea); root.cancelArea() }
+                }
+            }
+        }
         RowLayout {
+            visible: !root.selectingArea
             Layout.alignment: Qt.AlignHCenter
+            Layout.minimumHeight: 48
+            Layout.maximumHeight: 48
             spacing: 2
             PinButton {
                 objectName: "nkshotPinFit"

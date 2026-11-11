@@ -23,7 +23,7 @@ See [iterations](iterations.md), [building](building.md) and
 2. **Non-destructive sharing:** background/watermark copies and reusable image
    processing must preserve original documents/history and verify exported pixels.
 3. **Local text workflows:** whole-image OCR from immutable pins is implemented
-   in 060; inline word highlighting/selection remains a Live Text gap. Translation
+   in 060, with explicit rectangle-only OCR in 069; inline word highlighting/selection remains a Live Text gap. Translation
    is requested separately and is not yet implemented. Prefer local processing;
    any external provider requires explicit opt-in identifying data/destination.
 4. **Recording beyond capture:** actual KWin/PipeWire recording/A/V acceptance,

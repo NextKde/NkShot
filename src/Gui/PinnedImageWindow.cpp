@@ -16,6 +16,7 @@
 #include <QQuickImageProvider>
 #include <QScreen>
 #include <QShortcut>
+#include <QQuickItem>
 #include <KLocalizedString>
 
 namespace {
@@ -53,7 +54,11 @@ PinnedImageWindow::PinnedImageWindow(const QImage &image, QQmlEngine *engine)
     new QShortcut(QKeySequence::SaveAs, this, this, &PinnedImageWindow::saveAs);
     new QShortcut(QKeySequence::Copy, this, this, &PinnedImageWindow::copyImage);
     new QShortcut(QKeySequence::Close, this, this, &PinnedImageWindow::close);
-    new QShortcut(QKeySequence(Qt::Key_Escape), this, this, &PinnedImageWindow::close);
+    new QShortcut(QKeySequence(Qt::Key_Escape), this, this, [this] {
+        if (rootObject() && rootObject()->property("selectingArea").toBool())
+            QMetaObject::invokeMethod(rootObject(), "cancelArea");
+        else close();
+    });
     // Views must be destroyed before their shared application engine.
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this] { delete this; });
 }
@@ -122,16 +127,41 @@ bool PinnedImageWindow::event(QEvent *event)
 {
     const auto type = event->type();
     const bool result = QQuickView::event(event);
+    if (type == QEvent::Hide && rootObject()) QMetaObject::invokeMethod(rootObject(), "cancelArea");
     if (type == QEvent::Close && event->isAccepted()) {m_closing=true;if(m_ocrCancelled)m_ocrCancelled->store(true);deleteLater();}
     return result;
 }
 
 void PinnedImageWindow::extractText(const QString &language)
 {
+    extractTextRegion(m_image.rect(), language);
+}
+
+void PinnedImageWindow::extractTextArea(const QRect &area)
+{
+    // Reject empty/inverted bounds; intersection is in physical source pixels.
+    if (area.width() < 2 || area.height() < 2) return;
+    const qint64 left = qMax<qint64>(0, area.x());
+    const qint64 top = qMax<qint64>(0, area.y());
+    const qint64 right = qMin<qint64>(m_image.width(), qint64(area.x()) + area.width());
+    const qint64 bottom = qMin<qint64>(m_image.height(), qint64(area.y()) + area.height());
+    if (right - left < 2 || bottom - top < 2) return;
+    const QRect clipped(int(left), int(top), int(right - left), int(bottom - top));
+    if (clipped.width() < 2 || clipped.height() < 2) return;
+    extractTextRegion(clipped, QString());
+}
+
+void PinnedImageWindow::extractTextRegion(const QRect &area, const QString &language)
+{
     if(m_extractingText || m_closing) return;
+    // Bound the region before allocating its independent crop, not only in OCR.
+    if (area.width() > 8192 || area.height() > 32000 || qint64(area.width()) * area.height() > 20000000) {
+        Q_EMIT textExtractionStatus(i18nc("@info", "This area is too large for text extraction. Select a smaller area."));
+        return;
+    }
     auto languages=language.isEmpty()?Settings::ocrLanguages():language.split(u'+',Qt::SkipEmptyParts);
     if(languages.isEmpty()) languages={QStringLiteral("eng")};
-    if(!m_pendingText.isEmpty() && m_pendingLanguages==languages) {
+    if(!m_pendingText.isEmpty() && m_pendingLanguages==languages && m_pendingArea==area) {
         if(isVisible() && visibility()!=QWindow::Minimized) {
             showExtractedText(m_pendingText);
             m_pendingText.clear();
@@ -142,9 +172,9 @@ void PinnedImageWindow::extractText(const QString &language)
     m_extractingText=true;m_ocrCancelled=std::make_shared<std::atomic_bool>(false);
     Q_EMIT extractingTextChanged();
     Q_EMIT textExtractionStatus(i18nc("@info","Reading text locally…"));
-    const auto image=m_image;const auto cancelled=m_ocrCancelled;
+    const auto image=area==m_image.rect()?m_image:m_image.copy(area);const auto cancelled=m_ocrCancelled;
     QtConcurrent::run([image,languages,cancelled]{return NkShot::Imaging::extractLocalText(image,languages,cancelled);})
-        .then(this,[this,cancelled,languages](const NkShot::Imaging::TextExtractionResult &result){
+        .then(this,[this,cancelled,languages,area](const NkShot::Imaging::TextExtractionResult &result){
         if(m_closing || cancelled->load()) return;
         m_extractingText=false;Q_EMIT extractingTextChanged();
         using Error=NkShot::Imaging::TextExtractionError;
@@ -159,7 +189,11 @@ void PinnedImageWindow::extractText(const QString &language)
         if(result.text.isEmpty()) {Q_EMIT textExtractionStatus(i18nc("@info","No text was found. The image and clipboard are unchanged."));return;}
         // Scrolling capture temporarily hides pins. Never steal focus from its selector.
         if(!isVisible() || visibility()==QWindow::Minimized) {
-            m_pendingText=result.text;m_pendingLanguages=languages;
+            if (area != m_image.rect()) {
+                Q_EMIT textExtractionStatus(i18nc("@info", "Area reading finished while hidden. Select an area again to read it."));
+                return;
+            }
+            m_pendingText=result.text;m_pendingLanguages=languages;m_pendingArea=area;
             Q_EMIT textExtractionStatus(i18nc("@info","Text ready. Choose Extract text to view it."));
             return;
         }

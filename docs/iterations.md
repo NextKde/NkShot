@@ -1564,3 +1564,43 @@ Reviewed actual software-window captures:
 [Chinese OCR regression](screenshots/068-ocr-regression.png).
 All source images are synthetic fixtures. This is not a global screen eyedropper,
 HDR/monitor-profile validation, real KWin capture or GPU/native-DPI acceptance.
+
+## 069 — Focused area OCR in immutable pins
+
+The existing Extract text icon opens a two-choice menu: Read whole image or
+Select an area. Area mode uses a stable contextual footer rather than adding
+another toolbar feature. Drag a rectangle, review its physical-pixel dimensions,
+then explicitly choose Read area. Cancel/Escape exits selection before closing the
+pin, and hiding clears it. Zoom shortcuts retain source-pixel bounds; normal drag
+panning returns on exit. Copy/Ctrl+C and Save As always retain the full image.
+
+The crop is clamped in physical pixels independent of DPR, with invalid/tiny and
+oversized rectangles rejected before crop allocation. Both modes share local
+Tesseract recognition. Repeated work is coalesced and close suppresses late UI.
+Hidden whole-image results remain available; hidden area results are discarded
+with explicit retry guidance, never substituted for a later whole-image request.
+No recognition starts from merely selecting, and nothing copies automatically.
+
+Focused actual-window tests use DPR=2 synthetic English/Chinese fixtures with an
+excluded second line. They exercise menu clicks, disabled empty Read, Escape and
+Cancel/reopen, nonzero pan at 100%, zoom-preserved bounds, reverse drag and outside
+clamping, hide-during-selection, whole-image Ctrl+C, exact region OCR, text copy
+and UTF-8 export, immutable pixels/history, pending-region isolation and close
+while working. Light, dark and the true 260×180 minimum were visually inspected.
+The minimum fit preview is small by design; keyboard zoom remains available.
+
+Final sequential build, CTest 15/15, static 18/18 and whitespace checks pass.
+Area empty/missing-model paths also pass without a result or clipboard change.
+Independent regressions cover whole-image English/Chinese/compact/error OCR,
+normal/compact pin reading, PNG Save As and the 068 compact color sampler.
+
+Reviewed software-window captures:
+[light selection](screenshots/069-region-light.png.selected.png),
+[dark selection](screenshots/069-region-dark.png.selected.png),
+[260×180 selection](screenshots/069-region-compact.png.selected.png),
+[Chinese selection](screenshots/069-region-chinese.png.selected.png),
+[English result](screenshots/069-region-light.png) and
+[Chinese result](screenshots/069-region-chinese.png).
+These are synthetic fixtures, not captured desktops. Area creation is mouse-only;
+inline word selection, native compositor focus, GPU rendering and real desktop
+high-DPI acceptance remain outside this stage.

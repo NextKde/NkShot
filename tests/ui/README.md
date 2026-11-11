@@ -324,3 +324,18 @@ The helper's `color_sample_test` covers profile conversion, external pixel memor
 alpha formatting, premultiplied inputs, DPR, bounds and edge neighborhoods. These
 are software-window tests with synthetic content, not desktop capture, global
 color picking, GPU rendering or native monitor-profile validation.
+
+### Selected-area pinned OCR (069)
+
+Add `NKSHOT_TEST_PIN_AREA=1` to `NKSHOT_TEST_PIN_TEXT=1`. A DPR=2 synthetic pin
+contains a desired line and a separate excluded line. The harness clicks the OCR
+menu, verifies an empty selection cannot read, exercises Escape and Cancel/reopen,
+changes zoom, verifies nonzero pan at 100%, reverse-drags physical-pixel bounds,
+checks outside-image clamping and hide-during-selection cleanup, verifies no
+implicit OCR/clipboard change,
+uses Ctrl+C for the full image, then explicitly reads only the selected line.
+The `.selected.png` sibling capture shows the real selection state. Existing
+result copy/UTF-8 export, history/pixel isolation, hidden delivery and close-during-
+work checks also run. Combine with PIN_TEXT_CHINESE, PIN_TEXT_COMPACT (true 260×180) and DARK.
+Whole-image PIN_TEXT now clicks its menu item rather than assuming the icon starts
+recognition. Software window tests are not native desktop acceptance.
