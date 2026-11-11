@@ -77,3 +77,7 @@ set_tests_properties(image_transforms_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT
 ecm_add_test(ScrollCaptureSessionTest.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/ScrollFrameCrop.cpp ../src/Imaging/VerticalStitcher.cpp
     TEST_NAME scroll_capture_session_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(scroll_capture_session_test PROPERTIES TIMEOUT 20)
+
+ecm_add_test(ScrollCaptureControllerTest.cpp ../src/Imaging/ScrollCaptureController.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/VerticalStitcher.cpp
+    TEST_NAME scroll_capture_controller_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(scroll_capture_controller_test PROPERTIES TIMEOUT 20)

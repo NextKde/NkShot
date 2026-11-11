@@ -124,3 +124,40 @@ backend groundwork, not a disabled fake UI or an automatic scrolling claim.
 The source also rejects incomplete raw pixel reads instead of accepting a partly
 initialized QImage. Native pipe transport/short-read behavior remains a real KWin
 acceptance item; cloud tests do not emulate that compositor protocol.
+
+## Manual controller foundation (056, not exposed to users)
+
+`Imaging/ScrollCaptureController` now coordinates the collector through injected
+backend request/cancel functions whose owner is monitored with QPointer. It has
+no SpectacleCore/ExportManager/editor references. Backend destruction cancels the
+session; controller destruction aborts an active request and restores any hidden
+windows through the restoration signal. No UI constructs this class yet.
+
+The explicit states are Idle → Ready → WaitingForHidden → Capturing → Ready,
+with Finished/Cancelled end states. Capture-next does **not** call a backend
+until the matching `confirmHidden(ticket, currentLayout)` arrives. A four-second
+barrier deadline is a failure timeout, not a presumed repaint delay. An eight-
+second capture deadline aborts the backend and preserves accepted frames. A late
+confirmation, frame or failure cannot consume a newer ticket. Reentrant clicks
+are rejected during transition notifications; synchronous failure/cancellation
+is covered by tests. Restore is emitted exactly once per hide request on tested
+completion, failure, cancellation, timeout and destruction paths.
+
+`scrollSelectionPixels` accepts a global logical selection only if wholly inside
+one output. It computes both physical edges relative to that output, preserving
+negative desktop coordinates and fractional DPR without independently scaling
+width and origin. The expected native output size must agree with geometry/DPR.
+The controller snapshots the full output layout and compares it both before
+request and on frame delivery, not merely across one backend call. Unit tests
+cover DPR 1/1.25/1.5/2, crossing-output rejection and native-size mismatches. These
+numerical tests do not certify actual fractional-scale KWin behavior.
+
+### Still required before a user entry point
+
+A real UI/compositor coordinator must wire hide/restore signals, actually exclude
+all intersecting NkShot windows, obtain a trustworthy repaint/exclusion barrier,
+and pass current layout to confirmation and response calls. The test code calls
+confirmation explicitly to exercise the state machine; that is not proof of a
+compositor barrier. Need accepted single-output selection, actual KWin wiring,
+localized user statuses, accessible keyboard interaction, real denial/hotplug/
+interruption checks and successful image export before enabling the feature.

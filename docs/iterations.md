@@ -1144,3 +1144,33 @@ real permissions, fractional-DPI conversion, screen hotplug, timeout and window
 exclusion are unverified. The adapter drops late results but does not forcibly
 abort an already-blocking kernel pipe read. No automatic retry loop, scroll input
 injection, fake button or full scrolling feature is advertised.
+
+## 056 — Cancellable manual-scroll controller protocol (no public workflow yet)
+
+Added a GUI-thread controller around the isolated collector with monitored backend
+ownership. Capture-next first enters WaitingForHidden; only an explicit matching
+ticket and unchanged output-layout confirmation may start capture. No fixed sleep
+is treated as a compositor barrier. Separate barrier/capture deadlines fail safely.
+Cancel, late replies, synchronous backend failure, backend loss and controller
+teardown restore the requested hidden-window state and do not touch the editor.
+Single-output selection mapping uses logical edge positions relative to the output
+and checks native dimensions, rather than scaling global coordinates blindly.
+
+The first compile caught a constructor-parameter name shadowing the cancel method;
+this was corrected. A later intermediate test run caught the old object/new test
+mismatch while refining cancellation before a hide request. The final rebuild
+uses the matching sources and tests. Final CTest 8/8, static checks 16/16, full
+build and whitespace checks pass. Controller tests cover DPR 1/1.25/1.5/2 and
+negative screen coordinates, cross-output/native-size rejection, exact combined
+pixels, hide confirmation ordering, repeated clicks, cancel/restart, stale frames,
+layout change, duplicate guidance, synchronous failure, backend/controller loss,
+and real timer expiry for both preparation and capture. Expiry retains accepted
+pixels, cancels active work and ignores its late result.
+
+Reviewed the [existing editor isolation regression](screenshots/056-existing-editor-isolation-regression.png).
+This is existing UI after an unavailable-backend check, not a rolling-capture
+interface or demonstration. No user menu constructs the controller yet. Backend
+callbacks in future integration must use QObject-context connections; UI teardown
+from notification handlers should use deleteLater. Required real region selection,
+window exclusion/repaint confirmation, localized accessible controls and successful
+KWin capture/export acceptance remain in [the plan](scroll-capture-plan.md).
