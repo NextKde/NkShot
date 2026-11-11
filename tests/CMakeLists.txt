@@ -99,3 +99,6 @@ set_tests_properties(capture_stream_lease_test PROPERTIES TIMEOUT 10)
 # Actual linked KPipeWire failure/termination regression; requires the documented patch.
 ecm_add_test(RecordingInitializeFailureTest.cpp TEST_NAME recording_initialize_failure_test LINK_LIBRARIES Qt::Test Qt::Gui K::KPipeWireRecord)
 set_tests_properties(recording_initialize_failure_test PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+ecm_add_test(NoteCardTest.cpp ../src/Imaging/NoteCard.cpp TEST_NAME note_card_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(note_card_test PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -42,6 +42,7 @@ public:
     Q_INVOKABLE QQuickWindow *openScrollPreview();
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
+    Q_INVOKABLE QQuickWindow *openQuickNote();
     Q_INVOKABLE QSize imageSnapshotSize() const;
     Q_INVOKABLE void resizeImageCopy(int width);
     Q_INVOKABLE void beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded);
@@ -67,6 +68,7 @@ private:
 
     void setBackgroundColorRole(QPalette::ColorRole role);
 
+    QPointer<QQuickWindow> m_quickNote;
     QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
     bool m_combiningImages = false;

@@ -8,6 +8,7 @@
 #include "ViewerWindow.h"
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
+#include "QuickNoteWindow.h"
 #include "OcrTextWindow.h"
 #include "Imaging/ImageTransforms.h"
 #include "OcrManager.h"
@@ -89,6 +90,28 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
         KConfigGroup configGroup(KSharedConfig::openConfig(), u"ViewerWindow"_s);
         KWindowConfig::restoreWindowSize(this, configGroup);
     }
+}
+
+QQuickWindow *ViewerWindow::openQuickNote()
+{
+    if (!m_quickNote) {
+        for (auto window : QGuiApplication::allWindows()) {
+            if (auto note = qobject_cast<QuickNoteWindow *>(window)) {
+                m_quickNote = note;
+                break;
+            }
+        }
+    }
+    if(!m_quickNote) {
+        auto note=new QuickNoteWindow(engine());
+        if(note->status()!=QQuickView::Ready) {delete note;return nullptr;}
+        m_quickNote=note;
+    }
+    m_quickNote->setScreen(screen());
+    m_quickNote->show();
+    m_quickNote->setWindowStates(m_quickNote->windowStates().setFlag(Qt::WindowMinimized, false));
+    m_quickNote->requestActivate();
+    return m_quickNote;
 }
 
 QQuickWindow *ViewerWindow::pinImage()

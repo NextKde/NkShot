@@ -45,6 +45,9 @@ target_sources(spectacle PRIVATE
     Imaging/VerticalStitcher.cpp
     Gui/SoftwareVideoPreview.cpp
     Gui/SoftwareVideoPreview.h
+    Gui/QuickNoteWindow.cpp
+    Gui/QuickNoteWindow.h
+    Imaging/NoteCard.cpp
     Gui/OcrTextWindow.cpp
     Gui/OcrTextWindow.h
     Gui/ScrollCaptureWindow.cpp
@@ -220,6 +223,7 @@ qt_target_qml_sources(spectacle
     Gui/TextContextMenuConnection.qml
     Gui/TtToolButton.qml
     Gui/UndoRedoGroup.qml
+    Gui/QuickNote.qml
     Gui/OcrText.qml
     Gui/ScrollCapture.qml
     Gui/PinnedImage.qml

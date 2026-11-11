@@ -17,6 +17,7 @@
 #include "Gui/SelectionEditor.h"
 #include "Gui/SpectacleWindow.h"
 #include "Gui/InlineMessageModel.h"
+#include "Gui/QuickNoteWindow.h"
 #include "ImageMetaData.h"
 #include "OcrManager.h"
 #if WITH_X11
@@ -1171,6 +1172,7 @@ void SpectacleCore::activate(const QStringList &arguments, const QString &workin
 
 void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode grabMode, int timeout, bool includePointer, bool includeDecorations, bool includeWindowShadow)
 {
+    QuickNoteWindow::hideDraftsForCapture();
     // Clear when a new screenshot is taken to avoid overwriting
     // the previous file with a completely unrelated image.
     m_editExistingUrl.clear();
@@ -1555,6 +1557,7 @@ void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withP
     if (m_videoPlatform->isRecording() || mode == VideoPlatform::NoRecordingModes) {
         return;
     }
+    QuickNoteWindow::hideDraftsForCapture();
     const bool hasCaptureWindows = !CaptureWindow::instances().empty();
     if (hasCaptureWindows && mode != VideoPlatform::Region && !m_recordingEventLoopLocker) {
         m_recordingEventLoopLocker = std::make_unique<QEventLoopLocker>();

@@ -1456,3 +1456,36 @@ was reviewed using synthetic video. These results validate failed initialization
 not successful KWin capture, recording pause/resume or audio/video synchronization.
 The fix applies to the documented patched dependency, not arbitrary installed
 KPipeWire versions, and it is not represented as upstream-accepted.
+
+## 066 — Independent quick-note image cards
+
+Quick Note adds a focused 1Capture reference workflow rather than another annotation
+mode: write plain text, preview a styled card, then copy the exact image or pin an
+immutable copy. Pins and notes share one menu group instead of expanding the
+root More list. The draft stays in memory across window close/reopen, with an
+explicit reminder that it is not saved across application restarts.
+
+The reusable Qt Gui renderer handles Chinese/plain text and three card palettes,
+with bounded dimensions and clear empty/oversized disabled states. Original
+screenshots, undo history and already-created pins are isolated. The draft window
+adopts an existing note across viewer replacement, restores a minimized note and
+focuses the editor on first open. Review caught the initial focus/minimize issues;
+the UI test now asserts initial focus instead of artificially giving it focus.
+
+Build, CTest 13/13 and static checks 18/18 pass. Actual software-window interaction
+covers the submenu, Chinese input, copy/pin pixel equality, style change, close and
+reopen, empty/oversized input and source isolation. Existing pin Save As regression
+checks cancel, reopen, one-dialog behavior and PNG pixel equality. Light, dark and
+400×560 screenshots were inspected, including empty, limit and Night-card states.
+An implicit-width binding loop was eliminated before the final captures.
+Review also found that independent draft windows bypassed ordinary capture hiding.
+Screenshot/recording startup now hides them without deleting the draft; scrolling
+selection includes them in its existing hide/restore list. The hide/reopen helper
+is UI-tested, but compositor exclusion timing remains a native-KDE acceptance item.
+
+[Light](screenshots/066-quick-note-light.png),
+[dark](screenshots/066-quick-note-dark.png), and
+[compact](screenshots/066-quick-note-compact.png).
+These are actual QML windows with synthetic content and software rendering, not
+native KWin topmost/recording or GPU material acceptance. Quick Note is not a
+persistent notes database, cloud sync or full 1Capture parity.

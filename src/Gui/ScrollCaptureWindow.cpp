@@ -4,6 +4,7 @@
 #include "PinnedImageWindow.h"
 #include "ViewerWindow.h"
 #include "OcrTextWindow.h"
+#include "QuickNoteWindow.h"
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -100,7 +101,7 @@ void ScrollCaptureWindow::selectRegion()
     if(QGuiApplication::modalWindow()) {setStatus(i18nc("@info","Close the open dialog before selecting a region."));return;}
     for(auto w:QGuiApplication::allWindows()) {
         if(w!=this && w->isVisible() && w->visibility()!=QWindow::Minimized
-           && (qobject_cast<ViewerWindow *>(w)||qobject_cast<PinnedImageWindow *>(w)||qobject_cast<OcrTextWindow *>(w))) {m_hidden.append({w,w->visibility()});w->hide();}
+           && (qobject_cast<ViewerWindow *>(w)||qobject_cast<PinnedImageWindow *>(w)||qobject_cast<OcrTextWindow *>(w)||qobject_cast<QuickNoteWindow *>(w))) {m_hidden.append({w,w->visibility()});w->hide();}
     }
     m_phase=1;
     m_status=i18nc("@info","Drag a region, then adjust with arrow keys. Alt + arrows resize; Shift moves faster. Enter confirms, Esc cancels.");

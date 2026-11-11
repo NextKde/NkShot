@@ -28,9 +28,12 @@ See [iterations](iterations.md), [building](building.md) and
    any external provider requires explicit opt-in identifying data/destination.
 4. **Recording beyond capture:** actual KWin/PipeWire recording/A/V acceptance,
    then recording annotation, click effects and camera overlays where feasible.
-5. **Other verified reference gaps:** quick notes, dedicated color picking,
+5. **Other verified reference gaps:** dedicated color picking,
    spotlight/magnifier and AI erase/background removal. Do not label ordinary
    editor tools as these workflows or add fake placeholders.
+
+Quick-note image cards are implemented in 066 as a session-only workflow, not a
+persistent notes application.
 
 ## Release gates
 

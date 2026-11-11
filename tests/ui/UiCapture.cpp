@@ -5,6 +5,7 @@
 #include "Platforms/ScrollFrameKWin.h"
 #include <QDBusConnection>
 #include "Gui/PinnedImageWindow.h"
+#include "Gui/QuickNoteWindow.h"
 #include "Gui/OcrTextWindow.h"
 #include "Gui/InlineMessageModel.h"
 #include "Imaging/ImageTransforms.h"
@@ -263,6 +264,48 @@ void installUiCaptureHook(QApplication &application)
                 if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
                 qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
                 application.exit(0); return;
+            }
+            if(qEnvironmentVariableIsSet("NKSHOT_TEST_QUICK_NOTE")) {
+                auto document=SpectacleCore::instance()->annotationDocument();const auto original=document->renderToImage();const auto depth=document->undoStackDepth();
+                if(!openTaskMenu(viewer,QStringLiteral("nkshotPinsNotesMenu"))) {application.exit(170);return;}
+                auto action=visualItem(viewer->contentItem(),QStringLiteral("nkshotQuickNoteAction"));
+                if(!action){application.exit(171);return;}
+                QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,action->mapToScene(QPointF(action->width()/2,action->height()/2)).toPoint());QTest::qWait(200);
+                QuickNoteWindow *note=nullptr;for(auto w:QGuiApplication::allWindows())if(auto n=qobject_cast<QuickNoteWindow *>(w))note=n;
+                if(!note || note->canExport()){application.exit(172);return;}
+                if(qEnvironmentVariableIsSet("NKSHOT_TEST_NOTE_COMPACT"))note->resize(400,560);
+                auto editor=visualItem(note->contentItem(),QStringLiteral("nkshotNoteEditor"));
+                auto copy=visualItem(note->contentItem(),QStringLiteral("nkshotNoteCopy"));
+                auto pinAction=visualItem(note->contentItem(),QStringLiteral("nkshotNotePin"));
+                if(!editor || !copy || !pinAction || copy->isEnabled() || pinAction->isEnabled()){application.exit(173);return;}
+                QTest::qWait(150);note->grabWindow().save(destination+QStringLiteral(".empty.png"));
+                const QString text=QStringLiteral("Tomorrow’s demo\n\n截图与录制检查\n• Review the image before sharing\n• Keep high-frequency actions visible\n• 中文备注，清晰表达。");
+                if (!editor->hasActiveFocus()) { application.exit(183); return; }
+                QInputMethodEvent commit;commit.setCommitString(text);QCoreApplication::sendEvent(note,&commit);
+                if(!QTest::qWaitFor([&]{return note->canExport() && copy->isEnabled();},2000)){application.exit(174);return;}
+                auto click=[&](QQuickItem *item){QTest::mouseClick(note,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());QTest::qWait(150);};
+                const auto card=note->snapshot();click(copy);
+                if(!samePixels(QApplication::clipboard()->image(),card)){application.exit(175);return;}
+                click(pinAction);QPointer<PinnedImageWindow> pin;
+                for(auto w:QGuiApplication::allWindows())if(auto p=qobject_cast<PinnedImageWindow *>(w))pin=p;
+                if(!pin || !samePixels(pin->snapshot(),card)){application.exit(176);return;}
+                auto style=visualItem(note->contentItem(),QStringLiteral("nkshotNoteStyle"));
+                if(!style){application.exit(177);return;}note->requestActivate();click(style);QTest::keyClick(note,Qt::Key_End);QTest::keyClick(note,Qt::Key_Return);QTest::qWait(250);
+                if(note->snapshot().pixelColor(0,0)!=QColor("#20232c") || !samePixels(pin->snapshot(),card)){application.exit(178);return;}
+                note->grabWindow().save(destination+QStringLiteral(".night.png"));
+                note->close();QTest::qWait(100);if(note->isVisible() || viewer->openQuickNote()!=note || editor->property("text").toString()!=text){application.exit(179);return;}
+                editor->setProperty("text",QString(2001,u'x'));QTest::qWait(250);
+                if(note->canExport() || copy->isEnabled() || note->error().isEmpty()){application.exit(180);return;}
+                note->grabWindow().save(destination+QStringLiteral(".limit.png"));
+                editor->setProperty("text",text);QTest::qWait(200);click(style);QTest::keyClick(note,Qt::Key_Home);QTest::keyClick(note,Qt::Key_Return);QTest::qWait(250);
+                for(auto item:{copy,pinAction}) {auto p=item->mapToScene(QPointF());if(p.x()<0 || p.x()+item->width()>note->width() || p.y()<0 || p.y()+item->height()>note->height()){application.exit(181);return;}}
+                if(!samePixels(document->renderToImage(),original) || depth!=document->undoStackDepth() || !samePixels(pin->snapshot(),card)){application.exit(182);return;}
+                note->grabWindow().save(destination);
+                QuickNoteWindow::hideDraftsForCapture();
+                if (note->isVisible() || viewer->openQuickNote()!=note || editor->property("text").toString()!=text) { application.exit(184); return; }
+                pin->close();note->close();
+                qInfo()<<"NkShot quick note actual menu/Chinese input/styles/copy/pin/reopen/limits and source isolation passed";
+                application.exit(0);return;
             }
             if(qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_ZOOM")) {
                 auto document=SpectacleCore::instance()->annotationDocument();
@@ -1038,9 +1081,7 @@ void installUiCaptureHook(QApplication &application)
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN")) {
                 auto document = SpectacleCore::instance()->annotationDocument();
                 const auto original = document->renderToImage();
-                auto menu = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
-                if (!menu || !QMetaObject::invokeMethod(menu, "open")) { application.exit(41); return; }
-                QTest::qWait(200);
+                if (!openTaskMenu(viewer, QStringLiteral("nkshotPinsNotesMenu"))) { application.exit(41); return; }
                 auto pinAction = visualItem(viewer->contentItem(), QStringLiteral("nkshotPinImageAction"));
                 if (!pinAction) { application.exit(41); return; }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,

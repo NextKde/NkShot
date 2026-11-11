@@ -281,3 +281,13 @@ and speed-combo interactions, followed by Escape/reopen/outside dismissal.
 The additional `.settings.png` shows the opened popup. Audio-track metadata and
 QAudioOutput properties are checked, not physical sound output. Source-file bytes
 must remain unchanged. The fixture used for 062 is generated H.264 plus AAC tone.
+
+### 066 quick-note workflow
+
+Set `NKSHOT_TEST_QUICK_NOTE=1` with an image fixture and UI capture path. The test
+opens the actual Pins and notes submenu, enters Chinese and English text, checks
+empty/oversized disabled actions, copies exact preview pixels, creates an immutable
+pin, changes card style, closes/reopens the retained draft and checks original
+screenshot/history isolation. `NKSHOT_TEST_NOTE_COMPACT=1` tests 400×560, and
+`NKSHOT_TEST_DARK=1` tests the dark shell. These are software-window tests, not
+KWin topmost, native compositor capture or GPU material acceptance.

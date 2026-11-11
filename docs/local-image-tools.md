@@ -146,3 +146,23 @@ snapshot, not the visible or scaled region. The footer is outside the image rath
 than an overlay hiding the bottom of a long screenshot. Mouse/keyboard/wheel and
 window resizing were checked in software Qt windows; native high-DPI, touch and
 trackpad behavior still require real desktop testing. Pinch zoom is not implemented.
+
+## Quick-note cards (066)
+
+More → Pins and notes → Quick note opens an independent editor. Plain text is
+rendered locally into a 720-pixel-wide opaque image, with Paper, Blue or Night
+colors. Chinese, wrapped text and literal markup are supported without treating
+input as HTML. Copy image writes only after an explicit click. Pin note creates an
+immutable snapshot; Save As in its toolbar exports the PNG through the existing
+pin workflow. Editing the note never changes an existing pin or screenshot.
+
+The draft survives closing/reopening the note window within this process, but is
+not saved across application restarts. The window says this explicitly. There is
+no cloud sync, notes database or automatic clipboard/disk write. Empty notes and
+notes beyond 2,000 UTF-16 units or 2,400 rendered pixels in height cannot export.
+`Imaging/NoteCard` is a Qt Gui-only renderer reusable outside this UI.
+
+Starting a screenshot or recording hides the draft window; reopen it explicitly
+from Pins and notes afterward. Scrolling selection restores its prior visibility
+through the existing selection cleanup. This prevents intentional draft display
+during setup; actual compositor exclusion timing still needs native KDE testing.

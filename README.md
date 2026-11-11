@@ -8,6 +8,9 @@ and separate implementation, automated-test and real-KDE acceptance status.
 
 ## Current scope
 
+- Quick Note: session-only plain-text cards with three styles, image copy and
+  immutable pins, grouped under Pins and notes. Save the pinned PNG to keep it.
+
 - Canonical NextKde Kos.Ui floating liquid panels with same-window image sampling,
   blur/refraction and opaque fallbacks (software visuals reviewed; GPU optics unverified).
 - Neutral selection outline and contrasting resize handles.

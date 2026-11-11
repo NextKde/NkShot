@@ -270,6 +270,11 @@ EmptyPage {
                             onTriggered: contextWindow.combineImages(true)
                         }
                     }
+                    TaskMenu {
+                        objectName: "nkshotPinsNotesMenu"
+                        imageOnly: false
+                        title: i18nc("@action:menu", "Pins and notes")
+                        icon.name: "window-pin"
                     QQC.MenuItem {
                         objectName: "nkshotPinImageAction"
                         visible: !SpectacleCore.videoMode
@@ -278,6 +283,14 @@ EmptyPage {
                         icon.name: "window-pin"
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.pinImage()
+                    }
+                        QQC.MenuItem {
+                            objectName: "nkshotQuickNoteAction"
+                            text: i18nc("@action", "Quick note…")
+                            icon.name: "document-edit"
+                            icon.color: palette.buttonText
+                            onTriggered: contextWindow.openQuickNote()
+                        }
                     }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
                     QQC.MenuItem {
