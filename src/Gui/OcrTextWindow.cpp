@@ -11,11 +11,11 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 
-OcrTextWindow::OcrTextWindow(const QString &text, QQmlEngine *engine)
-    : QQuickView(engine, nullptr), m_text(text)
+OcrTextWindow::OcrTextWindow(const QString &text, QQmlEngine *engine, bool codeResult)
+    : QQuickView(engine, nullptr), m_text(text), m_codeResult(codeResult)
 {
-    setObjectName(QStringLiteral("nkshotOcrTextWindow"));
-    setTitle(i18nc("@title:window", "Extracted Text — NkShot"));
+    setObjectName(codeResult ? QStringLiteral("nkshotCodeTextWindow") : QStringLiteral("nkshotOcrTextWindow"));
+    setTitle(codeResult ? i18nc("@title:window", "Code Content — NkShot") : i18nc("@title:window", "Extracted Text — NkShot"));
     setMinimumSize({360, 260});
     setResizeMode(SizeRootObjectToView);
     auto context = new QQmlContext(engine->rootContext(), this);
@@ -53,13 +53,13 @@ void OcrTextWindow::saveAs()
     m_saveDialog = dialog;
     dialog->setObjectName(QStringLiteral("nkshotOcrSaveDialog"));
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(i18nc("@title:window", "Save Extracted Text"));
+    dialog->setWindowTitle(m_codeResult ? i18nc("@title:window", "Save Code Content") : i18nc("@title:window", "Save Extracted Text"));
     dialog->setAcceptMode(QFileDialog::AcceptSave);
     dialog->setFileMode(QFileDialog::AnyFile);
     dialog->setNameFilter(i18nc("@item:inlistbox", "UTF-8 text (*.txt)"));
     dialog->setDefaultSuffix(QStringLiteral("txt"));
     dialog->setDirectory(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
-    dialog->selectFile(QStringLiteral("NkShot-text.txt"));
+    dialog->selectFile(m_codeResult ? QStringLiteral("NkShot-code.txt") : QStringLiteral("NkShot-text.txt"));
     dialog->winId();
     dialog->windowHandle()->setTransientParent(this);
     connect(dialog, &QFileDialog::accepted, this, [this, dialog] {
@@ -78,4 +78,14 @@ void OcrTextWindow::saveAs()
         Q_EMIT saveFinished(i18nc("@info", "Text saved"), true);
     });
     dialog->open();
+}
+
+QString OcrTextWindow::heading() const
+{
+    return m_codeResult ? i18nc("@title", "Code content") : i18nc("@title", "Extracted Text");
+}
+QString OcrTextWindow::description() const
+{
+    return m_codeResult ? i18nc("@info", "Decoded on this device. Links and commands are shown as text, never opened automatically.")
+                        : i18nc("@info", "Recognized on this device. Review the text before using it.");
 }

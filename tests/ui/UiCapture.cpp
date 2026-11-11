@@ -91,7 +91,7 @@ void installUiCaptureHook(QApplication &application)
         return;
     }
 
-    if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_TEXT") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY") || qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_SAVE") || qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE")) {
         // The harness drives widget filenames; production retains native dialogs.
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
@@ -263,6 +263,83 @@ void installUiCaptureHook(QApplication &application)
                 }
                 if (!viewer->grabWindow().save(destination)) { application.exit(166); return; }
                 qInfo() << "NkShot task-based More menu and recording-context filtering passed" << video;
+                application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE")) {
+                auto document = SpectacleCore::instance()->annotationDocument();
+                const auto original = document->renderToImage();
+                const auto depth = document->undoStackDepth();
+                QApplication::clipboard()->setText(QStringLiteral("leave clipboard unchanged"));
+                InlineMessageModel::instance()->clear();
+                if (!openTaskMenu(viewer, QStringLiteral("nkshotOcrLanguageMenu"))) { application.exit(185); return; }
+                auto action = visualItem(viewer->contentItem(), QStringLiteral("nkshotScanCodeAction"));
+                if (!action || !action->isVisible()) { application.exit(186); return; }
+                QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, action->mapToScene(QPointF(action->width()/2, action->height()/2)).toPoint());
+                viewer->scanImageCode(); // A rapid second request must not create another job/result.
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE_STALE")) { viewer->hide(); viewer->show(); }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE_MAXIMIZE")) viewer->setWindowStates(Qt::WindowMaximized);
+                if (!QTest::qWaitFor([&] { return !viewer->scanningCode(); }, 5000)) { application.exit(187); return; }
+                QTest::qWait(200);
+                QPointer<OcrTextWindow> result;
+                int count = 0;
+                for (auto window : QGuiApplication::allWindows()) {
+                    if (window->objectName() == QStringLiteral("nkshotCodeTextWindow")) {
+                        result = qobject_cast<OcrTextWindow *>(window); ++count;
+                    }
+                }
+                if (QApplication::clipboard()->text() != QStringLiteral("leave clipboard unchanged")) { application.exit(188); return; }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE_STALE")) {
+                    if (result || InlineMessageModel::instance()->rowCount()) { application.exit(199); return; }
+                    viewer->grabWindow().save(destination);
+                } else if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE_EMPTY")) {
+                    if (result || InlineMessageModel::instance()->rowCount() != 1) { application.exit(189); return; }
+                    viewer->grabWindow().save(destination);
+                } else {
+                    const auto expected = QStringLiteral("https://example.com/notes?text=<literal>\n中文备注");
+                    if (!result || count != 1 || result->recognizedText() != expected) { application.exit(190); return; }
+                    if (qEnvironmentVariableIsSet("NKSHOT_TEST_CODE_COMPACT")) result->resize(360, 300);
+                    auto text = visualItem(result->contentItem(), QStringLiteral("nkshotOcrText"));
+                    auto copy = visualItem(result->contentItem(), QStringLiteral("nkshotOcrCopy"));
+                    if (!text || !copy || text->property("textFormat").toInt() != 0) { application.exit(191); return; }
+                    result->requestActivate(); QTest::qWait(200);
+                    result->grabWindow().save(destination);
+                    QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier, copy->mapToScene(QPointF(copy->width()/2, copy->height()/2)).toPoint());
+                    if (QApplication::clipboard()->text() != expected) { application.exit(192); return; }
+                    QTemporaryDir folder;
+                    const auto output = folder.filePath(QStringLiteral("code.txt"));
+                    auto save = visualItem(result->contentItem(), QStringLiteral("nkshotOcrSave"));
+                    if (!folder.isValid() || !save) { application.exit(195); return; }
+                    QTest::mouseClick(result, Qt::LeftButton, Qt::NoModifier, save->mapToScene(QPointF(save->width()/2, save->height()/2)).toPoint());
+                    QTest::qWait(200);
+                    QPointer<QFileDialog> dialog;
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotOcrSaveDialog")) dialog = qobject_cast<QFileDialog *>(widget);
+                    auto filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
+                    if (!filename) { application.exit(196); return; }
+                    filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, output);
+                    if (!QTest::qWaitFor([&] { return dialog->selectedFiles() == QStringList{output}; }, 1000)
+                        || !QMetaObject::invokeMethod(dialog, "accept")
+                        || !QTest::qWaitFor([&] { return dialog.isNull(); }, 1000)) { application.exit(197); return; }
+                    QFile file(output);
+                    if (!file.open(QIODevice::ReadOnly) || file.readAll() != expected.toUtf8()) { application.exit(198); return; }
+                    result->close(); QTest::qWait(100);
+                    if (result) { application.exit(193); return; }
+                    // A completed/closed request must not block the next one.
+                    viewer->scanImageCode();
+                    if (!QTest::qWaitFor([&] { return !viewer->scanningCode(); }, 5000)) { application.exit(200); return; }
+                    for (auto window : QGuiApplication::allWindows())
+                        if (window->objectName() == QStringLiteral("nkshotCodeTextWindow")) result = qobject_cast<OcrTextWindow *>(window);
+                    if (!result || result->recognizedText() != expected) { application.exit(201); return; }
+                    // Closing a result must also close its outstanding Save As dialog.
+                    result->saveAs(); QTest::qWait(100);
+                    for (auto widget : QApplication::topLevelWidgets())
+                        if (widget->objectName() == QStringLiteral("nkshotOcrSaveDialog")) dialog = qobject_cast<QFileDialog *>(widget);
+                    if (!dialog) { application.exit(202); return; }
+                    result->close(); QTest::qWait(100);
+                    if (result || dialog) { application.exit(203); return; }
+                }
+                if (!samePixels(document->renderToImage(), original) || depth != document->undoStackDepth()) { application.exit(194); return; }
+                qInfo() << "NkShot actual code menu/decode/plain-text/copy/no-result/deduplication/source isolation passed";
                 application.exit(0); return;
             }
             if(qEnvironmentVariableIsSet("NKSHOT_TEST_QUICK_NOTE")) {

@@ -166,3 +166,17 @@ Starting a screenshot or recording hides the draft window; reopen it explicitly
 from Pins and notes afterward. Scrolling selection restores its prior visibility
 through the existing selection cleanup. This prevents intentional draft display
 during setup; actual compositor exclusion timing still needs native KDE testing.
+
+## Read QR and barcodes (067)
+
+More → Read text and codes → Read QR or barcode scans an immutable snapshot of
+the current edited image locally. It displays one decoded textual result in the
+shared read-only result window. Copy and UTF-8 Save As are explicit actions; URLs,
+HTML and commands stay plain text and are never opened or executed by this flow.
+The existing automatic scan preference remains a separate upstream path.
+
+Empty, undecodable and binary-only codes get useful guidance without modifying
+the clipboard. The helper rejects images over 20 megapixels and composites alpha
+onto white for recognition. A repeated request is ignored while decoding; a hidden
+viewer, changed image or switch to video discards the obsolete result. Multiple
+codes are not enumerated, and damaged-code accuracy is not guaranteed.

@@ -218,12 +218,12 @@ EmptyPage {
                     TaskMenu {
                         id: ocrLanguageMenu
                         objectName: "nkshotOcrLanguageMenu"
-                        title: i18nc("@action:menu", "Extract text")
+                        title: i18nc("@action:menu", "Read text and codes")
                         icon.name: "document-scan"
                         property var languages: SpectacleCore.ocrAvailable ? SpectacleCore.ocrAvailableLanguages() : ({})
                         QQC.MenuItem {
                             action: OcrAction {}
-                            text: i18nc("@action", "Use configured languages")
+                            text: i18nc("@action", "Extract text")
                             icon.color: palette.buttonText
                         }
                         QQC.MenuSeparator {}
@@ -238,6 +238,15 @@ EmptyPage {
                             }
                             onObjectAdded: (index, object) => ocrLanguageMenu.insertItem(index + 2, object)
                             onObjectRemoved: (index, object) => ocrLanguageMenu.removeItem(object)
+                        }
+                        QQC.MenuSeparator {}
+                        QQC.MenuItem {
+                            objectName: "nkshotScanCodeAction"
+                            text: contextWindow.scanningCode ? i18nc("@info", "Reading code…") : i18nc("@action", "Read QR or barcode")
+                            icon.name: "view-barcode-qr"
+                            icon.color: palette.buttonText
+                            enabled: !contextWindow.scanningCode
+                            onTriggered: contextWindow.scanImageCode()
                         }
                         QQC.Label {
                             visible: !SpectacleCore.ocrAvailable

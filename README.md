@@ -18,6 +18,7 @@ and separate implementation, automated-test and real-KDE acceptance status.
 - Bottom capture controls separated from the screen edge.
 - Existing Spectacle capture, recording, annotations, exports and shortcuts retained.
 - Local English/Chinese OCR results, text selection/copy and UTF-8 saving, including independent pinned images.
+- Explicit local QR/barcode reading with plain-text results; links and commands are never opened automatically.
 - Separate-image pinning, conservative overlap composition and explicit vertical stacking.
 - Non-destructive sharing copies: proportional resizing, backgrounds and text watermark.
 - Local video/animation playback with software-frame fallback and failure/retry UI.

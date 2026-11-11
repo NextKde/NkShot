@@ -291,3 +291,19 @@ pin, changes card style, closes/reopens the retained draft and checks original
 screenshot/history isolation. `NKSHOT_TEST_NOTE_COMPACT=1` tests 400×560, and
 `NKSHOT_TEST_DARK=1` tests the dark shell. These are software-window tests, not
 KWin topmost, native compositor capture or GPU material acceptance.
+
+### 067 explicit local code reading
+
+`NKSHOT_TEST_CODE=1` opens the real Read text and codes submenu and decodes a
+Prison-generated QR fixture with literal URL/markup and Chinese content. It checks
+no automatic clipboard mutation, repeated-request protection, plain-text display,
+explicit Copy all, result destruction and source/history isolation. Use
+`NKSHOT_TEST_CODE_COMPACT=1` or `NKSHOT_TEST_DARK=1` for visual variants.
+`NKSHOT_TEST_CODE_EMPTY=1` with a blank fixture checks one actionable warning and
+no result window. Renderer tests additionally exercise real Code128, binary,
+transparency/DPI and pixel bounds; this is not an accuracy benchmark.
+
+`NKSHOT_TEST_CODE_STALE=1` hides/reopens the viewer before delivery and requires
+no result or warning. `NKSHOT_TEST_CODE_MAXIMIZE=1` maximizes while decoding and
+requires a normal result. Successful-result runs also verify UTF-8 export, repeat
+scan after close, and result/dialog destruction while Save As is open.

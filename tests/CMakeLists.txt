@@ -102,3 +102,8 @@ set_tests_properties(recording_initialize_failure_test PROPERTIES TIMEOUT 15 ENV
 
 ecm_add_test(NoteCardTest.cpp ../src/Imaging/NoteCard.cpp TEST_NAME note_card_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(note_card_test PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Local QR/barcode decode with generated Prison fixtures and no external actions.
+ecm_add_test(CodeScannerTest.cpp ../src/Imaging/CodeScanner.cpp
+    TEST_NAME code_scanner_test LINK_LIBRARIES Qt::Test Qt::Gui KF6::Prison KF6::PrisonScanner)
+set_tests_properties(code_scanner_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -23,6 +23,7 @@ class ViewerWindowPrivate;
 class ViewerWindow : public SpectacleWindow
 {
     Q_OBJECT
+    Q_PROPERTY(bool scanningCode READ scanningCode NOTIFY scanningCodeChanged)
     Q_PROPERTY(bool scrollPreviewEnabled READ scrollPreviewEnabled CONSTANT)
     Q_PROPERTY(bool resizingImage READ resizingImage NOTIFY resizingImageChanged)
     Q_PROPERTY(bool combiningImages READ combiningImages NOTIFY combiningImagesChanged)
@@ -43,6 +44,8 @@ public:
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
     Q_INVOKABLE QQuickWindow *openQuickNote();
+    Q_INVOKABLE void scanImageCode();
+    bool scanningCode() const { return m_scanningCode; }
     Q_INVOKABLE QSize imageSnapshotSize() const;
     Q_INVOKABLE void resizeImageCopy(int width);
     Q_INVOKABLE void beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded);
@@ -50,6 +53,7 @@ public:
     Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);
     bool combiningImages() const { return m_combiningImages; }
 Q_SIGNALS:
+    void scanningCodeChanged();
     void combiningImagesChanged();
     void resizingImageChanged();
 
@@ -72,6 +76,8 @@ private:
     QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
     bool m_combiningImages = false;
+    bool m_scanningCode = false;
+    quint64 m_codeScanEpoch = 0;
     bool m_resizingImage = false;
     bool m_pixmapExists = false;
     QPalette::ColorRole m_backgroundColorRole;

@@ -47,6 +47,7 @@ target_sources(spectacle PRIVATE
     Gui/SoftwareVideoPreview.h
     Gui/QuickNoteWindow.cpp
     Gui/QuickNoteWindow.h
+    Imaging/CodeScanner.cpp
     Imaging/NoteCard.cpp
     Gui/OcrTextWindow.cpp
     Gui/OcrTextWindow.h

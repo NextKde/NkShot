@@ -28,7 +28,7 @@ This is a workflow comparison, not a claim of source reuse or full parity.
 | Recording annotation/click effects/camera overlay | Not implemented | Pointer capture option is not a click-effect feature | Not accepted |
 | Dedicated screen color picker | Not implemented | Annotation color control is not a global eyedropper | Not accepted |
 | Spotlight/presentation magnifier | Not implemented | Capture-selection magnifier source exists, not an independent presentation mode | Not accepted |
-| QR recognition | Upstream source route retained | No focused QR acceptance test yet | Not accepted |
+| QR / barcode reading | Explicit local scan of an immutable edited-image snapshot; plain-text result, copy/save, bounded size and no-result/binary guidance (067). Original automatic route retained | Real Prison QR/Code128 fixtures, Chinese/literal markup, binary/invalid bounds; actual menu and result interactions | Software-window workflow verified; real-world damaged-code accuracy and native dialogs pending |
 | AI erase/background removal | Not implemented | No model/provider integration | Not accepted |
 | Translation (user request) | Not implemented | Not part of the confirmed 1Capture comparison above | No default external transmission |
 

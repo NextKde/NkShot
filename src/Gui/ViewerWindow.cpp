@@ -11,6 +11,7 @@
 #include "QuickNoteWindow.h"
 #include "OcrTextWindow.h"
 #include "Imaging/ImageTransforms.h"
+#include "Imaging/CodeScanner.h"
 #include "OcrManager.h"
 #include "Imaging/VerticalStitcher.h"
 #include <QFileDialog>
@@ -409,6 +410,8 @@ void ViewerWindow::startDrag()
 
 bool ViewerWindow::event(QEvent *event)
 {
+    if (event->type() == QEvent::Hide || event->type() == QEvent::Close
+        || (event->type() == QEvent::WindowStateChange && windowStates().testFlag(Qt::WindowMinimized))) ++m_codeScanEpoch;
     if (event->type() == QEvent::ApplicationPaletteChange) {
         updateColor();
     }
@@ -443,4 +446,45 @@ QQuickWindow *ViewerWindow::openScrollPreview()
     auto view=new ScrollCaptureWindow(engine());
     if(view->status()!=QQuickView::Ready) {delete view;return nullptr;}
     m_scrollPreview=view;view->show();view->requestActivate();return view;
+}
+
+void ViewerWindow::scanImageCode()
+{
+    if (m_scanningCode || SpectacleCore::instance()->videoMode()) return;
+    const auto snapshot = SpectacleCore::instance()->annotationDocument()->renderToImage();
+    m_scanningCode = true;
+    Q_EMIT scanningCodeChanged();
+    const auto epoch = m_codeScanEpoch;
+    auto watcher = new QFutureWatcher<NkShot::Imaging::CodeScanResult>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, snapshot, epoch] {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        m_scanningCode = false;
+        Q_EMIT scanningCodeChanged();
+        // A capture or edit may have replaced the source while the worker decoded.
+        // Never present a stale result over a selector or a different document.
+        if (epoch != m_codeScanEpoch || !isVisible() || windowStates().testFlag(Qt::WindowMinimized)
+            || SpectacleCore::instance()->captureTimeRemaining() > 0 || SpectacleCore::instance()->videoMode()
+            || snapshot != SpectacleCore::instance()->annotationDocument()->renderToImage()) return;
+        using Result = NkShot::Imaging::CodeScanResult;
+        if (result.status != Result::Text) {
+            const auto message = result.status == Result::Binary
+                ? i18nc("@info", "A code contains binary data, not readable text. No content was copied or opened.")
+                : result.status == Result::InvalidImage
+                ? i18nc("@info", "Code reading requires a valid image of at most 20 megapixels. Crop or resize a copy and try again.")
+                : i18nc("@info", "No readable code found. Try a clearer image with the complete code and its surrounding margin.");
+            InlineMessageModel::instance()->push(InlineMessageModel::Warning, message);
+            return;
+        }
+        auto preview = new OcrTextWindow(result.text, engine(), true);
+        if (preview->status() != QQuickView::Ready) {
+            delete preview;
+            InlineMessageModel::instance()->push(InlineMessageModel::Error, i18nc("@info", "The code result could not be opened. Your image is unchanged."));
+            return;
+        }
+        preview->setScreen(screen());
+        preview->show();
+        preview->requestActivate();
+    });
+    watcher->setFuture(QtConcurrent::run([snapshot] { return NkShot::Imaging::scanImageCode(snapshot); }));
 }

@@ -7,10 +7,14 @@
 class OcrTextWindow : public QQuickView
 {
     Q_OBJECT
+    Q_PROPERTY(QString heading READ heading CONSTANT)
+    Q_PROPERTY(QString description READ description CONSTANT)
     Q_PROPERTY(QString recognizedText READ recognizedText CONSTANT)
 public:
-    OcrTextWindow(const QString &text, QQmlEngine *engine);
+    OcrTextWindow(const QString &text, QQmlEngine *engine, bool codeResult = false);
     ~OcrTextWindow() override;
+    QString heading() const;
+    QString description() const;
     Q_INVOKABLE void saveAs();
     QString recognizedText() const { return m_text; }
     Q_INVOKABLE void copyText();
@@ -21,5 +25,6 @@ protected:
     bool event(QEvent *event) override;
 private:
     const QString m_text;
+    const bool m_codeResult;
     QPointer<QObject> m_saveDialog;
 };

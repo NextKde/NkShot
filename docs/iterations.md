@@ -1489,3 +1489,38 @@ is UI-tested, but compositor exclusion timing remains a native-KDE acceptance it
 These are actual QML windows with synthetic content and software rendering, not
 native KWin topmost/recording or GPU material acceptance. Quick Note is not a
 persistent notes database, cloud sync or full 1Capture parity.
+
+## 067 — Explicit local code-reading workflow
+
+Read text and codes groups OCR and QR/barcode reading without adding a new root
+menu entry. The explicit scanner uses a private edited-image snapshot, recognizes
+locally and opens the shared plain-text result reader. Copy and UTF-8 Save As are
+intentional actions. Payloads containing URLs, markup or commands are never
+interpreted or launched by this workflow. The original automatic-scan preference
+remains separate.
+
+Recognition is bounded to 20 megapixels and repeated clicks are coalesced. Binary
+content and no-code images receive guidance without clipboard changes. Results
+are discarded if the viewer is hidden, becomes video or its image changed while
+recognition ran. The underlying renderer/helper remains independent of the UI.
+
+Real Prison-generated QR, Chinese, URL/literal markup, binary, Code128 and alpha/DPI
+fixtures exercise the decoder. Actual QML menu clicks verify explicit copy/save,
+no automatic clipboard mutation, one result per request and unchanged source
+pixels/history. Shared OCR reading/export remains a regression gate. Software
+screenshots use synthetic fixtures; native dialogs, desktop capture and general
+damaged-code accuracy remain unverified. Multiple codes are not enumerated.
+
+Final build, CTest 14/14 and static checks 18/18 pass. Review found that
+maximizing during a scan unnecessarily discarded its result; only minimizing now
+invalidates the window-state epoch. The final interaction pass also verifies
+maximizing, repeat scanning after closing a result, and closing the result with an
+outstanding Save As dialog. Hide/show still discards the in-flight result.
+
+[Light](screenshots/067-code-light.png), [dark](screenshots/067-code-dark.png),
+[compact](screenshots/067-code-compact.png),
+[no code](screenshots/067-code-blank.png),
+[binary content](screenshots/067-code-binary.png),
+[discarded stale result](screenshots/067-code-stale.png), and
+[shared OCR regression](screenshots/067-ocr-regression.png) are actual software
+window captures reviewed for this stage.

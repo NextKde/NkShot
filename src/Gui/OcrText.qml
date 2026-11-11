@@ -18,7 +18,7 @@ QQC.Pane {
             Layout.fillWidth: true
             QQC.Label {
                 Layout.fillWidth: true
-                text: i18nc("@title", "Extracted Text")
+                text: ocrWindow.heading
                 font.pixelSize: 17
                 font.weight: Font.DemiBold
                 color: Kos.AppTheme.paletteText
@@ -67,7 +67,7 @@ QQC.Pane {
         }
         QQC.Label {
             Layout.fillWidth: true
-            text: i18nc("@info", "Recognized on this device. Review the text before using it.")
+            text: ocrWindow.description
             wrapMode: Text.Wrap
             color: Kos.AppTheme.mutedText
             font.pixelSize: 12
