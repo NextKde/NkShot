@@ -303,6 +303,69 @@ void installUiCaptureHook(QApplication &application)
                         application.exit(119); return;
                     }
                 }
+                if (qEnvironmentVariableIsSet("NKSHOT_TEST_MEDIA_SWITCH")) {
+                    QTemporaryDir repairFolder;
+                    const auto repairPath = repairFolder.filePath(QStringLiteral("repair.mp4"));
+                    if (!repairFolder.isValid() || !QFile::copy(qEnvironmentVariable("NKSHOT_TEST_SWITCH_BROKEN"), repairPath)) {
+                        application.exit(135); return;
+                    }
+                    const QList<QPair<QString, int>> sources{
+                        {qEnvironmentVariable("NKSHOT_TEST_SWITCH_GIF"), 1},
+                        {qEnvironmentVariable("NKSHOT_TEST_SWITCH_WEBP"), 1},
+                        {repairPath, 2}, {path, 0}};
+                    auto softwareVideo = visualItem(viewer->contentItem(), QStringLiteral("nkshotSoftwareVideoPreview"));
+                    auto animated = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnimatedImage"));
+                    auto player = recording->findChild<QObject *>(QStringLiteral("nkshotMediaPlayer"));
+                    if (!softwareVideo || !animated || !player) { application.exit(127); return; }
+                    for (const auto &[source, kind] : sources) {
+                        QFile nextFile(source);
+                        if (!nextFile.open(QIODevice::ReadOnly)) { application.exit(128); return; }
+                        const auto bytes = nextFile.readAll(); nextFile.close();
+                        recording->setProperty("sourceUrl", QUrl::fromLocalFile(source));
+                        if (kind == 2) {
+                            if (!QTest::qWaitFor([&] { return recording->property("playbackFailed").toBool()
+                                && !recording->property("hasContent").toBool() && !softwareVideo->property("hasFrame").toBool(); }, 5000)) {
+                                application.exit(129); return;
+                            }
+                            QFile repaired(source);
+                            if (!repaired.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                                || repaired.write(original) != original.size()) { application.exit(136); return; }
+                            repaired.close(); // Only the test-owned temporary file is changed.
+                            auto retry = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackRetry"));
+                            if (!retry) { application.exit(137); return; }
+                            QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                                retry->mapToScene(QPointF(retry->width()/2, retry->height()/2)).toPoint());
+                            if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool()
+                                && !recording->property("playbackFailed").toBool(); }, 5000)) { application.exit(138); return; }
+                            QMetaObject::invokeMethod(recording, "togglePlay");
+                            if (!QTest::qWaitFor([&] { return softwareVideo->property("hasFrame").toBool()
+                                && player->property("position").toLongLong() > 100; }, 5000)) { application.exit(139); return; }
+                            QMetaObject::invokeMethod(recording, "togglePlay");
+                        } else if (kind == 1) {
+                            if (!QTest::qWaitFor([&] { return recording->property("hasAnimatedImage").toBool()
+                                && !recording->property("playbackFailed").toBool() && player->property("source").toUrl().isEmpty()
+                                && !softwareVideo->property("active").toBool() && !softwareVideo->property("hasFrame").toBool(); }, 5000)) {
+                                application.exit(130); return;
+                            }
+                            if (!recording->property("playing").toBool()) QMetaObject::invokeMethod(recording, "togglePlay");
+                            const auto frame = animated->property("currentFrame").toInt();
+                            if (!QTest::qWaitFor([&] { return animated->property("currentFrame").toInt() != frame; }, 2000)) {
+                                application.exit(131); return;
+                            }
+                        } else {
+                            if (!QTest::qWaitFor([&] { return recording->property("hasContent").toBool()
+                                && !recording->property("playbackFailed").toBool() && !recording->property("hasAnimatedImage").toBool(); }, 5000)) {
+                                application.exit(132); return;
+                            }
+                            QMetaObject::invokeMethod(recording, "togglePlay");
+                            if (!QTest::qWaitFor([&] { return softwareVideo->property("hasFrame").toBool()
+                                && player->property("position").toLongLong() > 100; }, 5000)) { application.exit(133); return; }
+                            QMetaObject::invokeMethod(recording, "togglePlay");
+                        }
+                        if (!nextFile.open(QIODevice::ReadOnly) || nextFile.readAll() != (kind == 2 ? original : bytes)) { application.exit(134); return; }
+                    }
+                    qInfo() << "NkShot MP4 GIF WebP invalid-file MP4 switch, decoder isolation, stale-frame clearing and recovery passed";
+                }
                 QTest::qWait(300);
                 if (!viewer->grabWindow().save(destination) || !input.open(QIODevice::ReadOnly) || input.readAll() != original) {
                     application.exit(120); return;

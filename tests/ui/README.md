@@ -189,3 +189,11 @@ Tests verify actual frame progression, mouse pause/resume and stable paused fram
 hidden seek, empty MediaPlayer source and unchanged input bytes. Run both themes.
 Qt's WebP image plugin must be installed; libwebp alone is not enough. Corrupt
 animation files use PLAYBACK_ERROR as above. These are not desktop recordings.
+
+`NKSHOT_TEST_MEDIA_SWITCH=1` with a valid TEST_PLAYBACK MP4 runs same-window
+transitions. Provide `NKSHOT_TEST_SWITCH_GIF`, `NKSHOT_TEST_SWITCH_WEBP` and
+`NKSHOT_TEST_SWITCH_BROKEN` file paths. The broken fixture is copied into a
+QTemporaryDir; only that private copy is replaced with valid bytes before an
+actual Retry click. Assertions cover stale frame/error clearing, format isolation,
+animated frames and recovered video frames, and untouched original inputs.
+Transitions assign the view source property; they do not simulate desktop capture.

@@ -971,3 +971,21 @@ non-personal animation fixture generator. Updated stale README claims that OCR
 and all playback were untested, while retaining the true desktop/GPU/audio limits.
 These are local synthetic-media tests, not real recording acceptance, broad codec
 coverage, mixed-format source-switch testing or a performance benchmark.
+
+## 050 — Same-window format transitions and successful Retry recovery
+
+This is a validation stage, not a new product feature. No production change was
+needed after testing the real playback view continuously through MP4 → GIF → WebP
+→ broken MP4 → repaired MP4 via the actual Retry button → another valid MP4.
+The tests require decoder isolation, cleared stale software frames and errors,
+animation frame progression and real decoded video frames after recovery.
+Only a test-owned temporary broken file is deliberately replaced with valid MP4
+bytes; all original fixtures remain unchanged. Source transitions are driven by
+the reusable view's sourceUrl, not by a real desktop recording workflow.
+
+Build, CTest 5/5 and static checks 16/16 pass in the restored environment. Both
+light and dark same-window scenarios pass. Reviewed recovered playback in
+[light](screenshots/050-media-recovery-light.png) and
+[dark](screenshots/050-media-recovery-dark.png). These are actual test-pattern
+frames after recovery, not new interface designs. Desktop capture, audio, GPU,
+format rotation/HDR and performance acceptance remain open.
