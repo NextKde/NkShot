@@ -21,7 +21,7 @@ QStringList probeArgs(const QString &path, bool webm=false) {
     args << QStringLiteral("-show_streams") << QStringLiteral("-show_format") << QStringLiteral("-of") << QStringLiteral("json") << path;
     return args;
 }
-struct Media { bool valid=false; bool audio=false; qint64 duration=0; int width=0,height=0,audioRate=0; qreal frameMs=0; };
+struct Media { bool valid=false; bool audio=false; bool squarePixels=true; qint64 duration=0; int width=0,height=0,audioRate=0; qreal frameMs=0; };
 Media parseMedia(const QByteArray &data, bool webm=false) {
     const auto doc=QJsonDocument::fromJson(data); if(!doc.isObject()) return {};
     const auto root=doc.object(); const auto format=root.value(QStringLiteral("format")).toObject();
@@ -39,6 +39,10 @@ Media parseMedia(const QByteArray &data, bool webm=false) {
         if(type==QStringLiteral("video")) {
             ++video; if(webm && (streamStart<-.001 || streamStart>.080))return {}; out.width=s.value(QStringLiteral("width")).toInt(); out.height=s.value(QStringLiteral("height")).toInt();
             if(s.value(QStringLiteral("codec_name")).toString()!=(webm ? QStringLiteral("vp9") : QStringLiteral("h264")) || out.width<2||out.height<2||out.width>4096||out.height>4096||out.width%2||out.height%2) return {};
+            const auto sar=s.value(QStringLiteral("sample_aspect_ratio")).toString();
+            const auto ratio=sar.split(u':');
+            out.squarePixels=sar.isEmpty()||sar==QStringLiteral("N/A")||sar==QStringLiteral("0:1")
+                ||(ratio.size()==2&&ratio[0].toInt()>0&&ratio[0].toInt()==ratio[1].toInt());
             const auto pixel=s.value(QStringLiteral("pix_fmt")).toString();
             if(pixel!=QStringLiteral("yuv420p")&&(webm||pixel!=QStringLiteral("yuvj420p"))) return {};
             if(s.value(QStringLiteral("disposition")).toObject().value(QStringLiteral("attached_pic")).toInt()) return {};
@@ -125,6 +129,7 @@ bool VideoClipJob::destinationUnchanged() const {
 }
 void VideoClipJob::inspect(const QUrl &source) {
     stop();m_ready=false;m_mediaValid=false;m_encodersChecked=false;m_duration=0;m_audio=false;m_source=QUrl();m_output=QUrl();m_error.clear();m_progress=0;
+    m_width=0;m_height=0;m_squarePixels=false;m_cropAspect=QStringLiteral("original");
     const QFileInfo f(source.toLocalFile());
     m_webm=f.suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||(!m_webm&&f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive))||(m_webm&&!NkShot::LocalVideoInput::hasWebMDocType(f.absoluteFilePath()))||f.size()<=0||f.size()>(m_webm?qint64(256)*1024*1024:qint64(2)*1024*1024*1024)) {
@@ -168,7 +173,7 @@ void VideoClipJob::completed(Stage stage) {
     if(stage==Inspect) {
         const auto info=parseMedia(m_stdout,m_webm);
         if(!info.valid){fail(tr("This clip needs one SDR H.264 MP4 or VP9 WebM video track and at most one mono/stereo audio track (Opus for WebM), with even dimensions up to 4096 pixels and duration up to two hours (WebM: ten minutes). Rotated, HDR and extra-track files are not supported yet."));return;}
-        m_mediaValid=true;m_duration=info.duration;m_audio=info.audio;m_width=info.width;m_height=info.height;m_frameMs=info.frameMs;
+        m_mediaValid=true;m_squarePixels=info.squarePixels;m_duration=info.duration;m_audio=info.audio;m_width=info.width;m_height=info.height;m_frameMs=info.frameMs;
         launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-encoders")},Encoders,15000);
     } else if(stage==Encoders) {
         if(m_format==QStringLiteral("gif")) {
@@ -190,11 +195,11 @@ void VideoClipJob::completed(Stage stage) {
         launch(m_ffprobe,m_format==QStringLiteral("gif")?gifProbeArgs(m_temp):probeArgs(m_temp),Verify,15000);
     } else if(stage==Verify) {
         if(m_format==QStringLiteral("gif")) {
-            if(!validGif(m_stdout,m_clipDuration,m_width,m_height)){fail(tr("The GIF could not be verified. Choose a shorter range with at least two frames."));return;}
+            if(!validGif(m_stdout,m_clipDuration,cropRect().width(),cropRect().height())){fail(tr("The GIF could not be verified. Choose a shorter range with at least two frames."));return;}
             launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("gif"),QStringLiteral("-ignore_loop"),QStringLiteral("1"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-i"),m_temp,QStringLiteral("-map"),QStringLiteral("0:v:0"),QStringLiteral("-f"),QStringLiteral("null"),QStringLiteral("-")},Decode,60000);return;
         }
         const auto info=parseMedia(m_stdout);
-        if(!info.valid||info.audio!=(m_audio&&m_includeAudio)||(info.audio&&info.audioRate!=48000)||info.width!=m_width||info.height!=m_height||qAbs(info.duration-m_clipDuration)>qMax(m_frameMs, qreal(m_audio&&m_includeAudio ? 24 : 0))+3){fail(tr("The exported clip could not be verified. The destination is unchanged."));return;}
+        if(!info.valid||info.audio!=(m_audio&&m_includeAudio)||(info.audio&&info.audioRate!=48000)||info.width!=cropRect().width()||info.height!=cropRect().height()||qAbs(info.duration-m_clipDuration)>qMax(m_frameMs, qreal(m_audio&&m_includeAudio ? 24 : 0))+3){fail(tr("The exported clip could not be verified. The destination is unchanged."));return;}
         launch(m_ffmpeg,{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-i"),m_temp,QStringLiteral("-map"),QStringLiteral("0:v:0"),QStringLiteral("-map"),QStringLiteral("0:a:0?"),QStringLiteral("-f"),QStringLiteral("null"),QStringLiteral("-")},Decode,30*60*1000);
     } else if(stage==Decode) {
         if(!destinationUnchanged()){fail(tr("The destination changed during export. Choose another file and try again."));return;}
@@ -243,6 +248,7 @@ void VideoClipJob::exportClip(const QUrl &target,qint64 startMs,qint64 endMs) {
         args[args.indexOf(QStringLiteral("-vf"))+1]=webmVideoFilter(30);
         if(m_audio&&m_includeAudio)args[args.indexOf(QStringLiteral("-af"))+1]=QStringLiteral("atrim=start=%1:end=%2,asetpts=PTS-%1/TB,apad=whole_dur=%3").arg(seconds(m_start),seconds(m_end),seconds(m_clipDuration));
     }
+    args[args.indexOf(QStringLiteral("-vf"))+1]+=cropFilter();
     m_busy=true;const auto epoch=m_epoch;Q_EMIT changed();if(epoch==m_epoch&&m_busy)launch(m_ffmpeg,args,Encode,30*60*1000);
 }
 
@@ -264,10 +270,36 @@ void VideoClipJob::setOutputFormat(const QString &format) {
     } else if(!m_source.isEmpty()) {const auto source=m_source;inspect(source);}
     else Q_EMIT changed();
 }
+QRect VideoClipJob::cropRect() const {
+    if(!m_mediaValid||m_width<2||m_height<2)return {};
+    if(m_cropAspect==QStringLiteral("original"))return QRect(0,0,m_width,m_height);
+    int numerator=1,denominator=1;
+    if(m_cropAspect==QStringLiteral("portrait")){numerator=9;denominator=16;}
+    else if(m_cropAspect==QStringLiteral("wide")){numerator=16;denominator=9;}
+    int width=m_width,height=m_height;
+    // Keep source pixels, never stretch. Round inward to even dimensions and
+    // even offsets for YUV420 chroma alignment (centre bias at most one pixel).
+    if(m_width*denominator>m_height*numerator)width=qBound(2,(m_height*numerator/denominator)&~1,m_width);
+    else height=qBound(2,(m_width*denominator/numerator)&~1,m_height);
+    return QRect(((m_width-width)/2)&~1,((m_height-height)/2)&~1,width,height);
+}
+void VideoClipJob::setCropAspect(const QString &aspect) {
+    if(m_busy||!m_ready||aspect==m_cropAspect)return;
+    if(aspect!=QStringLiteral("original")&&!cropAvailable())return;
+    if(aspect!=QStringLiteral("original")&&aspect!=QStringLiteral("square")
+        &&aspect!=QStringLiteral("portrait")&&aspect!=QStringLiteral("wide"))return;
+    m_cropAspect=aspect;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+QString VideoClipJob::cropFilter() const {
+    if(m_cropAspect==QStringLiteral("original"))return {};
+    const auto rect=cropRect();
+    return QStringLiteral(",crop=%1:%2:%3:%4").arg(rect.width()).arg(rect.height()).arg(rect.x()).arg(rect.y());
+}
 QString VideoClipJob::gifFilter() const {
-    const double factor=qMin(1.,640./qMax(m_width,m_height));
+    const auto rect=cropRect();
+    const double factor=qMin(1.,640./qMax(rect.width(),rect.height()));
     const QString range=m_webm ? webmVideoFilter(10) : QStringLiteral("trim=start=0:end=%1,setpts=PTS-STARTPTS,fps=10").arg(seconds(m_clipDuration));
-    return range+QStringLiteral(",scale=%1:%2:flags=lanczos").arg(qMax(1,qRound(m_width*factor))).arg(qMax(1,qRound(m_height*factor)));
+    return range+cropFilter()+QStringLiteral(",scale=%1:%2:flags=lanczos").arg(qMax(1,qRound(rect.width()*factor))).arg(qMax(1,qRound(rect.height()*factor)));
 }
 void VideoClipJob::launchGifPass(bool palette) {
     QStringList args{QStringLiteral("-hide_banner"),QStringLiteral("-loglevel"),QStringLiteral("error"),QStringLiteral("-nostdin"),QStringLiteral("-xerror"),QStringLiteral("-y"),QStringLiteral("-protocol_whitelist"),QStringLiteral("file"),QStringLiteral("-f"),QStringLiteral("mov"),QStringLiteral("-enable_drefs"),QStringLiteral("0"),QStringLiteral("-use_absolute_path"),QStringLiteral("0"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-filter_threads"),QStringLiteral("2"),QStringLiteral("-filter_complex_threads"),QStringLiteral("2"),QStringLiteral("-ss"),seconds(m_start),QStringLiteral("-accurate_seek"),QStringLiteral("-t"),seconds(m_clipDuration),QStringLiteral("-i"),m_source.toLocalFile()};

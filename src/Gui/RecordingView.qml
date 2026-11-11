@@ -94,6 +94,20 @@ FocusScope {
         visible: active
     }
 
+    CropPreviewOverlay {
+        objectName: "nkshotVideoCropOverlay"
+        anchors.fill: videoOutput
+        visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.cropAspect !== "original" && !root.captureActive
+        sourceSize: contextWindow.clipJob.sourceSize
+        cropRect: contextWindow.clipJob.cropRect
+        readonly property real fittedScale: sourceSize.width > 0 && sourceSize.height > 0
+            ? Math.max(0, Math.min(width / sourceSize.width, height / sourceSize.height)) : 0
+        displayRect: GraphicsInfo.api === GraphicsInfo.Software
+            ? Qt.rect((width-sourceSize.width*fittedScale)/2, (height-sourceSize.height*fittedScale)/2,
+                      sourceSize.width*fittedScale, sourceSize.height*fittedScale)
+            : videoOutput.contentRect
+    }
+
     AudioOutput {
         id: audioOutput
         objectName: "nkshotPlaybackAudio"

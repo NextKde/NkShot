@@ -258,8 +258,9 @@ QQC.Popup {
                 Layout.fillWidth: true
                 font: root.font
                 color: Kos.AppTheme.mutedText
-                text: root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
-                    : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds.")
+                text: (root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
+                    : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds."))
+                    + (root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", " · Crop %1 × %2", root.job.cropRect.width, root.job.cropRect.height) : "")
                 wrapMode: Text.Wrap
             }
             SolidButton {
@@ -269,6 +270,28 @@ QQC.Popup {
                 checkable: true
                 checked: root.detailsVisible
                 onClicked: root.detailsVisible = !root.detailsVisible
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.detailsVisible
+            spacing: 10
+            QQC.Label {text: i18nc("@label", "Center crop"); font: root.font; color: Kos.AppTheme.paletteText}
+            QQC.ComboBox {
+                id: cropChoice
+                objectName: "nkshotClipCropAspect"
+                Layout.fillWidth: true
+                model: [i18nc("@item", "Original frame"), "1:1", "9:16", "16:9"]
+                readonly property var values: ["original", "square", "portrait", "wide"]
+                currentIndex: Math.max(0, values.indexOf(root.job.cropAspect))
+                enabled: root.job.ready && root.job.cropAvailable && !root.locked
+                implicitHeight: 32
+                font: root.font
+                palette.text: Kos.AppTheme.paletteText
+                palette.buttonText: Kos.AppTheme.paletteText
+                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
+                Accessible.name: i18nc("@label", "Centered video export crop")
+                onActivated: {root.stopPreview(); root.job.cropAspect = values[currentIndex]}
             }
         }
         QQC.CheckBox {
@@ -295,8 +318,8 @@ QQC.Popup {
         QQC.Label {
             Layout.fillWidth: true
             visible: root.detailsVisible
-            text: root.gif ? i18nc("@info", "New GIF: silent, looping, 10 fps, up to 640 px and 20 MiB. The original stays unchanged.")
-                : i18nc("@info", "New MP4: H.264 video, with AAC audio only when included. WebM sources are re-encoded at 30 fps; this is not lossless. The original, preview speed and volume stay unchanged.")
+            text: (root.job.ready && !root.job.cropAvailable ? i18nc("@info", "Crop requires square-pixel video. ") : "") + (root.gif ? i18nc("@info", "New GIF: silent, looping, 10 fps, up to 640 px and 20 MiB. The original stays unchanged.")
+                : i18nc("@info", "Re-encoded MP4: H.264, AAC when included. Original unchanged."))
             wrapMode: Text.Wrap
             font: root.font
             color: Kos.AppTheme.mutedText

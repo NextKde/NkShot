@@ -6,9 +6,15 @@
 #include <QPointer>
 #include <QTimer>
 #include <QDateTime>
+#include <QSize>
+#include <QRect>
 class QProcess;
 class VideoClipJob : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool cropAvailable READ cropAvailable NOTIFY changed)
+    Q_PROPERTY(QString cropAspect READ cropAspect WRITE setCropAspect NOTIFY changed)
+    Q_PROPERTY(QSize sourceSize READ sourceSize NOTIFY changed)
+    Q_PROPERTY(QRect cropRect READ cropRect NOTIFY changed)
     Q_PROPERTY(QString outputFormat READ outputFormat WRITE setOutputFormat NOTIFY changed)
     Q_PROPERTY(QUrl sourceUrl READ sourceUrl NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
@@ -22,6 +28,11 @@ class VideoClipJob : public QObject {
 public:
     explicit VideoClipJob(QObject *parent = nullptr);
     ~VideoClipJob() override;
+    bool cropAvailable() const { return m_mediaValid && m_squarePixels; }
+    QString cropAspect() const { return m_cropAspect; }
+    Q_INVOKABLE void setCropAspect(const QString &aspect);
+    QSize sourceSize() const { return QSize(m_width, m_height); }
+    QRect cropRect() const;
     QString outputFormat() const { return m_format; }
     Q_INVOKABLE void setOutputFormat(const QString &format);
     QUrl sourceUrl() const { return m_source; }
@@ -46,6 +57,7 @@ private:
     void completed(Stage stage);
     void launchGifPass(bool palette);
     QString gifFilter() const;
+    QString cropFilter() const;
     QString webmVideoFilter(int fps) const;
     void fail(const QString &message);
     void stop();
@@ -54,6 +66,7 @@ private:
     bool destinationUnchanged() const;
     QUrl m_source, m_output;
     QString m_ffmpeg, m_ffprobe, m_error, m_temp, m_target, m_palette;
+    QString m_cropAspect = QStringLiteral("original");
     QString m_format = QStringLiteral("mp4");
     QByteArray m_stdout, m_stderr, m_progressBuffer;
     QPointer<QProcess> m_process;
@@ -61,6 +74,7 @@ private:
     quint64 m_epoch = 0;
     Stage m_stage = None;
     bool m_webm = false;
+    bool m_squarePixels = false;
     bool m_includeAudio = true, m_encodersChecked = false, m_x264Available = false, m_aacAvailable = false;
     bool m_busy = false, m_ready = false, m_audio = false, m_mediaValid = false;
     qint64 m_duration = 0, m_sourceSize = 0, m_clipDuration = 0, m_start = 0, m_end = 0;

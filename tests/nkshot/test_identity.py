@@ -109,6 +109,14 @@ class IdentityTests(unittest.TestCase):
         for page in ('ViewerPage.qml', 'DialogPage.qml'):
             self.assertIn('contextWindow.editClipboardImage()', read('src/Gui/' + page))
 
+    def test_video_crop_preview_is_injected(self):
+        overlay = read('src/Gui/CropPreviewOverlay.qml')
+        self.assertNotIn('SpectacleCore', overlay)
+        for prop in ('sourceSize', 'cropRect', 'displayRect'):
+            self.assertRegex(overlay, r'required property \w+ ' + prop)
+        self.assertIn('videoOutput.contentRect', read('src/Gui/RecordingView.qml'))
+        self.assertIn('m_clipJob->cropAspect() != cropAspect', read('src/Gui/ViewerWindow.cpp'))
+
     def test_capture_actions_still_present(self):
         overlay = read('src/Gui/CaptureOverlay.qml')
         for action in ['AcceptAction', 'CancelAction', 'SaveAction', 'SaveAsAction',

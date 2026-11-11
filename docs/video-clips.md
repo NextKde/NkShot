@@ -112,3 +112,9 @@ chosen start, resamples onto a common timeline, and then trims. MP4 output uses
 existing bounded process deadlines remain in force. No image interpolation or
 input automation is introduced. Opus codec delay is consumed by the decoder;
 audio is not independently zeroed to its first remaining sample.
+
+## Center crop
+
+[Center crop presets](video-crops.md) can remove frame edges in the exported MP4
+or GIF. Original frame remains the default, and no source pixels are replaced.
+The preview mask and output-dimension checks share the same crop rectangle.

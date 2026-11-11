@@ -241,6 +241,7 @@ qt_target_qml_sources(spectacle
     Gui/BeautifyImagePopup.qml
     Gui/ResizeImagePopup.qml
     Gui/RecordingView.qml
+    Gui/CropPreviewOverlay.qml
     Gui/VideoClipPopup.qml
     Gui/RecordOptions.qml
     Gui/SaveAction.qml

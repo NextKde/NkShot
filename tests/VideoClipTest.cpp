@@ -22,7 +22,7 @@
 class VideoClipTest:public QObject {
     Q_OBJECT
     QTemporaryDir folder;
-    QString source,silent,ffmpeg,ffprobe;
+    QString source,silent,ffmpeg,ffprobe,cropMp4,cropWebm;
     QByteArray execute(const QString &program,const QStringList &args) {
         QProcess p;p.start(program,args);if(!p.waitForFinished(30000)||p.exitCode()!=0){qWarning()<<p.readAllStandardError();return {};}
         return p.readAllStandardOutput();
@@ -61,6 +61,78 @@ private Q_SLOTS:
         QVERIFY2(!ffmpeg.isEmpty()&&!ffprobe.isEmpty(),"Install ffmpeg/ffprobe to run real clip export tests");
         source=folder.filePath(QStringLiteral("original ; ' 中文.mp4"));silent=folder.filePath(QStringLiteral("silent.mp4"));
         QVERIFY(generate(source,true));QVERIFY(generate(silent,false));
+        cropMp4=folder.filePath(QStringLiteral("crop-spatial.mp4"));cropWebm=folder.filePath(QStringLiteral("crop-spatial.webm"));
+        for(const bool webm:{false,true}) {
+            QStringList args{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),
+                QStringLiteral("nullsrc=s=320x240:r=30:d=2,geq=lum='16+X/2+Y/4':cb=128:cr=128"),
+                QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),QStringLiteral("sine=frequency=440:sample_rate=48000:duration=2"),
+                QStringLiteral("-c:v"),webm?QStringLiteral("libvpx-vp9"):QStringLiteral("libx264"),QStringLiteral("-pix_fmt"),QStringLiteral("yuv420p"),QStringLiteral("-threads"),QStringLiteral("2")};
+            if(webm)args<<QStringLiteral("-lossless")<<QStringLiteral("1")<<QStringLiteral("-deadline")<<QStringLiteral("realtime")<<QStringLiteral("-cpu-used")<<QStringLiteral("8");
+            else args<<QStringLiteral("-qp")<<QStringLiteral("0");
+            args<<QStringLiteral("-c:a")<<(webm?QStringLiteral("libopus"):QStringLiteral("aac"))<<(webm?cropWebm:cropMp4);
+            QProcess process;process.start(ffmpeg,args);QVERIFY(process.waitForFinished(30000));QVERIFY2(process.exitCode()==0,process.readAllStandardError().constData());
+        }
+    }
+    void centerCrop_data() {
+        QTest::addColumn<bool>("webm");QTest::addColumn<QString>("aspect");QTest::addColumn<QRect>("expected");
+        const QList<QPair<QString,QRect>> modes{{QStringLiteral("original"),QRect(0,0,320,240)},
+            {QStringLiteral("square"),QRect(40,0,240,240)},{QStringLiteral("portrait"),QRect(92,0,134,240)},
+            {QStringLiteral("wide"),QRect(0,30,320,180)}};
+        for(const bool webm:{false,true})for(const auto &mode:modes)
+            QTest::newRow(qPrintable((webm?QStringLiteral("webm-"):QStringLiteral("mp4-"))+mode.first))<<webm<<mode.first<<mode.second;
+    }
+    void centerCrop() {
+        QFETCH(bool,webm);QFETCH(QString,aspect);QFETCH(QRect,expected);
+        const auto input=webm?cropWebm:cropMp4;const auto original=hash(input);VideoClipJob job;
+        QVERIFY2(ready(job,input),qPrintable(job.error()));QCOMPARE(job.sourceSize(),QSize(320,240));QVERIFY(job.cropAvailable());
+        QCOMPARE(job.cropAspect(),QStringLiteral("original"));QCOMPARE(job.cropRect(),QRect(0,0,320,240));
+        job.setCropAspect(aspect);QCOMPARE(job.cropRect(),expected);QVERIFY(job.ready());
+        job.setCropAspect(QStringLiteral("arbitrary"));QCOMPARE(job.cropAspect(),aspect);
+        const auto sourceFrame=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),input,
+            QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-an"),QStringLiteral("-pix_fmt"),QStringLiteral("gray"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        QCOMPARE(sourceFrame.size(),320*240);
+        for(const auto &format:{QStringLiteral("mp4"),QStringLiteral("gif")}) {
+            job.setOutputFormat(format);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY2(job.ready(),qPrintable(job.error()));
+            QCOMPARE(job.cropAspect(),aspect);QCOMPARE(job.cropRect(),expected);
+            const auto target=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+u'.'+format);
+            job.exportClip(QUrl::fromLocalFile(target),200,1200);QVERIFY(job.busy());
+            job.setCropAspect(aspect==QStringLiteral("square")?QStringLiteral("original"):QStringLiteral("square"));
+            QCOMPARE(job.cropAspect(),aspect);QCOMPARE(job.cropRect(),expected);
+            QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+            QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));QCOMPARE(hash(input),original);QCOMPARE(job.sourceSize(),QSize(320,240));
+            QStringList probe{QStringLiteral("-v"),QStringLiteral("error")};
+            if(format==QStringLiteral("gif"))probe<<QStringLiteral("-ignore_loop")<<QStringLiteral("1");
+            probe<<QStringLiteral("-show_streams")<<QStringLiteral("-of")<<QStringLiteral("json")<<target;
+            const auto streams=QJsonDocument::fromJson(execute(ffprobe,probe)).object()[QStringLiteral("streams")].toArray();
+            QCOMPARE(streams.size(),format==QStringLiteral("mp4")?2:1);
+            const auto video=streams.first().toObject();QCOMPARE(video[QStringLiteral("width")].toInt(),expected.width());QCOMPARE(video[QStringLiteral("height")].toInt(),expected.height());
+            QStringList decode{QStringLiteral("-v"),QStringLiteral("error")};
+            if(format==QStringLiteral("gif"))decode<<QStringLiteral("-ignore_loop")<<QStringLiteral("1");
+            decode<<QStringLiteral("-i")<<target<<QStringLiteral("-frames:v")<<QStringLiteral("1")<<QStringLiteral("-an")<<QStringLiteral("-pix_fmt")<<QStringLiteral("gray")<<QStringLiteral("-f")<<QStringLiteral("rawvideo")<<QStringLiteral("pipe:1");
+            const auto output=execute(ffmpeg,decode);QCOMPARE(output.size(),expected.width()*expected.height());
+            // Spatial gradients distinguish a real centre crop from squeezing the
+            // complete source into a smaller output of the same dimensions.
+            for(const QPoint point:{QPoint(8,8),QPoint(expected.width()/2,expected.height()/2),QPoint(expected.width()-9,expected.height()-9)}) {
+                const int actual=uchar(output.at(point.y()*expected.width()+point.x()));
+                const int wanted=uchar(sourceFrame.at((point.y()+expected.y())*320+point.x()+expected.x()));
+                QVERIFY2(qAbs(actual-wanted)<=5,qPrintable(QStringLiteral("Crop pixel %1,%2 was %3, expected %4").arg(point.x()).arg(point.y()).arg(actual).arg(wanted)));
+            }
+        }
+        job.setCropAspect(aspect==QStringLiteral("square")?QStringLiteral("original"):QStringLiteral("square"));
+        QVERIFY(job.outputUrl().isEmpty());QCOMPARE(job.progress(),qreal(0));QVERIFY(job.error().isEmpty());
+        job.inspect(QUrl::fromLocalFile(input));QCOMPARE(job.cropAspect(),QStringLiteral("original"));QVERIFY(job.cropRect().isEmpty());QCOMPARE(job.sourceSize(),QSize(0,0));
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());QCOMPARE(job.cropRect(),QRect(0,0,320,240));
+    }
+    void cropNonSquareSarKeepsOriginal() {
+        const auto input=folder.filePath(QStringLiteral("non-square-sar.mp4"));
+        execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-i"),cropMp4,
+            QStringLiteral("-vf"),QStringLiteral("setsar=4/3"),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-threads"),QStringLiteral("2"),QStringLiteral("-c:a"),QStringLiteral("copy"),input});
+        VideoClipJob job;QVERIFY2(ready(job,input),qPrintable(job.error()));QVERIFY(!job.cropAvailable());job.setCropAspect(QStringLiteral("square"));
+        QCOMPARE(job.cropAspect(),QStringLiteral("original"));QCOMPARE(job.cropRect(),QRect(0,0,320,240));
+        const auto target=folder.filePath(QStringLiteral("non-square-sar-copy.mp4"));job.exportClip(QUrl::fromLocalFile(target),200,1200);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        const auto sar=execute(ffprobe,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-select_streams"),QStringLiteral("v:0"),QStringLiteral("-show_entries"),QStringLiteral("stream=sample_aspect_ratio"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),target});
+        QCOMPARE(sar.trimmed(),QByteArray("4:3"));
     }
     void realAccurateClipWithAudio() {
         const auto original=hash(source);VideoClipJob job;QVERIFY2(ready(job,source),qPrintable(job.error()));QVERIFY(job.hasAudio());
@@ -252,6 +324,8 @@ private Q_SLOTS:
         VideoClipJob job;job.setOutputFormat(QStringLiteral("gif"));QVERIFY2(ready(job,source),qPrintable(job.error()));
         const auto target=folder.filePath(QStringLiteral("gif-only-tools.gif"));job.exportClip(QUrl::fromLocalFile(target),1350,3150);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QVERIFY(QFile::exists(target));
         job.setOutputFormat(QStringLiteral("mp4"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY(!job.ready());QVERIFY(job.error().contains(QStringLiteral("H.264")));
+        const auto encoderError=job.error();job.setCropAspect(QStringLiteral("square"));
+        QCOMPARE(job.cropAspect(),QStringLiteral("original"));QCOMPARE(job.error(),encoderError);
         job.setOutputFormat(QStringLiteral("gif"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},20000));QVERIFY2(job.ready(),qPrintable(job.error()));QVERIFY(job.error().isEmpty());
     }
     void gifByteBudget() {

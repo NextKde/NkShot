@@ -623,12 +623,28 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         return QTest::qWaitFor([&]{return spin->property("value").toInt()==expected;},500);
     };
     const bool silentExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SILENT_CLIP");
+    const bool cropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
+    QRect expectedCrop;
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
         return fail(QStringLiteral("Export details could not be opened"));
     if(silentExport) {
         if(!job->property("includeAudio").toBool()||!click(QStringLiteral("nkshotClipIncludeAudio"))
             ||job->property("includeAudio").toBool()||!capture(QStringLiteral(".silent-options.png")))
             return fail(QStringLiteral("Silent export option did not update actual job"));
+    }
+    if(cropExport) {
+        if(!job->property("cropAvailable").toBool()||job->property("cropAspect").toString()!=QStringLiteral("original")
+            ||!click(QStringLiteral("nkshotClipCropAspect")))return fail(QStringLiteral("Crop preset unavailable/default incorrect"));
+        QTest::keyClick(viewer(),Qt::Key_Home);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Return);
+        if(!QTest::qWaitFor([&]{return job->property("cropAspect").toString()==QStringLiteral("portrait");},1000))
+            return fail(QStringLiteral("Actual center-crop choice did not reach encoder"));
+        expectedCrop=job->property("cropRect").toRect();
+        const auto sourceSize=job->property("sourceSize").toSize();
+        auto overlay=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoCropOverlay"));
+        auto frame=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoCropFrame"));
+        if(!overlay||!frame||!overlay->isVisible()||expectedCrop.width()>=sourceSize.width()||expectedCrop.height()!=sourceSize.height()
+            ||!QTest::qWaitFor([&]{return frame->height()>10&&qAbs(frame->width()/frame->height()-qreal(expectedCrop.width())/expectedCrop.height())<.01;},1000)
+            ||!capture(QStringLiteral(".crop-options.png")))return fail(QStringLiteral("Crop preview does not reflect export geometry"));
     }
     auto cancelControl=visual(viewer()->contentItem(),QStringLiteral("nkshotClipCancel"));
     auto previewControl=visual(viewer()->contentItem(),QStringLiteral("nkshotSoftwareVideoPreview"));
@@ -640,6 +656,18 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         ||!capture(QStringLiteral(".clip.png"))||!click(QStringLiteral("nkshotClipExport"))
         ||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
         return fail(QStringLiteral("Imported MP4 clip time inputs/Save dialog failed"));
+    if(cropExport) {
+        // An asynchronous dialog must not export a different crop than requested.
+        job->setProperty("cropAspect",QStringLiteral("square"));
+        const auto stale=fixtures.filePath(QStringLiteral("stale-crop.mp4"));
+        if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
+            ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500))return fail(QStringLiteral("Crop-race dialog did not settle"));
+        if(QFileInfo::exists(stale)||job->property("busy").toBool()||!job->property("outputUrl").toUrl().isEmpty())
+            return fail(QStringLiteral("Changed crop was exported from an obsolete save dialog"));
+        job->setProperty("cropAspect",QStringLiteral("portrait"));
+        if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
+            return fail(QStringLiteral("Crop export did not recover after stale dialog"));
+    }
     const auto clip=fixtures.filePath(QStringLiteral("imported ' clip.mp4"));
     if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),clip)
         ||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("outputUrl").toUrl()==QUrl::fromLocalFile(clip);},30000)
@@ -651,6 +679,12 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
         if(!probe.waitForFinished(10000)||probe.exitCode()!=0||!probe.readAllStandardOutput().trimmed().isEmpty())
             return fail(QStringLiteral("Actual UI silent MP4 still has an audio track"));
+    }
+    if(cropExport) {
+        QProcess probe;probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-select_streams"),QStringLiteral("v:0"),
+            QStringLiteral("-show_entries"),QStringLiteral("stream=width,height"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
+        if(!probe.waitForFinished(10000)||probe.exitCode()!=0||QString::fromUtf8(probe.readAllStandardOutput()).trimmed()!=QStringLiteral("%1,%2").arg(expectedCrop.width()).arg(expectedCrop.height()))
+            return fail(QStringLiteral("Actual cropped MP4 dimensions do not match preview"));
     }
     const auto evidenceClip=screenshot+QStringLiteral(".export-")+QString::number(QDateTime::currentMSecsSinceEpoch())+QStringLiteral(".mp4");
     if(!QFile::copy(clip,evidenceClip))return fail(QStringLiteral("Unable to retain actual export evidence"));
@@ -701,6 +735,15 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
             ||!job->property("includeAudio").toBool()||!click(QStringLiteral("nkshotClipCancel")))
             return fail(QStringLiteral("New export retained an old silent choice"));
+    }
+    if(cropExport) {
+        auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+        if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))return fail(QStringLiteral("Crop export close failed"));
+        QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
+        if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip"))
+            ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
+            ||job->property("cropAspect").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipCancel")))
+            return fail(QStringLiteral("New clip session inherited an old crop"));
     }
     if(qEnvironmentVariableIsSet("NKSHOT_TEST_CLIPBOARD_EDITOR")) {
         auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
