@@ -2,6 +2,7 @@
 // Actual local-file dialogs and decoders, using generated nonpersonal fixtures.
 #include "LocalMediaOpenUiChecks.h"
 #include "WindowOwnershipUiChecks.h"
+#include "ImageExportUiChecks.h"
 #include "VideoAnnotationsUiChecks.h"
 #include "SpectacleCore.h"
 #include "RecentMediaModel.h"
@@ -595,6 +596,10 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(samePixels(edited,extracted)||!hit(QStringLiteral("nkshotUndo"))||!samePixels(editor->document()->renderToImage(),extracted)
             ||!hit(QStringLiteral("nkshotRedo"))||!samePixels(editor->document()->renderToImage(),edited))
             return fail(QStringLiteral("Independent undo/redo failed"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_EXPORT")) {
+            QString exportFailure;
+            if(!ImageExportUiChecks::run(application, editor, screenshot, &exportFailure))return fail(exportFailure);
+        }
         if(!compareEditor(editor,extracted,QStringLiteral(".compare")))return fail(QStringLiteral("Actual before/after comparison changed editor history or output"));
         editor->close();QMessageBox *discard=nullptr;
         if(!QTest::qWaitFor([&]{for(auto w:QApplication::topLevelWidgets())if(w->objectName()==QStringLiteral("nkshotDiscardCopyDialog"))discard=qobject_cast<QMessageBox *>(w);return discard&&discard->isVisible();},1000))

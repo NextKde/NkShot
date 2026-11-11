@@ -2,6 +2,7 @@
 #include "RecentMediaModel.h"
 #include "ImageCopyEditor.h"
 #include "PinnedImageWindow.h"
+#include "Imaging/ImageExport.h"
 #include <KQuickImageEditor/AnnotationTool>
 #include <KLocalizedString>
 #include <QQmlContext>
@@ -152,6 +153,61 @@ void ImageCopyEditor::saveAs()
         Q_EMIT saveFinished(i18nc("@info","PNG saved. You can continue editing; further changes need another save."),true);
     });
     dialog->open();
+}
+bool ImageCopyEditor::jpegAvailable() const
+{
+    return NkShot::Imaging::imageExportAvailable(NkShot::Imaging::ImageExportFormat::Jpeg);
+}
+bool ImageCopyEditor::webpAvailable() const
+{
+    return NkShot::Imaging::imageExportAvailable(NkShot::Imaging::ImageExportFormat::WebpLossless);
+}
+bool ImageCopyEditor::exportAs(int format, int quality)
+{
+    endComparison();
+    if (m_annotationMode) return false;
+    if (m_saveDialog) { m_saveDialog->raise(); m_saveDialog->activateWindow(); return false; }
+    if (m_optionsDialog) { m_optionsDialog->raise(); return false; }
+    if (m_closeDialog) { m_closeDialog->raise(); return false; }
+    if ((format != 0 && format != 1) || (format == 0 && (quality < 1 || quality > 100))) {
+        Q_EMIT saveFinished(i18nc("@info", "Choose a supported export format and quality."), false); return false;
+    }
+    const auto selected = format == 0 ? NkShot::Imaging::ImageExportFormat::Jpeg : NkShot::Imaging::ImageExportFormat::WebpLossless;
+    if (!NkShot::Imaging::imageExportAvailable(selected)) {
+        Q_EMIT saveFinished(i18nc("@info", "This image format is unavailable. Save a PNG instead."), false); return false;
+    }
+    if (rootObject()) QMetaObject::invokeMethod(rootObject(), "commitOptions");
+    m_document->selectedItemWrapper()->commitChanges();
+    const QImage snapshot = m_document->renderToImage();
+    if (snapshot.isNull()) return false;
+    auto dialog = new QFileDialog;
+    m_saveDialog = dialog;
+    dialog->setObjectName(QStringLiteral("nkshotCopyExportDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(i18nc("@title:window", "Export Sharing Copy"));
+    dialog->setAcceptMode(QFileDialog::AcceptSave);
+    dialog->setFileMode(QFileDialog::AnyFile);
+    dialog->setNameFilter(format == 0 ? i18nc("@item:inlistbox", "JPEG image (*.jpg *.jpeg)") : i18nc("@item:inlistbox", "WebP image (*.webp)"));
+    const auto suffix = format == 0 ? QStringLiteral("jpg") : QStringLiteral("webp");
+    dialog->setDefaultSuffix(suffix);
+    dialog->setDirectory(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
+    dialog->selectFile(QStringLiteral("NkShot-edited.") + suffix);
+    dialog->winId(); dialog->windowHandle()->setTransientParent(this);
+    dialog->setWindowModality(Qt::WindowModal);
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, snapshot, selected, quality] {
+        const auto paths = dialog->selectedFiles();
+        if (paths.isEmpty()) return;
+        QString error;
+        if (!NkShot::Imaging::saveImageCopy(snapshot, paths.first(), selected, quality, &error)) {
+            Q_EMIT saveFinished(i18nc("@info", "Could not export image: %1", error), false); return;
+        }
+        // A sharing export is not the lossless PNG save point. Do not clear
+        // unsaved-change protection, including for a lossy JPEG destination.
+        NkShot::RecentMediaModel::instance()->remember(QUrl::fromLocalFile(paths.first()));
+        Q_EMIT saveFinished(i18nc("@info", "Sharing copy exported. This editing session is unchanged; Save still creates a PNG."), true);
+    });
+    dialog->open();
+    return true;
 }
 QQuickWindow *ImageCopyEditor::finishCopy()
 {

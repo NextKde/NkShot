@@ -42,7 +42,36 @@ QQC.Pane {
             Item { Layout.fillWidth: true }
             UndoRedoGroup { enabled: !copyEditor.comparing; editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
             ActionButton { objectName: "nkshotCopyEditorCopy"; enabled: !copyEditor.comparing; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
-            ActionButton { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing; visible: !copyEditor.annotationMode; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+            RowLayout {
+                spacing: 1
+                visible: !copyEditor.annotationMode
+                ActionButton { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+                ActionButton {
+                    id: exportMenuButton
+                    objectName: "nkshotCopyEditorSaveOptions"
+                    enabled: !copyEditor.comparing
+                    primary: true
+                    text: "⌄"
+                    Layout.preferredWidth: 28
+                    leftPadding: 4; rightPadding: 4
+                    Accessible.name: i18nc("@action", "More save formats")
+                    onClicked: saveOptions.popup(exportMenuButton, exportMenuButton.width - saveOptions.width, exportMenuButton.height + 4)
+                    QQC.Menu {
+                        id: saveOptions
+                        objectName: "nkshotCopyEditorSaveMenu"
+                        width: Math.min(260, root.width - 32)
+                        padding: 6
+                        palette.text: Kos.AppTheme.paletteText
+                        palette.windowText: Kos.AppTheme.paletteText
+                        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0.5 }
+                        QQC.MenuItem {
+                            objectName: "nkshotCopyEditorExportAction"
+                            text: i18nc("@action", "Export JPEG / WebP…")
+                            onTriggered: exportPopup.open()
+                        }
+                    }
+                }
+            }
             ActionButton { objectName: "nkshotCopyEditorDone"; enabled: !copyEditor.comparing; primary: copyEditor.annotationMode; text: i18nc("@action", "Done"); onClicked: { root.commitOptions(); copyEditor.finishCopy() } }
         }
         QQC.Label {
@@ -213,6 +242,21 @@ QQC.Pane {
             showNoneButton: true
             Layout.alignment: Qt.AlignHCenter
             Layout.maximumWidth: root.availableWidth
+        }
+    }
+    ImageExportPopup {
+        id: exportPopup
+        jpegAvailable: copyEditor.jpegAvailable
+        webpAvailable: copyEditor.webpAvailable
+        exportCallback: function(format, quality) {
+            root.commitOptions()
+            return copyEditor.exportAs(format, quality)
+        }
+        Connections {
+            target: copyEditor
+            function onSaveFinished(message, success) {
+                if (exportPopup.opened && !success) exportPopup.errorMessage = message
+            }
         }
     }
     // Preserve focused text/options and unfinished crop state; intercept new

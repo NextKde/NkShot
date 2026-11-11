@@ -19,6 +19,8 @@
 #include <QDBusMessage>
 #include <QProcess>
 #include "Gui/PinnedImageWindow.h"
+#include "Gui/ImageCopyEditor.h"
+#include "ImageExportUiChecks.h"
 #include "Gui/QuickNoteWindow.h"
 #include "Gui/ColorPickerWindow.h"
 #include "Imaging/ColorSample.h"
@@ -1846,6 +1848,22 @@ void installUiCaptureHook(QApplication &application)
                 viewer->grabWindow().save(destination);
                 qInfo() << "NkShot unavailable scroll backend refused requests without editor/history mutation; no live capture claim";
                 application.exit(0); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_IMAGE_EXPORT_DEMO")) {
+                const auto input = SpectacleCore::instance()->annotationDocument()->renderToImage();
+                auto editor = new ImageCopyEditor(input, viewer->engine());
+                if (editor->status() != QQuickView::Ready) { delete editor; application.exit(239); return; }
+                editor->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT") ? QSize(420,520) : QSize(900,640));
+                editor->show(); editor->requestActivate(); QTest::qWait(200);
+                auto document = editor->document();
+                document->tool()->setType(AnnotationTool::RectangleTool);
+                document->tool()->setStrokeColor(QColor(QStringLiteral("#007aff")));
+                document->tool()->setStrokeWidth(3); document->tool()->setFillColor(Qt::transparent); document->tool()->setShadow(false);
+                document->beginItem({75,75}); document->continueItem({285,165}); document->finishItem();
+                QString failure;
+                const bool passed = ImageExportUiChecks::run(application,editor,destination,&failure);
+                qInfo() << "107 image sharing standalone UI" << passed << failure;
+                application.exit(passed ? 0 : 239); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY")) {
                 const bool beautify = qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY");

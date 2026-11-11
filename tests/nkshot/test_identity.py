@@ -308,6 +308,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('m_ownedPreparedOutput->identityMatches()', start)
         self.assertIn('if (!stream)', start)
 
+    def test_explicit_image_export_keeps_png_save_point(self):
+        source = read('src/Gui/ImageCopyEditor.cpp')
+        body = source[source.index('bool ImageCopyEditor::exportAs'):source.index('QQuickWindow *ImageCopyEditor::finishCopy')]
+        self.assertIn('const QImage snapshot = m_document->renderToImage()', body)
+        self.assertIn('saveImageCopy(snapshot', body)
+        self.assertNotIn('m_savedImage=', body)
+        self.assertNotIn('m_savedImage =', body)
+        encoder = read('src/Imaging/ImageExport.cpp')
+        self.assertIn('setDirectWriteFallback(false)', encoder)
+        self.assertIn('flattened.fill(Qt::white)', encoder)
+        self.assertIn('format == ImageExportFormat::Jpeg ? quality : 100', encoder)
+
     def test_presentation_preview_uses_immutable_bounded_shared_renderer(self):
         source = read('src/Gui/PresentationPreview.cpp')
         self.assertIn('source.copy()', source)

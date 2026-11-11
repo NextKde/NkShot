@@ -11,6 +11,8 @@ class QWidget;
 class ImageCopyEditor : public QQuickView {
     Q_OBJECT
     Q_PROPERTY(AnnotationDocument *document READ document CONSTANT)
+    Q_PROPERTY(bool jpegAvailable READ jpegAvailable CONSTANT)
+    Q_PROPERTY(bool webpAvailable READ webpAvailable CONSTANT)
     Q_PROPERTY(bool annotationMode READ annotationMode CONSTANT)
     Q_PROPERTY(QImage originalImage READ originalImage CONSTANT)
     Q_PROPERTY(QSize originalSize READ originalSize CONSTANT)
@@ -29,6 +31,9 @@ public:
     AnnotationDocument *document() { return m_document; }
     Q_INVOKABLE void copyImage();
     Q_INVOKABLE void saveAs();
+    bool jpegAvailable() const;
+    bool webpAvailable() const;
+    Q_INVOKABLE bool exportAs(int format, int quality);
     bool hasUnsavedChanges() const;
     Q_INVOKABLE QQuickWindow *finishCopy();
     Q_INVOKABLE void showColorDialog(int option);

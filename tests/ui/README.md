@@ -682,3 +682,20 @@ shows the preview again after scrolling on narrow windows. The existing
 The new `presentation_preview_test` covers immutable/external-buffer input,
 reduced rendering, exact unscaled composition, cancellation/accepted-source
 preservation, invalid settings and engine lifetime. None is native KDE capture QA.
+
+### Independent-editor JPEG/WebP export (107)
+
+Add `NKSHOT_TEST_IMAGE_EXPORT=1 NKSHOT_TEST_COPY_EDITOR=1` to the local-media UI
+workflow. The helper uses real Save-arrow menus, format/quality controls, file
+choosers and decoded exports, then verifies source pixels/history/dirty state,
+repeat-dialog protection and mismatched-extension failure without replacing a
+sentinel. `.jpeg-options.png` / `.webp-options.png` are actual editor windows.
+The local-media harness's DARK/COMPACT flags apply to this editor (420×520).
+`image_export_test` separately covers physical dimensions, P3→sRGB, partial alpha,
+JPEG white matte/lossy quality, real lossless WebP bitstream, invalid inputs and
+atomic destination preservation. Native KDE portal/device acceptance is separate.
+
+`NKSHOT_TEST_IMAGE_EXPORT_DEMO=1` instead uses the current synthetic image in a
+standalone editor, adds an unsaved test annotation and runs the same export
+acceptance helper. DARK/COMPACT select that editor's palette/420px size. It is
+used for reviewable screenshots instead of showing video codec color bars.

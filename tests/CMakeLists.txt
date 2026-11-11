@@ -190,3 +190,8 @@ set_tests_properties(recent_media_model_test PROPERTIES TIMEOUT 30)
 ecm_add_test(PresentationPreviewTest.cpp ../src/Gui/PresentationPreview.cpp ../src/Gui/PresentationPreview.h ../src/Imaging/ImageTransforms.cpp
     TEST_NAME presentation_preview_test LINK_LIBRARIES Qt::Test Qt::Quick KF6::I18n)
 set_tests_properties(presentation_preview_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# Reusable atomic JPEG / lossless WebP sharing encoder; no native capture claim.
+ecm_add_test(ImageExportTest.cpp ../src/Imaging/ImageExport.cpp
+    TEST_NAME image_export_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(image_export_test PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
