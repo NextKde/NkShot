@@ -1,0 +1,742 @@
+--- a/src/encoder.cpp
++++ b/src/encoder.cpp
+@@ -217,11 +217,11 @@
+ 
+ bool SoftwareEncoder::filterFrame(const PipeWireFrame &frame)
+ {
+-    auto size = m_produce->m_stream->size();
++    auto size = m_produce->m_encoderSize;
+ 
+     QImage image;
+     if (frame.dmabuf) {
+-        image = QImage(m_produce->m_stream->size(), QImage::Format_RGBA8888_Premultiplied);
++        image = QImage(m_produce->m_encoderSize, QImage::Format_RGBA8888_Premultiplied);
+         if (!m_dmaBufHandler.downloadFrame(image, frame)) {
+             m_produce->m_stream->renegotiateModifierFailed(frame.format, frame.dmabuf->modifier);
+             return false;
+--- a/src/pipewirebaseencodedstream.cpp
++++ b/src/pipewirebaseencodedstream.cpp
+@@ -23,6 +23,9 @@
+ #include "vaapiutils_p.h"
+ 
+ struct PipeWireEncodedStreamPrivate {
++    quint64 m_pauseSequence = 0;
++    quint64 m_producerGeneration = 0;
++    bool m_pausePending = false;
+     uint m_nodeId = 0;
+     quint64 m_objectSerial = quint64(-1);
+     std::optional<uint> m_fd;
+@@ -211,6 +214,8 @@
+         d->m_encoder = suggestedEncoders().value(0, NoEncoder);
+     }
+ 
++    const auto generation = ++d->m_producerGeneration;
++    d->m_pausePending = false;
+     d->m_produceThread = std::make_unique<QThread>();
+     d->m_produceThread->setObjectName("PipeWireProduce::input");
+     d->m_produce = makeProduce();
+@@ -222,7 +227,20 @@
+     d->m_produce->moveToThread(d->m_produceThread.get());
+     d->m_produceThread->start();
+ 
+-    connect(d->m_produce.get(), &PipeWireProduce::started, this, [this]() {
++    connect(d->m_produce.get(), &PipeWireProduce::timelinePauseAcknowledged, this,
++            [this, generation](quint64 sequence, bool paused) {
++        if (generation != d->m_producerGeneration || sequence != d->m_pauseSequence
++            || !d->m_pausePending || d->m_state == Rendering || d->m_state == Idle) {
++            return;
++        }
++        d->m_pausePending = false;
++        d->m_state = paused ? Paused : Recording;
++        Q_EMIT stateChanged();
++    });
++    connect(d->m_produce.get(), &PipeWireProduce::started, this, [this, generation]() {
++        if (generation != d->m_producerGeneration || d->m_state == Rendering) {
++            return;
++        }
+         d->m_active = true;
+         Q_EMIT activeChanged(true);
+         d->m_state = Recording;
+@@ -256,6 +274,8 @@
+ 
+ void PipeWireBaseEncodedStream::stop()
+ {
++    ++d->m_pauseSequence;
++    d->m_pausePending = false;
+     if (d->m_produceThread) {
+         QMetaObject::invokeMethod(d->m_produce.get(), &PipeWireProduce::deactivate, Qt::QueuedConnection);
+         d->m_state = PipeWireBaseEncodedStream::Rendering;
+@@ -266,40 +286,35 @@
+     Q_EMIT stateChanged();
+ }
+ 
++int PipeWireBaseEncodedStream::timelinePauseVersion() const
++{
++    return 1;
++}
++
+ void PipeWireBaseEncodedStream::pause()
+ {
+-    if (d->m_state != Recording || !d->m_produceThread || !d->m_produce) {
+-        return;
+-    }
+-
++    if (d->m_state != Recording || d->m_pausePending || !d->m_produceThread || !d->m_produce) {
++        return;
++    }
++    d->m_pausePending = true;
++    const auto sequence = ++d->m_pauseSequence;
+     auto produce = d->m_produce.get();
+-    QMetaObject::invokeMethod(
+-        produce,
+-        [produce]() {
+-            produce->setStreamActive(false);
+-        },
+-        Qt::QueuedConnection);
+-
+-    d->m_state = Paused;
+-    Q_EMIT stateChanged();
++    QMetaObject::invokeMethod(produce, [produce, sequence]() {
++        produce->requestTimelinePause(true, sequence);
++    }, Qt::QueuedConnection);
+ }
+ 
+ void PipeWireBaseEncodedStream::resume()
+ {
+-    if (d->m_state != Paused || !d->m_produceThread || !d->m_produce) {
+-        return;
+-    }
+-
++    if (d->m_state != Paused || d->m_pausePending || !d->m_produceThread || !d->m_produce) {
++        return;
++    }
++    d->m_pausePending = true;
++    const auto sequence = ++d->m_pauseSequence;
+     auto produce = d->m_produce.get();
+-    QMetaObject::invokeMethod(
+-        produce,
+-        [produce]() {
+-            produce->setStreamActive(true);
+-        },
+-        Qt::QueuedConnection);
+-
+-    d->m_state = Recording;
+-    Q_EMIT stateChanged();
++    QMetaObject::invokeMethod(produce, [produce, sequence]() {
++        produce->requestTimelinePause(false, sequence);
++    }, Qt::QueuedConnection);
+ }
+ 
+ std::optional<quint8> PipeWireBaseEncodedStream::quality() const
+--- a/src/pipewirebaseencodedstream.h
++++ b/src/pipewirebaseencodedstream.h
+@@ -131,10 +131,14 @@
+      * Pause recording without tearing down the stream.
+      *
+      * Unlike stop(), this keeps the PipeWire stream, encoder thread and node id
+-     * alive. It stops the source stream, but in-flight frames keep being encoded
+-     * for a short while before output ceases. Call resume() to continue. Only has
+-     * an effect while state() is Recording.
+-     */
++     * alive. Accepted pre-pause frames drain. Audio and video exclude the same
++     * monotonic pause intervals. Paused is emitted only after the producer has
++     * installed its processing barrier; until then state remains Recording.
++     * Resume likewise changes state only after acknowledgement. Stop supersedes
++     * pending acknowledgements. Stale resumed video is conservatively ignored.
++     * Only has an effect while state() is Recording and no request is pending.
++     */
++    int timelinePauseVersion() const;
+     Q_INVOKABLE void pause();
+     /**
+      * Resume a stream previously paused with pause(). Only has an effect while
+--- a/src/pipewireproduce.cpp
++++ b/src/pipewireproduce.cpp
+@@ -216,37 +216,36 @@
+ {
+     qCDebug(PIPEWIRERECORD_LOGGING) << "Setting up stream";
+ 
++    if (!initializeEncoder(m_stream->size())) {
++        return;
++    }
++    connect(m_stream.get(), &PipeWireSourceStream::stateChanged, this, &PipeWireProduce::stateChanged);
++
++    if (m_audioEncoder) {
++        initializeAudioStreams();
++    }
++
++    connect(m_stream.data(), &PipeWireSourceStream::frameReceived, this, &PipeWireProduce::processFrame);
++
++    startThreads();
++
++    if (m_frameStatisticsTimer) {
++        m_frameStatisticsTimer->start();
++    }
++    Q_EMIT started();
++}
++
++bool PipeWireProduce::initializeEncoder(const QSize &size)
++{
++    m_encoderSize = size;
+     m_encoder = makeEncoder();
+-    if (!m_encoder) {
+-        qCWarning(PIPEWIRERECORD_LOGGING) << "No encoder could be created";
+-        if (!m_encodingErrorEmitted.exchange(true)) {
+-            Q_EMIT encodingError(QStringLiteral("No encoder could be created"));
+-        }
+-        return;
+-    }
+-    m_encoderSize = m_stream->size();
+-
+-    connect(m_stream.get(), &PipeWireSourceStream::stateChanged, this, &PipeWireProduce::stateChanged);
+-    if (!setupFormat()) {
+-        qCWarning(PIPEWIRERECORD_LOGGING) << "Could not set up the producing thread";
++    if (!m_encoder || !setupFormat()) {
+         if (!m_encodingErrorEmitted.exchange(true)) {
+             Q_EMIT encodingError(QStringLiteral("Could not set up the encoder output format"));
+         }
+-        return;
+-    }
+-
+-    if (m_audioEncoder) {
+-        initializeAudioStreams();
+-    }
+-
+-    connect(m_stream.data(), &PipeWireSourceStream::frameReceived, this, &PipeWireProduce::processFrame);
+-
+-    startThreads();
+-
+-    if (m_frameStatisticsTimer) {
+-        m_frameStatisticsTimer->start();
+-    }
+-    Q_EMIT started();
++        return false;
++    }
++    return true;
+ }
+ 
+ void PipeWireProduce::reconfigureStream()
+@@ -261,6 +260,7 @@
+     // nothing of the previous size can reach the new one.
+     discardFrameState();
+ 
++    m_encoderSize = newSize;
+     m_encoder = makeEncoder();
+     if (!m_encoder) {
+         qCWarning(PIPEWIRERECORD_LOGGING) << "Failed to recreate encoder after size change";
+@@ -406,7 +406,7 @@
+     m_audioPadTimer = std::make_unique<QTimer>();
+     m_audioPadTimer->setInterval(std::chrono::milliseconds(500));
+     connect(m_audioPadTimer.get(), &QTimer::timeout, this, [this] {
+-        const auto target = std::chrono::steady_clock::now() - std::chrono::seconds(1);
++        const auto target = monotonicNow() - std::chrono::seconds(1);
+         for (size_t i = 0; i < m_audioInputStates.size(); ++i) {
+             padAudioInputToTarget(int(i), target);
+         }
+@@ -416,13 +416,14 @@
+ 
+ void PipeWireProduce::handleAudioStreamStopped(int input)
+ {
++    drainPendingAudio();
+     auto &state = m_audioInputStates[input];
+     if (state.ended) {
+         return;
+     }
+     // Pad the track up to the moment the stream died so it does not simply
+     // truncate at the last delivered buffer.
+-    padAudioInputToTarget(input, std::chrono::steady_clock::now());
++    padAudioInputToTarget(input, monotonicNow());
+     state.ended = true;
+     // Close the encoder input so amix does not wait for data on it
+     m_audioEncoder->endInput(input);
+@@ -441,78 +442,157 @@
+     // That single-threaded delivery is also what makes the unsynchronized
+     // m_audioInputStates accesses safe.
+     if (!m_recordEpoch) {
+-        m_recordEpoch = std::chrono::steady_clock::now();
++        m_recordEpoch = monotonicNow();
+     }
+     return *m_recordEpoch;
+ }
+ 
++std::chrono::nanoseconds PipeWireProduce::activeTime(Clock::time_point when)
++{
++    const auto epoch = recordEpoch();
++    if (when <= epoch) {
++        return std::chrono::nanoseconds::zero();
++    }
++    auto result = std::chrono::duration_cast<std::chrono::nanoseconds>(when - epoch);
++    for (const auto &interval : m_pauseIntervals) {
++        const auto begin = std::max(epoch, interval.begin);
++        const auto end = std::min(when, interval.end.value_or(when));
++        if (end > begin) {
++            result -= end - begin;
++        }
++    }
++    return result;
++}
++
++bool PipeWireProduce::pausedAt(Clock::time_point when) const
++{
++    for (const auto &interval : m_pauseIntervals) {
++        if (when >= interval.begin && (!interval.end || when < *interval.end)) {
++            return true;
++        }
++    }
++    return false;
++}
++
++bool PipeWireProduce::acceptsVideoTimestamp(const std::optional<std::chrono::nanoseconds> &timestamp) const
++{
++    if (m_deactivated || m_timelinePaused || !timestamp) {
++        return false;
++    }
++    const auto when = timePoint(*timestamp);
++    if (when > monotonicNow()) {
++        return false;
++    }
++    // A pre-epoch static initial frame is legal. After resume, however, an old
++    // rendered timestamp is not evidence of fresh screen content. Do not rebase
++    // or replay such buffers: retain the previously encoded picture until fresh
++    // content arrives. This intentionally favours privacy over static refresh.
++    return !pausedAt(when) && (m_pauseIntervals.empty() ||
++        (m_pauseIntervals.back().end && when >= *m_pauseIntervals.back().end));
++}
++
+ void PipeWireProduce::processAudioFrame(int input, const PipeWireAudioFrame &frame)
+ {
++    if (m_deactivated || !m_audioEncoder || input < 0 || size_t(input) >= m_audioInputStates.size()
++        || m_audioInputStates[input].ended || !frame.data || !frame.rate || !frame.channels
++        || frame.channels > 8 || frame.sampleCount > frame.rate) {
++        return;
++    }
++    recordEpoch();
++    size_t queued = 0;
++    for (const auto &pending : m_pendingAudio) {
++        queued += pending.samples.size();
++    }
++    const auto begin = timePoint(frame.presentationTimestamp);
++    if (queued + size_t(frame.sampleCount) * frame.channels > size_t(frame.rate) * frame.channels * 2
++        || begin > monotonicNow() + std::chrono::seconds(1)) {
++        if (!m_encodingErrorEmitted.exchange(true)) {
++            Q_EMIT encodingError(QStringLiteral("Audio timestamp exceeds the bounded recording timeline"));
++        }
++        return;
++    }
++    PendingAudio pending{input, frame.channels, frame.rate, begin, {}, 0};
++    pending.samples.assign(frame.data, frame.data + size_t(frame.sampleCount) * frame.channels);
++    m_pendingAudio.push_back(std::move(pending));
++    drainPendingAudio();
++}
++
++void PipeWireProduce::drainPendingAudio()
++{
++    drainPendingAudioUntil(m_stopTimepoint.value_or(monotonicNow()));
++}
++
++void PipeWireProduce::drainPendingAudioUntil(Clock::time_point now)
++{
++    const auto epoch = recordEpoch();
++    for (auto &pending : m_pendingAudio) {
++        const size_t count = pending.samples.size() / pending.channels;
++        // A sample interval must have finished before we decide whether to keep
++        // it. Future tails stay owned here, and are classified after the clock
++        // reaches them, including pause/resume commands received meanwhile.
++        const auto elapsed = std::chrono::duration<double>(now - pending.begin).count();
++        const size_t available = size_t(std::clamp<int64_t>(int64_t(std::floor(elapsed * pending.rate)), 0, count));
++        size_t i = pending.consumed;
++        while (i < available) {
++            const auto stamp = pending.begin + samplesToDuration(i, pending.rate);
++            if (stamp < epoch || pausedAt(stamp) || m_audioInputStates[pending.input].ended) {
++                ++i;
++                continue;
++            }
++            const auto start = i++;
++            while (i < available && !pausedAt(pending.begin + samplesToDuration(i, pending.rate))) {
++                ++i;
++            }
++            encodeAudioSlice(pending.input, pending.samples.data() + start * pending.channels,
++                             int(i - start), pending.channels, pending.rate,
++                             durationToSamples(activeTime(stamp), pending.rate));
++        }
++        pending.consumed = available;
++    }
++    std::erase_if(m_pendingAudio, [](const PendingAudio &p) { return p.consumed == p.samples.size() / p.channels; });
++    if (!m_pendingAudio.empty() && !m_deactivated) {
++        if (!m_pendingAudioTimer) {
++            m_pendingAudioTimer = std::make_unique<QTimer>();
++            m_pendingAudioTimer->setSingleShot(true);
++            connect(m_pendingAudioTimer.get(), &QTimer::timeout, this, &PipeWireProduce::drainPendingAudio);
++        }
++        m_pendingAudioTimer->start(10);
++    }
++}
++
++void PipeWireProduce::encodeAudioSlice(int input, const float *data, int count, quint32 channels, quint32 rate, int64_t target)
++{
+     auto &state = m_audioInputStates[input];
+-    if (state.ended) {
+-        return;
+-    }
+-
+-    const auto epoch = recordEpoch();
+-
+-    if (!state.anchored) {
+-        // Align the start of this source with the start of the recording.
+-        const auto offset = timePoint(frame.presentationTimestamp) - epoch;
+-        const auto anchorSamples = durationToSamples(offset, frame.rate);
+-        if (anchorSamples > 0) {
+-            pushSilence(input, anchorSamples, frame.channels, frame.rate);
+-        } else if (anchorSamples < 0) {
+-            // The buffer was captured before the recording started, drop the
+-            // pre-epoch samples so the source starts exactly at the epoch
+-            // instead of playing late by the capture latency.
+-            state.trimSamples = -anchorSamples;
+-        }
+-        state.anchored = true;
+-    } else {
+-        // If the source stops producing buffers, e.g. a monitor of a suspended
+-        // sink, fill the hole with silence to keep the stream contiguous. Only
+-        // underruns are corrected here; drift between the PipeWire graph clock
+-        // and CLOCK_MONOTONIC (audio running slightly ahead) is not compensated.
+-        const auto expected = epoch + samplesToDuration(state.sampleCount, frame.rate);
+-        const auto gap = timePoint(frame.presentationTimestamp) - expected;
+-        if (gap > std::chrono::milliseconds(100)) {
+-            pushSilence(input, durationToSamples(gap, frame.rate), frame.channels, frame.rate);
+-        }
+-    }
+-
+-    const float *data = frame.data;
+-    int sampleCount = int(frame.sampleCount);
+-    if (state.trimSamples > 0) {
+-        const auto trim = std::min<int64_t>(state.trimSamples, sampleCount);
+-        state.trimSamples -= trim;
+-        data += trim * frame.channels;
+-        sampleCount -= int(trim);
+-        if (sampleCount == 0) {
+-            return;
+-        }
+-    }
+-
++    state.anchored = true;
++    // Both gaps and overlaps live in compressed sample coordinates, not wall
++    // time. Late duplicate buffers cannot append old samples a second time.
++    if (target > state.sampleCount) {
++        pushSilence(input, target - state.sampleCount, channels, rate);
++    }
++    const auto trim = std::min<int64_t>(std::max<int64_t>(0, state.sampleCount - target), count);
++    data += trim * channels;
++    count -= int(trim);
++    if (!count) {
++        return;
++    }
+     auto avFrame = av_frame_alloc();
+     if (!avFrame) {
+         qFatal("Failed to allocate memory");
+     }
+     avFrame->format = AV_SAMPLE_FMT_FLT;
+-    avFrame->sample_rate = frame.rate;
+-    avFrame->nb_samples = sampleCount;
+-    av_channel_layout_default(&avFrame->ch_layout, frame.channels);
++    avFrame->sample_rate = rate;
++    avFrame->nb_samples = count;
++    av_channel_layout_default(&avFrame->ch_layout, channels);
+     avFrame->pts = state.sampleCount;
+     if (av_frame_get_buffer(avFrame, 0) < 0) {
+         av_frame_free(&avFrame);
+         return;
+     }
+-    // The frame data is only valid for the duration of the signal emission
+-    std::memcpy(avFrame->data[0], data, sampleCount * frame.channels * sizeof(float));
+-
++    std::memcpy(avFrame->data[0], data, count * channels * sizeof(float));
+     if (m_audioEncoder->filterFrame(input, avFrame)) {
+-        state.sampleCount += sampleCount;
++        state.sampleCount += count;
+     }
+     av_frame_free(&avFrame);
+-
+     m_outputCondition.notify_all();
+ }
+ 
+@@ -565,7 +645,7 @@
+     // these hold even for an input that never delivered a buffer.
+     constexpr quint32 channels = AudioChannels;
+     constexpr quint32 rate = AudioSampleRate;
+-    const auto deficit = durationToSamples(target - recordEpoch(), rate) - state.sampleCount;
++    const auto deficit = durationToSamples(activeTime(target), rate) - state.sampleCount;
+     if (deficit <= 0) {
+         return;
+     }
+@@ -576,6 +656,12 @@
+ 
+ void PipeWireProduce::deactivate()
+ {
++    m_stopTimepoint = monotonicNow();
++    drainPendingAudio();
++    m_pendingAudio.clear();
++    if (m_pendingAudioTimer) {
++        m_pendingAudioTimer->stop();
++    }
+     m_deactivated = true;
+ 
+     // Remember when the recording stopped, on the same clock as recordEpoch(),
+@@ -583,7 +669,7 @@
+     // the much later instant the queued video frames finish flushing. Stop the
+     // pad timer here as well so it does not keep topping up silence in the
+     // meantime, which would also push the audio past the stop time.
+-    m_stopTimepoint = std::chrono::steady_clock::now();
++    m_stopTimepoint = monotonicNow();
+     if (m_audioPadTimer) {
+         m_audioPadTimer->stop();
+     }
+@@ -602,8 +688,12 @@
+     // If we have not been initialized properly before, ensure we still run any
+     // cleanup code and exit the thread, otherwise we risk applications not closing
+     // properly.
+-    if (!m_encoder || streamState != PW_STREAM_STATE_STREAMING) {
++    if (!m_encoder) {
+         QMetaObject::invokeMethod(this, &PipeWireProduce::destroy, Qt::QueuedConnection);
++    } else if (streamState != PW_STREAM_STATE_STREAMING) {
++        // An already paused source need not emit another state change. Still
++        // drain accepted video queues instead of destroying them prematurely.
++        stateChanged(PW_STREAM_STATE_PAUSED);
+     }
+ }
+ 
+@@ -614,6 +704,48 @@
+     }
+ 
+     m_stream->setActive(active);
++}
++
++void PipeWireProduce::requestTimelinePause(bool paused, quint64 sequence)
++{
++    Q_ASSERT(QThread::currentThread() == thread());
++    if (m_deactivated) {
++        return;
++    }
++    if (paused != m_timelinePaused) {
++        const auto now = monotonicNow();
++        if (!m_recordEpoch) {
++            m_recordEpoch = now;
++        }
++        // Use exactly the same snapshot for draining and the interval edge.
++        // A second clock read could encode future samples that are subsequently
++        // classified as paused by this very command.
++        drainPendingAudioUntil(now);
++        if (paused) {
++            m_pauseIntervals.push_back({now, std::nullopt});
++        } else {
++            m_pauseIntervals.back().end = now;
++        }
++        m_timelinePaused = paused;
++        m_lastDroppedFrame = {};
++        m_cursor = {};
++        clearTimelineFrameCache();
++        if (m_stream) {
++            m_stream->setActive(!paused);
++        }
++        for (auto &stream : m_audioStreams) {
++            stream->setActive(!paused);
++        }
++        if (m_audioPadTimer) {
++            if (paused) {
++                m_audioPadTimer->stop();
++            } else {
++                m_audioPadTimer->start();
++            }
++        }
++    }
++    // Acknowledges the producer processing barrier, not a compositor UI event.
++    Q_EMIT timelinePauseAcknowledged(sequence, paused);
+ }
+ 
+ void PipeWireProduce::destroy()
+@@ -628,6 +760,17 @@
+ 
+     m_frameStatisticsTimer = nullptr;
+ 
++    finishEncoding();
++
++    m_stream.reset();
++
++    qCDebug(PIPEWIRERECORD_LOGGING) << "finished";
++    Q_EMIT finished();
++    QThread::currentThread()->quit();
++}
++
++void PipeWireProduce::finishEncoding()
++{
+     stopThreads();
+ 
+     if (m_audioEncoder) {
+@@ -641,7 +784,7 @@
+         // while as the queued video frames are flushed, and padding to now()
+         // would leave a tail of silence past the end of the video. Fall back to
+         // the current time if deactivate() never ran.
+-        const auto stopTime = m_stopTimepoint.value_or(std::chrono::steady_clock::now());
++        const auto stopTime = m_stopTimepoint.value_or(monotonicNow());
+         for (size_t i = 0; i < m_audioInputStates.size(); ++i) {
+             if (!m_audioInputStates.at(i).ended) {
+                 // Pad the track up to the stop time so it does not truncate
+@@ -666,12 +809,7 @@
+     }
+     m_audioStreams.clear();
+ 
+-    m_stream.reset();
+-
+-    qCDebug(PIPEWIRERECORD_LOGGING) << "finished";
+     cleanup();
+-    Q_EMIT finished();
+-    QThread::currentThread()->quit();
+ }
+ 
+ void PipeWireProduce::setQuality(const std::optional<quint8> &quality)
+@@ -704,7 +842,7 @@
+ 
+ void PipeWireProduce::processFrame(const PipeWireFrame &frame)
+ {
+-    if (!m_encoder) {
++    if (!m_encoder || !acceptsVideoTimestamp(frame.presentationTimestamp)) {
+         return;
+     }
+ 
+@@ -819,7 +957,7 @@
+         qCWarning(PIPEWIRERECORD_LOGGING) << "Forcing encoder to" << forcedEncoder;
+     }
+ 
+-    auto size = m_stream->size();
++    auto size = m_encoderSize;
+ 
+     switch (m_encoderType) {
+     case PipeWireBaseEncodedStream::H264Baseline:
+--- a/src/pipewireproduce_p.h
++++ b/src/pipewireproduce_p.h
+@@ -150,6 +150,31 @@
+     // Runs on the produce thread. Does not set m_deactivated, so it does not trigger
+     // teardown in stateChanged().
+     void setStreamActive(bool active);
++    void requestTimelinePause(bool paused, quint64 sequence);
++    // Producer-thread clock seam, no environment override or public capture API.
++    using Clock = std::chrono::steady_clock;
++    virtual Clock::time_point monotonicNow() const { return Clock::now(); }
++    std::chrono::nanoseconds activeTime(Clock::time_point when);
++    bool pausedAt(Clock::time_point when) const;
++    bool acceptsVideoTimestamp(const std::optional<std::chrono::nanoseconds> &timestamp) const;
++    virtual void clearTimelineFrameCache() { }
++    bool initializeEncoder(const QSize &size);
++    void finishEncoding();
++    void drainPendingAudio();
++    void drainPendingAudioUntil(Clock::time_point boundary);
++    void encodeAudioSlice(int input, const float *data, int count, quint32 channels, quint32 rate, int64_t target);
++    struct PauseInterval { Clock::time_point begin; std::optional<Clock::time_point> end; };
++    std::vector<PauseInterval> m_pauseIntervals;
++    bool m_timelinePaused = false;
++    struct PendingAudio {
++        int input;
++        quint32 channels, rate;
++        Clock::time_point begin;
++        std::vector<float> samples;
++        size_t consumed = 0;
++    };
++    std::vector<PendingAudio> m_pendingAudio;
++    std::unique_ptr<QTimer> m_pendingAudioTimer;
+ 
+     void deactivate();
+ 
+@@ -260,6 +285,7 @@
+     PipeWireFrame m_lastDroppedFrame;
+ 
+ Q_SIGNALS:
++    void timelinePauseAcknowledged(quint64 sequence, bool paused);
+     void producedFrames();
+     void started();
+     void finished();
+--- a/src/pipewirerecord.cpp
++++ b/src/pipewirerecord.cpp
+@@ -148,7 +148,7 @@
+         return false;
+     }
+ 
+-    const Fraction framerate = m_stream->framerate();
++    const Fraction framerate = m_stream ? m_stream->framerate() : m_frameRate;
+     int ret = avio_open(&m_avFormatContext->pb, QFile::encodeName(m_output).constData(), AVIO_FLAG_WRITE);
+     if (ret < 0) {
+         qCWarning(PIPEWIRERECORD_LOGGING) << "Could not open" << m_output << av_err2str(ret);
+@@ -232,9 +232,15 @@
+ 
+ void PipeWireRecordProduce::processFrame(const PipeWireFrame &frame)
+ {
+-    PipeWireProduce::processFrame(frame);
++    if (!acceptsVideoTimestamp(frame.presentationTimestamp)) {
++        return;
++    }
+     if (frame.cursor && !frame.dmabuf && !frame.dataFrame && m_frameWithoutMetadataCursor.dataFrame) {
+-        m_encoder->filterFrame(m_frameWithoutMetadataCursor);
++        auto composed = frame;
++        composed.dataFrame = m_frameWithoutMetadataCursor.dataFrame->copy();
++        PipeWireProduce::processFrame(composed);
++    } else {
++        PipeWireProduce::processFrame(frame);
+     }
+ }
+ 
+@@ -247,7 +253,7 @@
+     if (m_cursor.position && !m_cursor.texture.isNull()) {
+         auto image = frame.dataFrame->toImage();
+         // Do not copy the image if it's already ours
+-        if (m_frameWithoutMetadataCursor.dataFrame->cleanup != frame.dataFrame->cleanup) {
++        if (!m_frameWithoutMetadataCursor.dataFrame || m_frameWithoutMetadataCursor.dataFrame->cleanup != frame.dataFrame->cleanup) {
+             m_frameWithoutMetadataCursor.dataFrame = frame.dataFrame->copy();
+         }
+         QPainter p(&image);
+@@ -288,16 +294,10 @@
+ int64_t PipeWireRecordProduce::framePts(const std::optional<std::chrono::nanoseconds> &presentationTimestamp)
+ {
+     if (!presentationTimestamp) {
+-        // No timestamp to place this frame on the timeline; treat it as the
+-        // very start rather than dereferencing an empty optional.
+-        return 0;
+-    }
+-    // A frame rendered before the recording started (the screencast stream
+-    // delivers the current screen content as its first frame, timestamped
+-    // with when it was originally rendered) belongs at the very start.
+-    const auto pts =
+-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::time_point(*presentationTimestamp) - recordEpoch()).count();
+-    return std::max<int64_t>(pts, 0);
++        return -1;
++    }
++    return std::chrono::duration_cast<std::chrono::milliseconds>(
++        activeTime(Clock::time_point(*presentationTimestamp))).count();
+ }
+ 
+ void PipeWireRecordProduce::cleanup()
+@@ -309,6 +309,7 @@
+ 
+         avio_closep(&m_avFormatContext->pb);
+         avformat_free_context(m_avFormatContext);
++        m_avFormatContext = nullptr;
+     }
+ }
+ 
+--- a/src/pipewirerecord_p.h
++++ b/src/pipewirerecord_p.h
+@@ -32,6 +32,7 @@
+     void aboutToEncode(PipeWireFrame &frame) override;
+     bool setupFormat() override;
+     void cleanup() override;
++    void clearTimelineFrameCache() override { m_frameWithoutMetadataCursor = {}; }
+ 
+ private:
+     const QString m_output;
+--- a/src/pwhelpers.cpp
++++ b/src/pwhelpers.cpp
+@@ -60,7 +60,7 @@
+ 
+ std::shared_ptr<PipeWireFrameData> PipeWireFrameData::copy() const
+ {
+-    const uint bufferSize = size.height() * stride * 4;
++    const qsizetype bufferSize = qsizetype(size.height()) * stride;
+     auto newMap = malloc(bufferSize);
+     memcpy(newMap, data, bufferSize);
+     return std::make_shared<PipeWireFrameData>(format, newMap, size, stride, new PipeWireFrameCleanupFunction([newMap] {

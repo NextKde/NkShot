@@ -27,12 +27,24 @@ package database. Build from the exact published source, not an uncommitted tree
    `ac7568044defc89c494b0d6edb60073cb0ad8b25` and KPipeWire commit
    `f30b39c53092673d136660c8deaf24d3935723eb`.
 2. Apply the matching patches in `third_party/patches/` to pristine copies.
-   Do not apply them to a different upstream revision without reviewing/retesting.
+   For the recording pause/resume source, KPipeWire requires
+   `kpipewire-initialize-failure.patch` **first**, then
+   `kpipewire-timeline-pause.patch`. Verify prerequisite and final source hashes
+   against the metadata accompanying the exact source revision being packaged;
+   do not use hashes from an earlier, still-changing development patch.
+   KQuickImageEditor requires `kquickimageeditor-shadow-repaint.patch`.
+   Do not apply these patches to a different upstream revision without review.
+   When reproducing the old 080 package, use only patches present at 080:
+   it did not contain the timeline-pause patch or the new recording capability.
 3. Configure/build/install both into a **clean** `/opt/nkshot` development prefix:
    `cmake -S SOURCE -B BUILD -G Ninja -DCMAKE_INSTALL_PREFIX=/opt/nkshot
    -DCMAKE_PREFIX_PATH=/opt/nkshot -DCMAKE_BUILD_TYPE=Release`, then
    `cmake --build BUILD --parallel 4` and `cmake --install BUILD`.
-4. Configure NkShot with the same settings plus
+4. For pause/resume-capable source, first confirm the private KPipeWire exports
+   `PipeWireBaseEncodedStream::timelinePauseVersion() const` and that the app's
+   compile/link capability check passes. A stock library with the same SONAME
+   is not an acceptable replacement. See `docs/recording-pause.md`.
+   Configure NkShot with the same settings plus
    `-DBUILD_TESTING=OFF -DNKSHOT_ENABLE_UI_CAPTURE=OFF
    -DCMAKE_INSTALL_RPATH=/opt/nkshot/lib/x86_64-linux-gnu` and build it.
 5. Run `packaging/debian/package.sh APP_BUILD KPIPEWIRE_BUILD
@@ -41,7 +53,7 @@ package database. Build from the exact published source, not an uncommitted tree
    For the exact 080 source above, use `0.1.0~preview080`. For a later verified
    source revision, choose its own release version and record the actual commit;
    do not reuse `preview080`. Epochs and path/control characters are rejected.
-   No 082 package has been built or validated by this procedure yet.
+   No post-080 package is claimed built or validated by this document.
 
 Packaging stages CMake install manifests afresh. It does **not** copy the entire
 live prefix, a Python virtual environment, translator models, or UI test harness.
@@ -75,6 +87,15 @@ Do not force dependencies or install this package on an older Plasma system.
 - All ELFs resolve; `nkshot --version` starts using only package private libraries.
 - Real Plasma Wayland: full-screen, region, window, fractional/multiple monitors.
 - Real video recording, actual stop/finalize, playable exported video and audio.
+- For pause/resume releases: check the packaged private KPipeWire's exported
+  capability symbol and the app's strong reference, not merely a matching SONAME.
+  Run the `tests/kpipewire` production encoder/muxer fixture against that exact
+  dependency build and retain its results. Generated-media fixture success alone
+  does not validate native KWin capture, PipeWire devices or hardware encoders.
+- In real Plasma recording, verify pause gates audio and video together, exported
+  duration excludes paused intervals, resume preserves audio/video sync, and Stop
+  works while paused or transitioning. Test the first frame after resume and
+  both software and supported hardware encoders; do not infer these from a build.
 - Annotation/undo/save/reopen; cancellation and permission-denied recovery.
 - DBus launch and menu launch work with the renamed application permission ID.
 - Install/uninstall alongside the system Spectacle without changing its behavior.
@@ -94,3 +115,14 @@ Full UI startup is **not verified**: the isolated toolchain has no session bus,
 and the host sandbox refused creation of a new D-Bus socket. No install transaction
 or real Plasma capture was performed. Treat this as a packaging preview pending
 the acceptance checks above, not a stable end-user release.
+
+## Next package preparation (not yet built)
+
+After the pause/resume source and dependency metadata are frozen and published,
+record that exact commit and use a new clean source snapshot with its own production
+build directory (planned: `/build/package084`). Use the lead-verified private
+KPipeWire build only after its patch hashes and capability export are finalized;
+do not race or rebuild a shared dependency while core validation is underway.
+Keep the existing 080 package and its evidence separate, select an explicit new
+Debian version, then repeat archive, dependency, launcher and native acceptance
+checks. This is a plan, not a claim that an 084 package or fixture has passed.

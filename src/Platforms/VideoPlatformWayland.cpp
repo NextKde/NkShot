@@ -191,6 +191,7 @@ void VideoPlatformWayland::initialize()
         if(generation!=m_recorderGeneration || m_recorder.get()!=recorder) return;
         const auto state = m_recorder->state();
         if (state == PipeWireRecord::Idle) {
+            clearPausePending();
             // Idle retires this producer generation immediately. Queued errors
             // from it must not cancel a later target-selection/countdown while
             // the next fresh recorder is waiting for commit.
@@ -206,13 +207,21 @@ void VideoPlatformWayland::initialize()
                 setRecordingState(RecordingState::NotRecording);
                 return;
             }
-            if (recordingState() == RecordingState::Recording || recordingState() == RecordingState::Rendering) {
+            if (isRecording() || recordingState() == RecordingState::Rendering) {
                 const auto output=QUrl::fromLocalFile(m_recorder->output());
                 setRecordingState(RecordingState::Finished);
                 preparation()->finish(m_requestToken);
                 Q_EMIT recordingSaved(output);
             }
         } else if (!m_attemptFailed && !m_stopRequested && state == PipeWireRecord::Recording) {
+            if(m_pausePending && m_pauseTargetPaused) return;
+            if(recordingState()==RecordingState::Paused) {
+                setRecordingState(RecordingState::Recording);
+                clearPausePending();
+                return;
+            }
+            clearPausePending();
+            if(m_stopRequested || m_attemptFailed) return;
             m_startGuard.recordingObserved(m_startGuard.token());
             if (!preparation()->markRecording(m_requestToken)) return;
             m_startWatchdog.stop();
@@ -220,13 +229,19 @@ void VideoPlatformWayland::initialize()
             m_memoryTimer.start(5000, Qt::CoarseTimer, this);
             setRecordingMode(m_requestedMode);
             setRecordingState(RecordingState::Recording);
+        } else if (!m_attemptFailed && !m_stopRequested && state == PipeWireRecord::Paused) {
+            if(!m_pausePending || !m_pauseTargetPaused) return;
+            if(isRecording()) setRecordingState(RecordingState::Paused);
+            clearPausePending();
         } else if (!m_attemptFailed && state == PipeWireRecord::Rendering) {
+            clearPausePending();
             m_memoryTimer.stop();
             setRecordingState(RecordingState::Rendering);
         }
     });
     Q_EMIT supportedRecordingModesChanged();
     Q_EMIT supportedFormatsChanged();
+    Q_EMIT pauseSupportedChanged();
 }
 
 VideoPlatform::RecordingModes VideoPlatformWayland::supportedRecordingModes() const
@@ -542,6 +557,7 @@ void VideoPlatformWayland::failRecording(const QString &message)
     if(m_attemptFailed) return;
     m_discardPreparedOutput=preparation()->phase()==NkShot::RecordingPreparation::Starting;
     m_attemptFailed=true;m_startPending=false;m_stopRequested=true;
+    clearPausePending();
     m_startGuard.cancel(m_startGuard.token());
     if(m_startGuard.outstanding()) m_streamLease.quiesce(); else m_streamLease.retire();
     m_memoryTimer.stop();
@@ -558,6 +574,7 @@ void VideoPlatformWayland::cancelPendingRecording()
     const bool wasStarting=preparation()->phase()==Prep::Starting;
     m_discardPreparedOutput=wasStarting;
     m_attemptFailed=true;m_stopRequested=true;m_startPending=false;
+    clearPausePending();
     m_startWatchdog.stop();m_memoryTimer.stop();
     preparation()->cancel();
     m_startGuard.cancel(m_startGuard.token());
@@ -569,9 +586,31 @@ void VideoPlatformWayland::cancelPendingRecording()
         : i18nc("@info", "Recording canceled before capture started."));
 }
 
+bool VideoPlatformWayland::supportsPause() const { return m_recorder && m_recorder->supportsPause(); }
+void VideoPlatformWayland::clearPausePending()
+{
+    if(!m_pausePending)return;
+    m_pausePending=false; Q_EMIT pausePendingChanged();
+}
+void VideoPlatformWayland::pauseRecording()
+{
+    if(m_pausePending || m_stopRequested || m_attemptFailed || !supportsPause()
+        || recordingState()!=RecordingState::Recording) return;
+    m_pauseTargetPaused=true; m_pausePending=true; Q_EMIT pausePendingChanged();
+    if(m_pausePending && !m_stopRequested && !m_attemptFailed) m_recorder->pause();
+}
+void VideoPlatformWayland::resumeRecording()
+{
+    if(m_pausePending || m_stopRequested || m_attemptFailed || !supportsPause()
+        || recordingState()!=RecordingState::Paused) return;
+    m_pauseTargetPaused=false; m_pausePending=true; Q_EMIT pausePendingChanged();
+    if(m_pausePending && !m_stopRequested && !m_attemptFailed) m_recorder->resume();
+}
+
 void VideoPlatformWayland::finishRecording()
 {
     m_stopRequested=true;
+    clearPausePending();
     if (preparation()->phase()!=NkShot::RecordingPreparation::Recording
         && preparation()->phase()!=NkShot::RecordingPreparation::Idle) {
         cancelPendingRecording();

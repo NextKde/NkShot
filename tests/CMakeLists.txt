@@ -166,3 +166,9 @@ set_tests_properties(status_notifier_availability_test PROPERTIES TIMEOUT 30)
 ecm_add_test(ScrollFrameAlignerTest.cpp ../src/Imaging/ScrollFrameAligner.cpp
     TEST_NAME scroll_frame_aligner_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(scroll_frame_aligner_test PROPERTIES TIMEOUT 45)
+
+# 084: cumulative recording clock, pause/resume without new capture.
+ecm_add_test(RecordingPauseClockTest.cpp ../src/Platforms/VideoPlatform.cpp ../src/Platforms/VideoPlatform.h
+    ../src/RecordingPreparation.cpp ../src/RecordingPreparation.h
+    TEST_NAME recording_pause_clock_test LINK_LIBRARIES Qt::Test Qt::Core Qt::Gui Qt::Qml)
+set_tests_properties(recording_pause_clock_test PROPERTIES TIMEOUT 15)

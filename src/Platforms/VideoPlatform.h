@@ -28,6 +28,9 @@ class VideoPlatform : public QObject
     Q_PROPERTY(Formats supportedFormats READ supportedFormats NOTIFY supportedFormatsChanged)
     Q_PROPERTY(qint64 recordedTime READ recordedTime NOTIFY recordedTimeChanged)
     Q_PROPERTY(bool isRecording READ isRecording NOTIFY recordingStateChanged)
+    Q_PROPERTY(bool isPaused READ isPaused NOTIFY recordingStateChanged)
+    Q_PROPERTY(bool pauseSupported READ supportsPause NOTIFY pauseSupportedChanged)
+    Q_PROPERTY(bool pausePending READ pausePending NOTIFY pausePendingChanged)
     Q_PROPERTY(bool readyForRecording READ readyForRecording NOTIFY readyForRecordingChanged)
     Q_PROPERTY(RecordingState recordingState READ recordingState NOTIFY recordingStateChanged)
 
@@ -48,7 +51,8 @@ public:
         NotRecording, //< Not recording anything
         Recording, //< Actively recording
         Rendering, //< Finishing the recording, no longer actively receiving frames but still processing to do.
-        Finished //< Recording finished completely.
+        Finished, //< Recording finished completely.
+        Paused //< Existing recording retained; no active media time advances.
     };
     Q_ENUM(RecordingState)
 
@@ -130,6 +134,9 @@ public:
     Q_INVOKABLE static bool formatSupportsAudio(VideoPlatform::Format format);
 
     bool isRecording() const;
+    bool isPaused() const { return m_recordingState == RecordingState::Paused; }
+    virtual bool supportsPause() const { return false; }
+    virtual bool pausePending() const { return false; }
     virtual bool isRecordingAudio() const = 0;
     qint64 recordedTime() const;
 
@@ -152,8 +159,12 @@ public Q_SLOTS:
                                 const QVariantMap &options,
                                 bool includePointer) = 0;
     virtual void finishRecording() = 0;
+    virtual void pauseRecording() {}
+    virtual void resumeRecording() {}
 
 Q_SIGNALS:
+    void pausePendingChanged();
+    void pauseSupportedChanged();
     void readyForRecordingChanged();
     void supportedRecordingModesChanged();
     void supportedFormatsChanged();
@@ -172,6 +183,7 @@ private:
     QElapsedTimer m_elapsedTimer;
     QBasicTimer m_basicTimer;
     qint64 m_recordedTime = 0;
+    qint64 m_accumulatedTime = 0;
     RecordingState m_recordingState = RecordingState::NotRecording;
     RecordingMode m_recordingMode = RecordingMode::NoRecordingModes;
 };

@@ -22,6 +22,9 @@ public:
     void setMaxPendingFrames(int value) override { m_native.setMaxPendingFrames(value); }
     void start() override { m_native.start(); }
     void stop() override { m_native.stop(); }
+    bool supportsPause() const override { return m_native.timelinePauseVersion() >= 1; }
+    void pause() override { m_native.pause(); }
+    void resume() override { m_native.resume(); }
 private:
     PipeWireRecord m_native;
 };

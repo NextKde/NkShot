@@ -66,6 +66,39 @@ Q_SIGNALS:
 };
 
 namespace {
+// Controlled acknowledgement source for Core/QML dispatch only. This does not
+// create a stream or claim to validate the encoder's audio/video timeline.
+class PauseControlsPlatform final : public VideoPlatform
+{
+public:
+    int pauses=0, resumes=0, stops=0;
+    bool pending=false, stopping=false;
+    bool supportsPause() const override { return true; }
+    bool pausePending() const override { return pending; }
+    RecordingModes supportedRecordingModes() const override { return Region; }
+    Formats supportedFormats() const override { return MP4_H264; }
+    bool isRecordingAudio() const override { return false; }
+    void startRecording(const QUrl &,RecordingMode,const QVariantMap &,bool) override {}
+    void begin() { setRecordingMode(Region); setRecordingState(RecordingState::Recording); }
+    void pauseRecording() override {
+        if(stopping||pending||recordingState()!=RecordingState::Recording)return;
+        ++pauses;pending=true;Q_EMIT pausePendingChanged();
+    }
+    void resumeRecording() override {
+        if(stopping||pending||!isPaused())return;
+        ++resumes;pending=true;Q_EMIT pausePendingChanged();
+    }
+    void acknowledge(RecordingState state) {
+        if(stopping)return;
+        pending=false;setRecordingState(state);Q_EMIT pausePendingChanged();
+    }
+    void finishRecording() override {
+        if(stopping||!isRecording())return;
+        ++stops;stopping=true;pending=false;Q_EMIT pausePendingChanged();
+        setRecordingState(RecordingState::Rendering);
+    }
+    void idle() { setRecordingState(RecordingState::NotRecording); }
+};
 // A preguard-only substitute: never connected to Core or treated as capable.
 class DrainingControlsPlatform final : public VideoPlatform
 {
@@ -131,6 +164,132 @@ bool RecordingControlsUiChecks::run(QApplication &application, const QString &sc
     // pending item. The assertion below requires the actual item registration.
     if(!QTest::qWaitFor([&]{return core->m_statusNotifierAvailability && core->m_statusNotifierAvailability->hostAvailable();},2000))
         return fail(QStringLiteral("Real Core availability monitor did not observe test host"));
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_PAUSE")) {
+        // CONSTANT videoPlatform bindings require a new real viewer after the
+        // swap. Restore the actual platform only after destroying fixture QML.
+        core->deleteWindows();
+        auto actualPlatform=std::move(core->m_videoPlatform);
+        auto controlled=std::make_unique<PauseControlsPlatform>();
+        auto probe=controlled.get();
+        core->m_videoPlatform=std::move(controlled);
+        const auto restore=qScopeGuard([&]{
+            probe->idle();
+            core->deleteWindows();
+            core->m_videoPlatform=std::move(actualPlatform);
+            core->m_videoMode=videoMode;
+            Q_EMIT core->videoModeChanged(core->m_videoMode);
+            core->initViewerWindow(mode);
+            ViewerWindow::instance()->setGeometry(geometry);
+            ViewerWindow::instance()->show();
+        });
+        QObject::connect(probe,&VideoPlatform::recordingStateChanged,core,&SpectacleCore::updateRecordingStateUi);
+        QObject::connect(probe,&VideoPlatform::pausePendingChanged,core,&SpectacleCore::updateRecordingPauseTray);
+        QObject::connect(probe,&VideoPlatform::recordedTimeChanged,core,&SpectacleCore::recordedTimeChanged);
+        core->m_videoMode=true;
+        Q_EMIT core->videoModeChanged(core->m_videoMode);
+        core->initViewerWindow(ViewerWindow::Viewer);
+        auto viewer=ViewerWindow::instance();
+        viewer->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(760,540));
+        viewer->show();
+        const auto invariant=[&]{return document->baseImage()==image&&document->undoStackDepth()==depth
+            &&core->currentVideo()==video&&application.clipboard()->text()==clipboard;};
+        const auto find=[&](const QString &name){return viewer->rootObject()->findChild<QQuickItem *>(name);};
+        const auto click=[&](const QString &name) {
+            QQuickItem *control=nullptr;
+            if(!QTest::qWaitFor([&]{control=find(name);return control&&control->isVisible()&&control->isEnabled()
+                    &&control->width()>10&&control->height()>10;},1500))return false;
+            const auto point=control->mapToScene(QPointF(control->width()/2,control->height()/2));
+            if(!QRectF(QPointF(),viewer->size()).contains(point))return false;
+            QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,point.toPoint());return true;
+        };
+        const auto shot=[&](const QString &suffix) {
+            QSignalSpy frame(viewer,&QQuickWindow::frameSwapped);viewer->update();
+            return QTest::qWaitFor([&]{return !frame.isEmpty();},1000)&&viewer->grabWindow().save(screenshot+suffix);
+        };
+        const auto properties=[&](const QString &item) {
+            const auto slash=item.indexOf(u'/');
+            auto call=QDBusMessage::createMethodCall(item.left(slash),item.mid(slash),
+                QStringLiteral("org.freedesktop.DBus.Properties"),QStringLiteral("GetAll"));
+            call.setArguments({QStringLiteral("org.kde.StatusNotifierItem")});
+            auto pending=bus.asyncCall(call,1000);
+            if(!QTest::qWaitFor([&]{return pending.isFinished();},1500))return QVariantMap{};
+            const auto reply=pending.reply();
+            if(reply.type()!=QDBusMessage::ReplyMessage||reply.arguments().isEmpty()) {
+                qWarning()<<"Pause SNI properties"<<item<<reply.errorName()<<reply.errorMessage();return QVariantMap{};
+            }
+            return qdbus_cast<QVariantMap>(reply.arguments().first());
+        };
+        const auto tooltipTitle=[](const QVariantMap &values) {
+            const auto arg=values.value(QStringLiteral("ToolTip")).value<QDBusArgument>();
+            QString icon,title,subtitle;
+            if(arg.currentSignature()!=QStringLiteral("(sa(iiay)ss)"))return title;
+            arg.beginStructure();arg>>icon;arg.beginArray();
+            while(!arg.atEnd()){int w,h;QByteArray bytes;arg.beginStructure();arg>>w>>h>>bytes;arg.endStructure();}
+            arg.endArray();arg>>title>>subtitle;arg.endStructure();return title;
+        };
+        QSignalSpy registrations(&watcher,&RecordingTestWatcher::StatusNotifierItemRegistered);
+        probe->begin();
+        QString item;
+        QElapsedTimer search;search.start();
+        while(item.isEmpty()&&search.elapsed()<2500) {
+            for(const auto &candidate:watcher.registered) {
+                const auto data=properties(candidate);
+                if(data.value(QStringLiteral("Status")).toString()==QStringLiteral("Active")
+                    &&tooltipTitle(data).contains(QStringLiteral("Recording"),Qt::CaseInsensitive)) {item=candidate;break;}
+            }
+            if(item.isEmpty())QTest::qWait(20);
+        }
+        if(item.isEmpty())return fail(QStringLiteral("Controlled Recording did not publish actual active SNI"));
+        const int initialRegistrations=registrations.size();
+        auto pauseAction=core->m_recordingPauseAction;
+        if(!pauseAction||pauseAction->objectName()!=QStringLiteral("nkshotPauseRecording")||!pauseAction->isEnabled())
+            return fail(QStringLiteral("Actual SNI Pause action unavailable"));
+        QTest::qWait(150);
+        if(!click(QStringLiteral("nkshotRecordingPause"))||probe->pauses!=1||!probe->pausePending()||probe->isPaused())
+            return fail(QStringLiteral("Actual QML Pause did not request acknowledgement"));
+        if(!QTest::qWaitFor([&]{return !find(QStringLiteral("nkshotRecordingPause"))->isEnabled();},500)
+            ||pauseAction->isEnabled()||!find(QStringLiteral("nkshotRecordingStop"))->isEnabled())
+            return fail(QStringLiteral("Pending pause did not disable Pause while preserving Stop"));
+        if(!shot(QStringLiteral(".pending.png")))return fail(QStringLiteral("Pending screenshot failed"));
+        probe->acknowledge(VideoPlatform::RecordingState::Paused);
+        const auto frozen=probe->recordedTime();QTest::qWait(1100);
+        if(frozen<100||probe->recordedTime()!=frozen||!probe->isRecording()||!probe->isPaused()
+            ||!tooltipTitle(properties(item)).contains(QStringLiteral("paused"),Qt::CaseInsensitive))
+            return fail(QStringLiteral("Pause acknowledgement did not freeze time/update same SNI"));
+        if(!shot(QStringLiteral(".paused.png")))return fail(QStringLiteral("Paused screenshot failed"));
+        // Trigger the real item menu's QAction, not a direct Core slot.
+        if(!pauseAction->isEnabled()||!pauseAction->text().contains(QStringLiteral("Resume")))
+            return fail(QStringLiteral("Actual SNI menu did not become Resume"));
+        pauseAction->trigger();
+        if(probe->resumes!=1||!probe->pausePending()||!probe->isPaused())return fail(QStringLiteral("SNI Resume skipped acknowledgement"));
+        probe->acknowledge(VideoPlatform::RecordingState::Recording);
+        QTest::qWait(150);
+        if(!click(QStringLiteral("nkshotRecordingPause")))return fail(QStringLiteral("Second QML Pause unavailable"));
+        probe->acknowledge(VideoPlatform::RecordingState::Paused);
+        if(probe->recordedTime()<frozen+100||registrations.size()!=initialRegistrations
+            ||core->m_recordingPauseAction!=pauseAction||properties(item).isEmpty())
+            return fail(QStringLiteral("Resume reset time or recreated actual SNI"));
+        // Also exercise the real QML Resume button, then pause through SNI.
+        if(!click(QStringLiteral("nkshotRecordingPause"))||probe->resumes!=2||!probe->pausePending())
+            return fail(QStringLiteral("Actual QML Resume did not dispatch"));
+        probe->acknowledge(VideoPlatform::RecordingState::Recording);
+        pauseAction->trigger();probe->acknowledge(VideoPlatform::RecordingState::Paused);
+        if(!shot(QString())||!invariant())return fail(QStringLiteral("Paused UI evidence/source isolation failed"));
+        if(!click(QStringLiteral("nkshotRecordingStop"))||probe->stops!=1
+            ||probe->recordingState()!=VideoPlatform::RecordingState::Rendering)
+            return fail(QStringLiteral("Actual QML Stop while Paused did not finish"));
+        probe->acknowledge(VideoPlatform::RecordingState::Recording);
+        if(probe->isRecording()||core->m_recordingTrayAction->isEnabled()||!invariant())
+            return fail(QStringLiteral("Late acknowledgement resurrected stopped UI or altered source"));
+        const int retiredPauses=probe->pauses, retiredResumes=probe->resumes;
+        QPointer<QAction> retiredPause=pauseAction;
+        probe->idle(); // synchronously retire, before deleteLater delivery
+        if(retiredPause)retiredPause->trigger();
+        if(core->m_recordingPauseAction||probe->pauses!=retiredPauses||probe->resumes!=retiredResumes)
+            return fail(QStringLiteral("Retired Pause QAction remained live or dispatched a request"));
+        qInfo()<<"084 controlled Core/QML/SNI pause dispatch passed; no native encoder or saved-media claim";
+        return true;
+    }
     const auto first=begin(Prep::Countdown);
     if(!QTest::qWaitFor([&]{return !watcher.registered.isEmpty();},2000))
         return fail(QStringLiteral("Core pending notifier never registered with real test bus host"));

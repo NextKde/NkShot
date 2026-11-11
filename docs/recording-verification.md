@@ -76,7 +76,7 @@ GIF/WebP and corrupt-file retry are regression-tested. Native recording, live
 microphone/system capture and capture pause/resume remain separate open items.
 
 
-## Capture pause API audit
+## Historical upstream capture pause API audit (before 084)
 
 `PipeWireRecord` inherits `PipeWireBaseEncodedStream::pause()` and `resume()`
 in the locally built dependency. Inspecting only the derived header misses these
@@ -144,7 +144,7 @@ An independent dependency-source audit also found a pre-existing KPipeWire edge:
 error/completion notification, while `destroy()` returns early for a null source.
 That path may leave shutdown pending and is **not fixed by 064**. It needs a
 separately verified dependency patch, not an arbitrary timer pretending encoding
-has finished. Capture pause/resume remains unimplemented.
+has finished. Capture pause/resume was not implemented at that stage; see the 084 downstream contract below.
 
 ## Patched dependency initialization failure (065)
 
@@ -264,3 +264,11 @@ No native screen or panel was used. Actual Recording/Rendering state behavior is
 covered by the controlled adapter, not a new native successful-capture test. Registered-host state does not establish shell visibility,
 native focus or clean first-frame capture. Rendering must drain without forced
 frame loss; only actual Recording starts recording timing/notifications/animation.
+
+## 084 downstream recording pause
+
+[Recording pause and resume](recording-pause.md) documents the new pinned dependency
+patch, strong capability gate, acknowledged controls and compressed A/V timeline.
+The upstream audit above remains valid for an unpatched library, which is rejected.
+Synthetic production encoding is distinct from native capture acceptance: actual
+KWin, devices, GPU encoders and static-target resume still require validation.

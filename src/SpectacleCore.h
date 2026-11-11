@@ -98,6 +98,7 @@ public:
 
     Q_INVOKABLE void startRecording(VideoPlatform::RecordingMode mode, bool withPointer = Settings::videoIncludePointer(), int startDelaySeconds = 0);
     Q_INVOKABLE void finishRecording();
+    Q_INVOKABLE void toggleRecordingPause();
     Q_INVOKABLE void cancelPendingRecording();
 
     Q_INVOKABLE QString timeFromMilliseconds(qint64 milliseconds) const;
@@ -167,6 +168,8 @@ private:
     void updateRecordingPreparationUi();
     void ensureRecordingTray();
     void updateRecordingPreparationTray();
+    void updateRecordingPauseTray();
+    void updateRecordingStateUi(VideoPlatform::RecordingState state);
     void activateRecordingTray();
     void initCaptureWindows(CaptureWindow::Mode mode);
     void initViewerWindow(ViewerWindow::Mode mode);
@@ -189,6 +192,7 @@ private:
     std::unique_ptr<RecordingCountdownWindow> m_recordingCountdown;
     std::unique_ptr<NkShot::StatusNotifierAvailability> m_statusNotifierAvailability;
     QPointer<QAction> m_recordingTrayAction;
+    QPointer<QAction> m_recordingPauseAction;
     bool m_recordingControlRequired = false;
     QRect m_recordingRestoreGeometry;
     QWindow::Visibility m_recordingRestoreVisibility = QWindow::Windowed;

@@ -105,3 +105,9 @@ next gates; automatic input/scrolling is not introduced.
 pending request, pause/late-result isolation and retained progress on failure.
 This reduces repeated panel switching but is not automatic scrolling, and does
 not remove the outstanding native desktop acceptance gate.
+
+### 084 recording pause/resume
+
+Implemented acknowledged recording controls and a downstream A/V timeline patch,
+not playback pause. Native KWin/device synchronization, hardware encoders and
+static-target refresh after Resume remain the next acceptance boundary.

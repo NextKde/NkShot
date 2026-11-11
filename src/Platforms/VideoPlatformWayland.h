@@ -40,6 +40,10 @@ public:
 
     void startRecording(const QUrl &fileUrl, RecordingMode recordingMode, const QVariantMap &options, bool includePointer) override;
     void finishRecording() override;
+    void pauseRecording() override;
+    void resumeRecording() override;
+    bool supportsPause() const override;
+    bool pausePending() const override { return m_pausePending; }
     void cancelPendingRecording() override;
     bool readyForRecording() const override;
     void provideRecordingRegion(const QRectF &rect, quint64 token) override;
@@ -82,6 +86,9 @@ private:
     quint64 m_recorderGeneration = 0;
     NkShot::CaptureStreamLease m_streamLease{this};
     bool m_startPending = false;
+    bool m_pausePending = false;
+    bool m_pauseTargetPaused = false;
+    void clearPausePending();
     bool m_attemptFailed = false;
     bool m_stopRequested = false;
     bool m_resetRecorder = false;

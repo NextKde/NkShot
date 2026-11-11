@@ -1,0 +1,54 @@
+{
+  "upstream": "https://github.com/KDE/kpipewire",
+  "commit": "f30b39c53092673d136660c8deaf24d3935723eb",
+  "version": "6.8.3",
+  "patch": "kpipewire-timeline-pause.patch",
+  "prerequisite_patch": "kpipewire-initialize-failure.patch",
+  "status": "Local downstream implementation; isolated library and standalone fixture built; not accepted upstream",
+  "capability": "PipeWireBaseEncodedStream::timelinePauseVersion() const returns 1 (out-of-line exported strong symbol)",
+  "base_after_prerequisite_sha256": {
+    "src/encoder.cpp": "6bdc55bcccf224f4a2e4039246bbc1b29bce0da297c5c981aab6b1ef13b97d07",
+    "src/pipewirebaseencodedstream.cpp": "bb916c3ddf6b9c0bfa3286bc690caaf09920727d14d0cbd060bafb837ba86caf",
+    "src/pipewirebaseencodedstream.h": "08cd8342f5e812d493febfbb730fb133a1a6e2ae4e3fd0e674c475cb24a19485",
+    "src/pipewireproduce.cpp": "f24f0e3a654f2509357ad9a8c625a998929ec810c9c66b4f533b5662d2cd8875",
+    "src/pipewireproduce_p.h": "96c8586ab72b1e0be09f50124fc3577e33ea53c32232851aec908cf36bb6b87c",
+    "src/pipewirerecord.cpp": "f3e48b0e43e75d56f582d8c748cda56d6938273865a3677b63b53e3f7d680cd4",
+    "src/pipewirerecord_p.h": "a41a65a4d95069a4a00dcbc033bfd28bddc15c899131b4f03cc97f9985dbeac2",
+    "src/pwhelpers.cpp": "2fd7d8d5f699e5af68dfa62b6f07c6ab3a0ee69e1e3d70e8f9e7f616e1205c8d"
+  },
+  "patched_sha256": {
+    "src/encoder.cpp": "1f3c6b44c1ad2a836c9b8e56268a6398b01cb3f61797d143331cde2dc2813b80",
+    "src/pipewirebaseencodedstream.cpp": "5a831e308eb91bc98e1caf5607e4029d727efdf5945c7d1369fe37e71a90d1b0",
+    "src/pipewirebaseencodedstream.h": "a4d6723297b0d58b32fe93b1ffbe6112f6e3784dcf0823b6453099d22f747c1f",
+    "src/pipewireproduce.cpp": "82a6ee19f0d7d16a4cc2bb2ce8ca511a27874c6ecc4dfc1e40e51bcc124d5d78",
+    "src/pipewireproduce_p.h": "fa831509eb2b5ae851aee9b91f6011341e78dd15af468c05b102804a4fd4d060",
+    "src/pipewirerecord.cpp": "3484bfaaf8cc91017f9f8a2378470ca99afe110f4f04f98724ed03ce0e121971",
+    "src/pipewirerecord_p.h": "062ec5ba04e86f0bf5958a41b34dac3e710f9dda030996e08b0b88b8d2992780",
+    "src/pwhelpers.cpp": "d916dad6748abc80326d110a3ff24ef506392a37032f32cc074e74bfa5b5db77"
+  },
+  "patch_sha256": "94d5ef57f702c1624114392bb6c67837e1ffef11e2e850e9ba1d5c58151d7aaf",
+  "verification": {
+    "fixture": "tests/kpipewire/timeline_pause_test",
+    "log": "084-timeline-final.log",
+    "result": "9 passed, 0 failed, 0 skipped",
+    "media": [
+      "one-resume.mp4",
+      "two-resume.mp4",
+      "two-stop-paused-ended-input.mp4",
+      "threaded-paused-stop.mp4"
+    ],
+    "checks": [
+      "production producer/encoder/muxer synthetic A/V",
+      "full decoded video exact 10/20 frames and every 100ms PTS",
+      "compressed audio duration and absent paused-only tones/green frames",
+      "two-input pre/post tones present",
+      "future-tail interval splitting and single-clock pause boundary",
+      "production Base queued acknowledgement and Stop invalidation",
+      "real encoding/output worker queues: paused Stop, pending final packet, production deactivate/destroy/finished, exact decoded frames/audio and thread exit"
+    ],
+    "limits": "Interval mapping cases manually pump encoders; separate paced real-worker case verifies paused Stop drain. Sources are synthetic, not native PipeWire capture; native KDE/devices/GPU remain unverified."
+  },
+  "native_acceptance": "Not verified against a real KDE compositor, devices, hardware encoder or PipeWire capture server",
+  "conservative_resume": "Video render timestamps older than the most recent resume are not re-stamped or replayed; the encoded previous picture remains until fresh timestamped content arrives. Missing video timestamps are rejected. This is not a native freshness guarantee.",
+  "fixture_correction": "Initial first-frame fixture passed a null PipeWireFrameCleanupFunction and crashed. Fixed to use the required ref-counted owned QImage cleanup; production was not relaxed to accept null."
+}

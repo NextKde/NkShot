@@ -2253,3 +2253,35 @@ Display removal invokes the real window handler under that test; no monitor was
 physically unplugged. Real KWin acquisition, non-activation/focus behavior, caller
 exclusion and GPU rendering still require native KDE acceptance. No translation,
 packaging, certificate or security-setting changes are included.
+
+## 084 — Real recording pause/resume and compressed A/V time
+
+Added acknowledged Pause/Resume and always-available Stop to the existing recording
+view and status-item menu. The timer freezes only on the acknowledged Paused state;
+resume continues the same target/output without another started notification.
+Starting/Rendering and outstanding transitions reject invalid toggles, and retired
+menu actions cannot control a later recording. This is separate from playback pause.
+
+The pinned KPipeWire downstream patch gates both video and audio, slices audio
+across historical active intervals, compresses media timestamps and drains accepted
+pre-pause work. A new exported capability is required at compile/link/runtime; stock
+headers and the old same-SONAME runtime were tested and rejected. The existing
+initialize-failure patch remains first in the required patch order.
+
+Final focused app checks passed: five recording CTest targets, 19 actual adapter
+fixture groups, three Core/QML/SNI pause UI variants, the earlier recording-control
+workflow and 18 static checks. Real synthetic x264/AAC MP4s are produced directly by
+the patched producer/encoders/muxer and independently decoded, rather than trimmed
+by a command-line substitute. See [verification and limits](recording-pause.md).
+
+Actual software-window captures: [Paused](screenshots/084-paused.png),
+[dark](screenshots/084-paused-dark.png), and
+[420 × 520 pending transition](screenshots/084-pausing-compact.png). These use a
+controlled test recording platform to exercise real Core/QML/status-item controls;
+they are not screenshots of a successful native desktop recording. No private
+desktop content is present.
+
+Native KDE/device A/V/GPU acceptance remains open. In particular, a static target
+with an old render timestamp is not relabelled after Resume: the previously encoded
+picture may remain until fresh content arrives. Source gating is not device
+permission revocation. Translation remains untouched.

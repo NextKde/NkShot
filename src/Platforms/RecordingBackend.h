@@ -26,6 +26,9 @@ public:
     virtual void setMaxPendingFrames(int) = 0;
     virtual void start() = 0;
     virtual void stop() = 0;
+    virtual bool supportsPause() const { return false; }
+    virtual void pause() {}
+    virtual void resume() {}
 Q_SIGNALS:
     void stateChanged();
     void errorFound(const QString &error);

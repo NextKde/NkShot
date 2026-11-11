@@ -86,6 +86,20 @@ find_package(Wayland REQUIRED COMPONENTS Client)
 find_package(PlasmaWaylandProtocols REQUIRED)
 find_package(LayerShellQt REQUIRED)
 find_package(KPipeWire ${PROJECT_DEP_VERSION} REQUIRED)
+# 084 intentionally requires the downstream A/V timeline-pause contract. The
+# upstream same-SONAME pause() only gates video and must never back this UI.
+include(CheckCXXSourceCompiles)
+set(_nkshot_required_libraries "${CMAKE_REQUIRED_LIBRARIES}")
+set(CMAKE_REQUIRED_LIBRARIES K::KPipeWireRecord)
+unset(NKSHOT_HAS_TIMELINE_PAUSE CACHE)
+check_cxx_source_compiles("#include <PipeWireRecord>
+int main() { PipeWireRecord recorder; return recorder.timelinePauseVersion() < 1; }" NKSHOT_HAS_TIMELINE_PAUSE)
+set(CMAKE_REQUIRED_LIBRARIES "${_nkshot_required_libraries}")
+unset(_nkshot_required_libraries)
+if(NOT NKSHOT_HAS_TIMELINE_PAUSE)
+    message(FATAL_ERROR "NkShot requires KPipeWire with the timeline-pause patch. Apply third_party/patches/kpipewire-initialize-failure.patch then kpipewire-timeline-pause.patch to the pinned source, rebuild the private dependency, and configure again. Upstream video-only pause is not supported.")
+endif()
+
 find_package(PkgConfig REQUIRED)
 
 set_package_properties(KPipeWire PROPERTIES DESCRIPTION

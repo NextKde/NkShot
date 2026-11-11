@@ -258,3 +258,15 @@ For 083 continuous collection, add `NKSHOT_TEST_SCROLL_CONTINUOUS=1` to the
 compact flags apply. This drives the actual checkbox, periodic requests, pause,
 unchanged-frame skip, failed-frame retry and Finish during an outstanding request;
 it does not replace native KDE acquisition acceptance.
+
+## 084 recording pause dependency
+
+Apply `kpipewire-initialize-failure.patch` then
+`kpipewire-timeline-pause.patch` to pinned KPipeWire
+`f30b39c53092673d136660c8deaf24d3935723eb`; retain both patches. Rebuild
+the private dependency before configuring NkShot. Stock headers fail the CMake
+compile/link capability check; a stock same-SONAME runtime fails symbol resolution
+rather than silently using video-only pause. See [contract](recording-pause.md) and
+[`tests/kpipewire/README.md`](../tests/kpipewire/README.md) for the standalone real
+encoder/muxer regression fixture and exact isolated commands. No global library
+replacement is required. Native KDE validation remains separate.

@@ -22,8 +22,8 @@ namespace {
 using Recorder = NkShot::RecordingRecorder;
 using Prep = NkShot::RecordingPreparation;
 struct Observations {
-    int outputs=0,outputTargets=0,streams=0,starts=0,stops=0,retired=0;
-    bool synchronousError=false,autoCreated=false,writeOnStart=false,writeOk=false;
+    int outputs=0,outputTargets=0,streams=0,starts=0,stops=0,retired=0,pauses=0,resumes=0;
+    bool synchronousError=false,autoCreated=false,writeOnStart=false,writeOk=false,pauseSupported=true;
     QByteArray bytes=QByteArrayLiteral("synthetic controlled QFile partial bytes 077");
     QByteArray destructorTail;
     bool destructorTailWritten=false,destructorFilePresent=false;
@@ -49,6 +49,9 @@ public:
     void setMaxPendingFrames(int) override {}
     void start() override {++data->starts;if(data->writeOnStart){writer.setFileName(data->output);data->writeOk=writer.open(QIODevice::WriteOnly|QIODevice::Truncate)&&writer.write(data->bytes)==data->bytes.size()&&writer.flush();}if(data->synchronousError){Q_EMIT errorFound(QStringLiteral("synthetic start failure"));report(PipeWireBaseEncodedStream::Idle);}}
     void stop() override {++data->stops;}
+    bool supportsPause() const override {return data->pauseSupported;}
+    void pause() override {++data->pauses;}
+    void resume() override {++data->resumes;}
     bool append(const QByteArray &tail) {return writer.isOpen()&&writer.write(tail)==tail.size()&&writer.flush();}
     void report(State state) {if(state==PipeWireBaseEncodedStream::Idle)writer.close();current=state;Q_EMIT stateChanged();}
     uint node=0;
@@ -423,6 +426,68 @@ bool runRecordingAdapterChecks(QJsonObject *report) {
         f.adapter->cancelPendingRecording();f.recorder->report(PipeWireBaseEncodedStream::Idle);
         CHECK_ADAPTER(QTest::qWaitFor([&]{return f.adapter->readyForRecording();},1000)&&saved.isEmpty()&&readBytes(output)==f.data->bytes,"new explicit partial never claimed by owned cleanup");
         passed.append(QStringLiteral("new explicit output partial survives canceled producer Idle"));
+    }
+    {
+        Fixture f;CHECK_ADAPTER(f.initialized(),"pause adapter initialized");
+        f.data->writeOnStart=true;
+        const auto output=QUrl::fromLocalFile(folder.filePath(QStringLiteral("pause-resume-084.mp4")));
+        QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+        f.adapter->startRecording(output,VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return bool(f.caster->source);},1000),"pause test source selected");
+        f.adapter->pauseRecording();f.adapter->resumeRecording();
+        CHECK_ADAPTER(f.data->pauses==0&&f.data->resumes==0&&!f.adapter->pausePending(),"Starting refuses pause/resume");
+        Q_EMIT f.caster->source->created(42);f.recorder->report(PipeWireBaseEncodedStream::Recording);
+        CHECK_ADAPTER(f.adapter->supportsPause()&&f.adapter->isRecording(),"pause supported only after real recorder facade initialization");
+        f.data->pauseSupported=false;f.adapter->pauseRecording();
+        CHECK_ADAPTER(f.data->pauses==0&&!f.adapter->pausePending(),"unsupported producer refuses pause");
+        f.data->pauseSupported=true;QTest::qWait(120);
+        f.adapter->pauseRecording();f.adapter->pauseRecording();f.adapter->resumeRecording();
+        CHECK_ADAPTER(f.data->pauses==1&&f.data->resumes==0&&f.adapter->pausePending()&&!f.adapter->isPaused(),"pause request waits for producer ack and rejects duplicates");
+        bool publishedPaused=false;
+        const auto pauseObserver=QObject::connect(f.adapter.get(),&VideoPlatform::pausePendingChanged,f.adapter.get(),[&]{
+            if(!f.adapter->pausePending()) publishedPaused=f.adapter->isPaused();
+        });
+        f.recorder->report(PipeWireBaseEncodedStream::Paused);
+        QObject::disconnect(pauseObserver);
+        CHECK_ADAPTER(publishedPaused,"pause pending completion publishes the already-committed state");
+        const auto pausedTime=f.adapter->recordedTime();
+        CHECK_ADAPTER(f.adapter->isRecording()&&f.adapter->isPaused()&&!f.adapter->pausePending()
+            &&f.adapter->recordingMode()==VideoPlatform::Region&&f.adapter->preparation()->phase()==Prep::Recording,"Paused retains active attempt, mode and Stop semantics");
+        CHECK_ADAPTER(pausedTime>=100,"pause acknowledges elapsed active segment");
+        QTest::qWait(1100);CHECK_ADAPTER(f.adapter->recordedTime()==pausedTime,"Paused clock excludes waiting wall time");
+        f.adapter->startRecording(QUrl::fromLocalFile(folder.filePath(QStringLiteral("must-not-start-paused.mp4"))),VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+        CHECK_ADAPTER(f.data->streams==1&&f.data->starts==1&&!f.adapter->readyForRecording(),"Paused refuses new recording");
+        f.adapter->resumeRecording();f.adapter->resumeRecording();f.adapter->pauseRecording();
+        CHECK_ADAPTER(f.data->resumes==1&&f.data->pauses==1&&f.adapter->pausePending()&&f.adapter->isPaused(),"resume request does not fabricate running state");
+        f.recorder->report(PipeWireBaseEncodedStream::Recording);
+        CHECK_ADAPTER(!f.adapter->isPaused()&&!f.adapter->pausePending()&&f.adapter->isRecording()
+            &&f.adapter->recordedTime()==pausedTime&&f.adapter->preparation()->phase()==Prep::Recording,"resume ack preserves preparation and accumulated time");
+        QTest::qWait(120);f.adapter->finishRecording();f.recorder->report(PipeWireBaseEncodedStream::Rendering);
+        CHECK_ADAPTER(f.adapter->recordedTime()>=pausedTime+100,"resumed active time accumulates instead of resetting");
+        f.adapter->pauseRecording();f.adapter->resumeRecording();
+        CHECK_ADAPTER(f.data->pauses==1&&f.data->resumes==1&&!f.adapter->pausePending(),"Rendering refuses pause/resume");
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);
+        CHECK_ADAPTER(saved.size()==1&&saved.first().first().toUrl()==output&&readBytes(output.toLocalFile())==f.data->bytes,"pause/resume successful drain saves existing bytes exactly once");
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);CHECK_ADAPTER(saved.size()==1,"pause resume duplicate Idle not saved twice");
+        passed.append(QStringLiteral("real-adapter pause/resume acknowledgements, frozen cumulative active clock, no new start, unsupported/Starting/Rendering rejection"));
+    }
+    {
+        Fixture f;CHECK_ADAPTER(f.initialized(),"Paused Stop adapter initialized");f.data->writeOnStart=true;
+        QSignalSpy saved(f.adapter.get(),&VideoPlatform::recordingSaved);
+        const auto output=QUrl::fromLocalFile(folder.filePath(QStringLiteral("paused-stop-084.mp4")));
+        f.adapter->startRecording(output,VideoPlatform::Region,{{QStringLiteral("rect"),rect}},false);
+        CHECK_ADAPTER(QTest::qWaitFor([&]{return bool(f.caster->source);},1000),"Paused Stop source prepared");
+        Q_EMIT f.caster->source->created(42);f.recorder->report(PipeWireBaseEncodedStream::Recording);
+        f.adapter->pauseRecording();f.recorder->report(PipeWireBaseEncodedStream::Paused);
+        const auto stoppedTime=f.adapter->recordedTime();
+        f.adapter->resumeRecording();CHECK_ADAPTER(f.adapter->pausePending(),"Paused Stop includes pending resume");
+        f.adapter->finishRecording();
+        CHECK_ADAPTER(f.data->stops>0&&!f.adapter->pausePending(),"Stop remains available during pending resume");
+        f.recorder->report(PipeWireBaseEncodedStream::Recording);
+        CHECK_ADAPTER(f.adapter->isPaused()&&f.adapter->recordedTime()==stoppedTime,"late resume ack cannot revive stopped recording");
+        f.recorder->report(PipeWireBaseEncodedStream::Idle);
+        CHECK_ADAPTER(saved.size()==1&&f.adapter->readyForRecording()&&readBytes(output.toLocalFile())==f.data->bytes,"Paused direct Stop Idle retains and saves output once");
+        passed.append(QStringLiteral("real-adapter Stop while Paused/pending resume ignores late ack and saves once on Idle"));
     }
     result.insert(QStringLiteral("passed"),true);result.insert(QStringLiteral("checks"),passed);result.insert(QStringLiteral("nativeAcceptance"),false);result.insert(QStringLiteral("watchdog30sExecuted"),false);result.insert(QStringLiteral("watchdogInjected40msExecuted"),true);if(report)*report=result;return true;
 #undef CHECK_ADAPTER

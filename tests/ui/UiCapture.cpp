@@ -1236,7 +1236,7 @@ void installUiCaptureHook(QApplication &application)
                 qInfo()<<"Translation UI"<<ok<<failure;
                 application.exit(ok ? 0 : 228);return;
             }
-            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_CONTROLS")) {
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_CONTROLS") || qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_PAUSE")) {
                 QString failure; const bool ok=RecordingControlsUiChecks::run(application,destination,&failure);
                 qInfo()<<"Recording controls UI"<<ok<<failure;
                 application.exit(ok?0:227); return;

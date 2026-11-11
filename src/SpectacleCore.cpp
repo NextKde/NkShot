@@ -79,13 +79,15 @@ SpectacleCore *SpectacleCore::s_self = nullptr;
 static std::unique_ptr<KStatusNotifierItem> s_systemTrayIcon;
 // A tray activation can synchronously cancel preparation. Do not destroy the
 // notifier while its own DBus/activation method is still on the stack.
-static void retireRecordingTray(QObject *owner, QPointer<QAction> &action)
+static void retireRecordingTray(QObject *owner, QPointer<QAction> &action, QPointer<QAction> &pauseAction)
 {
     if(!s_systemTrayIcon) return;
     auto item=s_systemTrayIcon.release();
     item->disconnect(owner);
     if(action) action->disconnect(owner);
     action.clear();
+    if(pauseAction) pauseAction->disconnect(owner);
+    pauseAction.clear();
     for(auto movie:item->findChildren<QMovie *>()) { movie->disconnect();movie->stop(); }
     item->setStatus(KStatusNotifierItem::Passive);
     item->deleteLater();
@@ -341,129 +343,12 @@ SpectacleCore::SpectacleCore(QObject *parent)
         }
     });
     connect(videoPlatform->preparation(), &NkShot::RecordingPreparation::changed, this, &SpectacleCore::updateRecordingPreparationUi);
-    connect(videoPlatform, &VideoPlatform::recordingStateChanged, this, [this, videoPlatform](VideoPlatform::RecordingState state) {
-        if (state == VideoPlatform::RecordingState::Recording) {
-            m_recordingRestoreActive=false;
-            static const auto recordingIcon = u":/icons/256-status-media-recording.webp"_s;
-            static const auto recordingStartedIcon = u":/icons/256-status-media-recording-started.webp"_s;
-            static const auto recordingPulseIcon = u":/icons/256-status-media-recording-pulse.webp"_s;
-            ensureRecordingTray();
-            m_recordingTrayAction->setText(i18nc("@action", "Stop recording"));
-            m_recordingTrayAction->setEnabled(true);
-            s_systemTrayIcon->setToolTipTitle(videoPlatform->isRecordingAudio()
-                                                  ? i18nc("@info:tooltip title for recording tray icon", "NkShot is Recording with Sound")
-                                                  : i18nc("@info:tooltip title for recording tray icon", "NkShot is Recording"));
-
-            const auto messageTitle = videoPlatform->isRecordingAudio() ? i18nc("recording notification title", "NkShot is Recording with Sound")
-                                                                        : i18nc("recording notification title", "NkShot is Recording");
-            auto getSimpleDefaultShortcut = [] {
-                const auto shortcuts = KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordRegionAction());
-                if (shortcuts.contains(QKeySequence{Qt::META | Qt::Key_R})) {
-                    return QKeySequence{Qt::META | Qt::Key_R};
-                }
-                return QKeySequence{};
-            };
-            auto getShortcut = [](const auto &list) {
-                auto it = std::find_if(list.cbegin(), list.cend(), [](const QKeySequence &shortcut) {
-                    return !shortcut.isEmpty();
-                });
-                return it != list.cend() ? *it : QKeySequence{};
-            };
-            QKeySequence stopShortcut = getSimpleDefaultShortcut();
-            if (stopShortcut.isEmpty()) {
-                auto mode = m_videoPlatform->recordingMode();
-                if (mode == VideoPlatform::Screen) {
-                    stopShortcut = getShortcut(KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordScreenAction()));
-                } else if (mode == VideoPlatform::Window) {
-                    stopShortcut = getShortcut(KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordWindowAction()));
-                } else if (mode == VideoPlatform::Region) {
-                    stopShortcut = getShortcut(KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordRegionAction()));
-                }
-            }
-            const auto messageBody = stopShortcut.isEmpty()
-                ? i18nc("recording notification message without shortcut", "To finish the recording, click the pulsing red System Tray icon.")
-                : xi18nc("recording notification message with shortcut", "To finish the recording, click the pulsing red System Tray icon or press <shortcut>%1</shortcut>.", stopShortcut.toString(QKeySequence::NativeText));
-            auto notification = new KNotification(u"notification"_s, KNotification::CloseOnTimeout | KNotification::DefaultEvent, this);
-            notification->setTitle(messageTitle);
-            notification->setText(messageBody);
-            notification->setIconName(u"media-record"_s);
-            // Whether the notification is transient and should not be kept in history.
-            notification->setHint(u"transient"_s, true);
-            // Can't set notification duration with KNotification directly.
-            // Also see https://bugs.kde.org/show_bug.cgi?id=503838
-            QTimer::singleShot(4000, notification, &KNotification::close);
-            connect(m_videoPlatform.get(), &VideoPlatform::recordingStateChanged, notification, [notification](VideoPlatform::RecordingState state) {
-                if (state != VideoPlatform::RecordingState::Recording) {
-                    notification->close();
-                }
-            });
-            notification->sendEvent();
-            if (!QMovie::supportedFormats().contains("webp"_ba)) {
-                const auto messageTitle = i18nc("missing webp support notification title", "WebP support is missing.");
-                const auto messageBody = i18nc("missing webp support notification message", "Please install Qt Image Formats to get animated system tray icons for NkShot, and then report this packaging issue to your distributor.");
-                s_systemTrayIcon->showMessage(messageTitle, messageBody, u"dialog-warning"_s, 4000);
-                s_systemTrayIcon->setIconByName(u"media-record"_s);
-                return;
-            }
-            static const auto initPulseAnimation = [] {
-                auto animation = new QMovie(recordingPulseIcon, {}, s_systemTrayIcon.get());
-                animation->setCacheMode(QMovie::CacheAll);
-                connect(animation, &QMovie::frameChanged, animation, [animation] {
-                    s_systemTrayIcon->setIconByPixmap(animation->currentPixmap());
-                });
-                // We periodically switch to a static image instead of having a period in the
-                // animation where nothing happens to be a bit more efficient.
-                // NOTE: If QMovie::finished isn't working,
-                // you probably edited the icon and forgot to set the loop count.
-                connect(animation, &QMovie::finished, animation, [animation] {
-                    animation->stop();
-                    static const auto recordingPixmap = QPixmap{recordingIcon};
-                    s_systemTrayIcon->setIconByPixmap(recordingPixmap);
-                    const auto animationDuration = animation->nextFrameDelay() * animation->frameCount() / (animation->speed() / 100.0);
-                    QTimer::singleShot(animationDuration / 2, animation, &QMovie::start);
-                });
-                animation->start();
-            };
-            auto startedAnimation = new QMovie(recordingStartedIcon, {}, s_systemTrayIcon.get());
-            startedAnimation->setCacheMode(QMovie::CacheAll);
-            connect(startedAnimation, &QMovie::frameChanged, startedAnimation, [startedAnimation] {
-                s_systemTrayIcon->setIconByPixmap(startedAnimation->currentPixmap());
-            });
-            connect(startedAnimation, &QMovie::finished, startedAnimation, [startedAnimation] {
-                startedAnimation->stop();
-                startedAnimation->deleteLater();
-                initPulseAnimation();
-            });
-            startedAnimation->start();
-        } else if (state == VideoPlatform::RecordingState::Rendering && s_systemTrayIcon) {
-            const auto messageTitle = i18nc("recording notification title", "NkShot is Finishing the Recording");
-            const auto messageBody = i18nc("recording notification message", "Please wait");
-            s_systemTrayIcon->setToolTipTitle(i18nc("@info:tooltip title for rendering tray icon", //
-                                                    "NkShot is Finishing the Recording"));
-            m_recordingTrayAction->setText(i18nc("@action", "Finishing recording…"));
-            m_recordingTrayAction->setEnabled(false);
-            auto subtitle = i18nc("@info:tooltip subtitle for rendering tray icon",
-                                  "Time recorded: %1\nPlease wait while the recording is saved.", recordedTime());
-            auto notification = new KNotification(u"notification"_s, KNotification::CloseOnTimeout | KNotification::DefaultEvent, this);
-            notification->setTitle(messageTitle);
-            notification->setText(messageBody);
-            notification->setIconName(u"process-working-symbolic"_s);
-            notification->setHint(u"transient"_s, true);
-            connect(m_videoPlatform.get(), &VideoPlatform::recordingStateChanged, notification, [notification](VideoPlatform::RecordingState state) {
-                if (state != VideoPlatform::RecordingState::Rendering) {
-                    notification->close();
-                }
-            });
-            notification->sendEvent();
-            s_systemTrayIcon->setToolTipSubTitle(subtitle);
-        } else {
-            retireRecordingTray(this,m_recordingTrayAction);
-            m_captureWindows.clear();
-        }
-    });
+    connect(videoPlatform, &VideoPlatform::recordingStateChanged, this, &SpectacleCore::updateRecordingStateUi);
+    connect(videoPlatform,&VideoPlatform::pausePendingChanged,this,&SpectacleCore::updateRecordingPauseTray);
+    connect(videoPlatform,&VideoPlatform::pauseSupportedChanged,this,&SpectacleCore::updateRecordingPauseTray);
     connect(videoPlatform, &VideoPlatform::recordedTimeChanged, this, [this, videoPlatform] {
         Q_EMIT recordedTimeChanged();
-        if (!s_systemTrayIcon || videoPlatform->recordingState() != VideoPlatform::RecordingState::Recording) {
+        if (!s_systemTrayIcon || !videoPlatform->isRecording()) {
             return;
         }
         auto subtitle = i18nc("@info:tooltip subtitle for recording tray icon", //
@@ -1847,8 +1732,27 @@ void SpectacleCore::ensureRecordingTray()
     s_systemTrayIcon->setIconByName(QStringLiteral("media-record"));
     m_recordingTrayAction=s_systemTrayIcon->contextMenu()->addAction(i18nc("@action", "Cancel recording start"));
     m_recordingTrayAction->setObjectName(QStringLiteral("nkshotCancelRecordingStart"));
+    m_recordingPauseAction=s_systemTrayIcon->contextMenu()->addAction(i18nc("@action", "Pause recording"));
+    m_recordingPauseAction->setObjectName(QStringLiteral("nkshotPauseRecording"));
+    m_recordingPauseAction->setVisible(false);
+    connect(m_recordingPauseAction,&QAction::triggered,this,&SpectacleCore::toggleRecordingPause);
     connect(m_recordingTrayAction,&QAction::triggered,this,&SpectacleCore::activateRecordingTray);
     connect(s_systemTrayIcon.get(),&KStatusNotifierItem::activateRequested,this,&SpectacleCore::activateRecordingTray);
+}
+
+void SpectacleCore::toggleRecordingPause()
+{
+    if(m_videoPlatform->isPaused()) m_videoPlatform->resumeRecording();
+    else m_videoPlatform->pauseRecording();
+}
+void SpectacleCore::updateRecordingPauseTray()
+{
+    if(!s_systemTrayIcon || !m_recordingPauseAction)return;
+    m_recordingPauseAction->setVisible(m_videoPlatform->isRecording());
+    m_recordingPauseAction->setEnabled(m_videoPlatform->supportsPause() && !m_videoPlatform->pausePending());
+    m_recordingPauseAction->setText(m_videoPlatform->pausePending()
+        ? (m_videoPlatform->isPaused() ? i18nc("@action", "Resuming…") : i18nc("@action", "Pausing…"))
+        : (m_videoPlatform->isPaused() ? i18nc("@action", "Resume recording") : i18nc("@action", "Pause recording")));
 }
 
 void SpectacleCore::activateRecordingTray()
@@ -1866,7 +1770,7 @@ void SpectacleCore::updateRecordingPreparationTray()
     const auto preparation=m_videoPlatform->preparation();
     const auto phase=preparation->phase();
     if(phase==Prep::Recording) return; // actual recorder state updates existing item
-    if(phase==Prep::Idle) { retireRecordingTray(this,m_recordingTrayAction); return; }
+    if(phase==Prep::Idle) { retireRecordingTray(this,m_recordingTrayAction,m_recordingPauseAction); return; }
     ensureRecordingTray();
     m_recordingTrayAction->setText(i18nc("@action", "Cancel recording start"));
     m_recordingTrayAction->setEnabled(true);
@@ -1876,3 +1780,141 @@ void SpectacleCore::updateRecordingPreparationTray()
     s_systemTrayIcon->setToolTipTitle(title);
     s_systemTrayIcon->setToolTipSubTitle(i18nc("@info:tooltip", "Click to cancel this recording attempt."));
 }
+
+void SpectacleCore::updateRecordingStateUi(VideoPlatform::RecordingState state)
+{
+    auto videoPlatform=m_videoPlatform.get();
+        if (state == VideoPlatform::RecordingState::Paused) {
+            ensureRecordingTray();
+            for(auto movie:s_systemTrayIcon->findChildren<QMovie *>()) { movie->disconnect(); movie->stop(); movie->deleteLater(); }
+            s_systemTrayIcon->setIconByName(QStringLiteral("media-playback-pause"));
+            s_systemTrayIcon->setToolTipTitle(i18nc("@info:tooltip", "Recording paused"));
+            s_systemTrayIcon->setToolTipSubTitle(i18nc("@info:tooltip", "Time recorded: %1\nClick to finish recording",recordedTime()));
+            updateRecordingPauseTray();
+        } else if (state == VideoPlatform::RecordingState::Recording) {
+            const bool resumed=s_systemTrayIcon && s_systemTrayIcon->property("nkshotWasRecording").toBool();
+            m_recordingRestoreActive=false;
+            static const auto recordingIcon = u":/icons/256-status-media-recording.webp"_s;
+            static const auto recordingStartedIcon = u":/icons/256-status-media-recording-started.webp"_s;
+            static const auto recordingPulseIcon = u":/icons/256-status-media-recording-pulse.webp"_s;
+            ensureRecordingTray();
+            m_recordingTrayAction->setText(i18nc("@action", "Stop recording"));
+            m_recordingTrayAction->setEnabled(true);
+            s_systemTrayIcon->setToolTipTitle(videoPlatform->isRecordingAudio()
+                                                  ? i18nc("@info:tooltip title for recording tray icon", "NkShot is Recording with Sound")
+                                                  : i18nc("@info:tooltip title for recording tray icon", "NkShot is Recording"));
+
+            s_systemTrayIcon->setProperty("nkshotWasRecording",true);
+            updateRecordingPauseTray();
+            if(resumed) {
+                s_systemTrayIcon->setIconByName(QStringLiteral("media-record"));
+                return; // Resuming is not a new recording/notification.
+            }
+            const auto messageTitle = videoPlatform->isRecordingAudio() ? i18nc("recording notification title", "NkShot is Recording with Sound")
+                                                                        : i18nc("recording notification title", "NkShot is Recording");
+            auto getSimpleDefaultShortcut = [] {
+                const auto shortcuts = KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordRegionAction());
+                if (shortcuts.contains(QKeySequence{Qt::META | Qt::Key_R})) {
+                    return QKeySequence{Qt::META | Qt::Key_R};
+                }
+                return QKeySequence{};
+            };
+            auto getShortcut = [](const auto &list) {
+                auto it = std::find_if(list.cbegin(), list.cend(), [](const QKeySequence &shortcut) {
+                    return !shortcut.isEmpty();
+                });
+                return it != list.cend() ? *it : QKeySequence{};
+            };
+            QKeySequence stopShortcut = getSimpleDefaultShortcut();
+            if (stopShortcut.isEmpty()) {
+                auto mode = m_videoPlatform->recordingMode();
+                if (mode == VideoPlatform::Screen) {
+                    stopShortcut = getShortcut(KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordScreenAction()));
+                } else if (mode == VideoPlatform::Window) {
+                    stopShortcut = getShortcut(KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordWindowAction()));
+                } else if (mode == VideoPlatform::Region) {
+                    stopShortcut = getShortcut(KGlobalAccel::self()->shortcut(ShortcutActions::self()->recordRegionAction()));
+                }
+            }
+            const auto messageBody = stopShortcut.isEmpty()
+                ? i18nc("recording notification message without shortcut", "To finish the recording, click the pulsing red System Tray icon.")
+                : xi18nc("recording notification message with shortcut", "To finish the recording, click the pulsing red System Tray icon or press <shortcut>%1</shortcut>.", stopShortcut.toString(QKeySequence::NativeText));
+            auto notification = new KNotification(u"notification"_s, KNotification::CloseOnTimeout | KNotification::DefaultEvent, this);
+            notification->setTitle(messageTitle);
+            notification->setText(messageBody);
+            notification->setIconName(u"media-record"_s);
+            // Whether the notification is transient and should not be kept in history.
+            notification->setHint(u"transient"_s, true);
+            // Can't set notification duration with KNotification directly.
+            // Also see https://bugs.kde.org/show_bug.cgi?id=503838
+            QTimer::singleShot(4000, notification, &KNotification::close);
+            connect(m_videoPlatform.get(), &VideoPlatform::recordingStateChanged, notification, [notification](VideoPlatform::RecordingState state) {
+                if (state != VideoPlatform::RecordingState::Recording) {
+                    notification->close();
+                }
+            });
+            notification->sendEvent();
+            if (!QMovie::supportedFormats().contains("webp"_ba)) {
+                const auto messageTitle = i18nc("missing webp support notification title", "WebP support is missing.");
+                const auto messageBody = i18nc("missing webp support notification message", "Please install Qt Image Formats to get animated system tray icons for NkShot, and then report this packaging issue to your distributor.");
+                s_systemTrayIcon->showMessage(messageTitle, messageBody, u"dialog-warning"_s, 4000);
+                s_systemTrayIcon->setIconByName(u"media-record"_s);
+                return;
+            }
+            static const auto initPulseAnimation = [] {
+                auto animation = new QMovie(recordingPulseIcon, {}, s_systemTrayIcon.get());
+                animation->setCacheMode(QMovie::CacheAll);
+                connect(animation, &QMovie::frameChanged, animation, [animation] {
+                    s_systemTrayIcon->setIconByPixmap(animation->currentPixmap());
+                });
+                // We periodically switch to a static image instead of having a period in the
+                // animation where nothing happens to be a bit more efficient.
+                // NOTE: If QMovie::finished isn't working,
+                // you probably edited the icon and forgot to set the loop count.
+                connect(animation, &QMovie::finished, animation, [animation] {
+                    animation->stop();
+                    static const auto recordingPixmap = QPixmap{recordingIcon};
+                    s_systemTrayIcon->setIconByPixmap(recordingPixmap);
+                    const auto animationDuration = animation->nextFrameDelay() * animation->frameCount() / (animation->speed() / 100.0);
+                    QTimer::singleShot(animationDuration / 2, animation, &QMovie::start);
+                });
+                animation->start();
+            };
+            auto startedAnimation = new QMovie(recordingStartedIcon, {}, s_systemTrayIcon.get());
+            startedAnimation->setCacheMode(QMovie::CacheAll);
+            connect(startedAnimation, &QMovie::frameChanged, startedAnimation, [startedAnimation] {
+                s_systemTrayIcon->setIconByPixmap(startedAnimation->currentPixmap());
+            });
+            connect(startedAnimation, &QMovie::finished, startedAnimation, [startedAnimation] {
+                startedAnimation->stop();
+                startedAnimation->deleteLater();
+                initPulseAnimation();
+            });
+            startedAnimation->start();
+        } else if (state == VideoPlatform::RecordingState::Rendering && s_systemTrayIcon) {
+            updateRecordingPauseTray();
+            const auto messageTitle = i18nc("recording notification title", "NkShot is Finishing the Recording");
+            const auto messageBody = i18nc("recording notification message", "Please wait");
+            s_systemTrayIcon->setToolTipTitle(i18nc("@info:tooltip title for rendering tray icon", //
+                                                    "NkShot is Finishing the Recording"));
+            m_recordingTrayAction->setText(i18nc("@action", "Finishing recording…"));
+            m_recordingTrayAction->setEnabled(false);
+            auto subtitle = i18nc("@info:tooltip subtitle for rendering tray icon",
+                                  "Time recorded: %1\nPlease wait while the recording is saved.", recordedTime());
+            auto notification = new KNotification(u"notification"_s, KNotification::CloseOnTimeout | KNotification::DefaultEvent, this);
+            notification->setTitle(messageTitle);
+            notification->setText(messageBody);
+            notification->setIconName(u"process-working-symbolic"_s);
+            notification->setHint(u"transient"_s, true);
+            connect(m_videoPlatform.get(), &VideoPlatform::recordingStateChanged, notification, [notification](VideoPlatform::RecordingState state) {
+                if (state != VideoPlatform::RecordingState::Rendering) {
+                    notification->close();
+                }
+            });
+            notification->sendEvent();
+            s_systemTrayIcon->setToolTipSubTitle(subtitle);
+        } else {
+            retireRecordingTray(this,m_recordingTrayAction,m_recordingPauseAction);
+            m_captureWindows.clear();
+        }
+ }

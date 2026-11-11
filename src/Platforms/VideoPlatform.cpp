@@ -17,7 +17,7 @@ VideoPlatform::VideoPlatform(QObject *parent)
 
 bool VideoPlatform::isRecording() const
 {
-    return m_recordingState == RecordingState::Recording;
+    return m_recordingState == RecordingState::Recording || m_recordingState == RecordingState::Paused;
 }
 
 qint64 VideoPlatform::recordedTime() const
@@ -28,7 +28,7 @@ qint64 VideoPlatform::recordedTime() const
 void VideoPlatform::timerEvent(QTimerEvent *event)
 {
     if (event->timerId() == m_basicTimer.timerId()) {
-        m_recordedTime = m_elapsedTimer.isValid() ? m_elapsedTimer.elapsed() : 0;
+        m_recordedTime = m_accumulatedTime + (m_elapsedTimer.isValid() ? m_elapsedTimer.elapsed() : 0);
         Q_EMIT recordedTimeChanged();
     }
 }
@@ -86,23 +86,26 @@ void VideoPlatform::setRecordingState(RecordingState state)
         return;
     }
 
-    m_recordingState = state;
+    const auto previous = m_recordingState;
+    if (state == RecordingState::Paused && previous != RecordingState::Recording) {
+        return;
+    }
+    // Commit the just-finished active segment once. Wall time spent paused is
+    // never added, and a resumed Recording acknowledgement starts a new segment.
+    if (previous == RecordingState::Recording && m_elapsedTimer.isValid()) {
+        m_accumulatedTime += m_elapsedTimer.elapsed();
+    }
+    m_elapsedTimer.invalidate();
+    m_basicTimer.stop();
     if (state == RecordingState::NotRecording) {
-        m_recordedTime = 0;
-        m_elapsedTimer.invalidate();
-        m_basicTimer.stop();
+        m_accumulatedTime = 0;
     } else if (state == RecordingState::Recording) {
-        m_recordedTime = 0;
+        if (previous != RecordingState::Paused) m_accumulatedTime = 0;
         m_elapsedTimer.start();
         m_basicTimer.start(1000, Qt::PreciseTimer, this);
-    } else {
-        if (m_elapsedTimer.isValid()) {
-            m_recordedTime = m_elapsedTimer.elapsed();
-        }
-        m_elapsedTimer.invalidate();
-        m_basicTimer.stop();
     }
-    if (state != RecordingState::Recording) {
+    m_recordedTime = m_accumulatedTime;
+    if (state != RecordingState::Recording && state != RecordingState::Paused) {
         setRecordingMode(NoRecordingModes);
     }
     m_recordingState = state;
@@ -131,5 +134,5 @@ void VideoPlatform::cancelPendingRecording()
 bool VideoPlatform::readyForRecording() const
 {
     return m_preparation.phase()==NkShot::RecordingPreparation::Idle
-        && m_recordingState!=RecordingState::Recording && m_recordingState!=RecordingState::Rendering;
+        && !isRecording() && m_recordingState!=RecordingState::Rendering;
 }
