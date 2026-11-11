@@ -57,7 +57,7 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
     setResizeMode(SizeRootObjectToView); setMinimumSize({360,260}); resize(460,300);
     for(auto screen:QGuiApplication::screens()) {m_screens.append(screen);m_outputs.append(screen->name().isEmpty()?i18nc("@item","Display %1",m_screens.size()):screen->name());}
     if(!m_screens.isEmpty()) m_screen=m_screens.first();
-    connect(qGuiApp,&QGuiApplication::screenRemoved,this,[this](QScreen *screen){if(screen==m_screen) cancelPreview();});
+    connect(qGuiApp,&QGuiApplication::screenRemoved,this,&ScrollCaptureWindow::handleScreenRemoved);
     static quint64 nextPreview = 0;
     m_providerId=QStringLiteral("nkshotscroll%1").arg(++nextPreview);
     m_previewProvider=new ScrollPreviewProvider;
@@ -89,16 +89,38 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
             :i18nc("@info","Unavailable: safe window exclusion requires KWin ScreenShot2 API 5 or later. No delay-based fallback is used."));
     });
 }
+void ScrollCaptureWindow::handleScreenRemoved(QScreen *screen)
+{
+    if(screen!=m_screen)return;
+    if(m_phase!=2) { cancelPreview(); return; }
+    m_controller->setCollecting(false);
+    m_available=false;
+    setStatus(i18nc("@info","The selected display was removed. Collection stopped; accepted frames are kept. Finish or cancel this session."));
+}
 void ScrollCaptureWindow::bindController()
 {
     connect(m_controller,&ScrollCaptureController::stateChanged,this,&ScrollCaptureWindow::changed);
+    connect(m_controller,&ScrollCaptureController::collectingChanged,this,[this]{
+        if(collecting()) {
+            m_retryFrame=false;
+            setStatus(i18nc("@info","Collecting while you scroll. Unchanged frames are skipped. Turn off collection to pause."));
+        } else {
+            setStatus(frameCount()>=16 ? i18nc("@info","The 16-frame limit was reached. Inspect the result and choose Finish.")
+                                      : i18nc("@info","Collection paused. Accepted frames are kept; inspect, retry, or finish."));
+        }
+    });
+    connect(m_controller,&ScrollCaptureController::frameSkipped,this,[this]{
+        setStatus(i18nc("@info","Waiting for new content. Scroll the target yourself; collection does not scroll for you."));
+    });
     connect(m_controller,&ScrollCaptureController::failed,this,[this](const QString &reason){
         m_retryFrame=true;
         setStatus(i18nc("@info","%1 Accepted frames are kept. Adjust the scroll position and retry this frame.",reason));
     });
     connect(m_controller,&ScrollCaptureController::frameAccepted,this,[this](int count){
         m_retryFrame=false; updatePreview();
-        setStatus(i18ncp("@info","%1 frame accepted. Scroll the target, then capture next.","%1 frames accepted. Scroll the target, then capture next.",count));
+        if(count>=16) setStatus(i18nc("@info","The 16-frame limit was reached. Inspect the result and choose Finish."));
+        else if(collecting()) setStatus(i18ncp("@info","%1 frame accepted. Keep scrolling; collection is on.","%1 frames accepted. Keep scrolling; collection is on.",count));
+        else setStatus(i18ncp("@info","%1 frame accepted. Scroll the target, then capture next.","%1 frames accepted. Scroll the target, then capture next.",count));
     });
     connect(m_controller,&ScrollCaptureController::resultReady,this,[this](const QImage &image){
         m_result=image; showResult();
@@ -186,9 +208,13 @@ void ScrollCaptureWindow::acceptRegion(const QRectF &local)
     setStatus(i18nc("@info","Capture the first frame, then scroll the target yourself. Finish creates a separate image; the original stays unchanged."));
     show();raise();requestActivate();
 }
+void ScrollCaptureWindow::setCollecting(bool enabled)
+{
+    if(m_phase==2 && (!enabled || m_available)) m_controller->setCollecting(enabled);
+}
 void ScrollCaptureWindow::captureNext()
 {
-    if(m_phase==2 && m_controller->captureNext()) setStatus(i18nc("@info","Capturing with compositor window exclusion…"));
+    if(m_phase==2 && !collecting() && m_controller->captureNext()) setStatus(i18nc("@info","Capturing with compositor window exclusion…"));
 }
 void ScrollCaptureWindow::showResult()
 {
@@ -198,7 +224,7 @@ void ScrollCaptureWindow::showResult()
     }
     close();pin->show();
 }
-void ScrollCaptureWindow::finishCapture() {if(m_phase==2) {if(!m_result.isNull()) showResult();else m_controller->finish();}}
+void ScrollCaptureWindow::finishCapture() {if(m_phase==2) {m_controller->setCollecting(false);if(!m_result.isNull()) showResult();else m_controller->finish();}}
 void ScrollCaptureWindow::restoreWindows() {for(const auto &entry:m_hidden) if(entry.first) entry.first->setVisibility(entry.second); m_hidden.clear();}
 void ScrollCaptureWindow::cancelPreview() {close();}
 bool ScrollCaptureWindow::event(QEvent *event)

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include <QtTest>
 #include <QSignalSpy>
+#include <QColorSpace>
+#include <memory>
+#include <cstring>
 #include "Imaging/ScrollCaptureController.h"
 using namespace NkShot::Imaging;
 class ScrollCaptureControllerTest : public QObject {
@@ -13,6 +16,55 @@ class ScrollCaptureControllerTest : public QObject {
         return image;
     }
 private Q_SLOTS:
+    void automaticPauseResumeSkipAndFailure() {
+        QObject backend;int cancels=0,calls=0;ScrollCaptureController c(&backend,[&](quint64,QRect){++calls;return true;},[&]{++cancels;});
+        QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),skipped(&c,&ScrollCaptureController::frameSkipped),failed(&c,&ScrollCaptureController::failed);
+        QVERIFY(c.begin(layout(),selection()));QVERIFY(!c.collecting());c.setCollecting(true);QCOMPARE(hidden.size(),0);QTRY_COMPARE(hidden.size(),1);
+        auto old=hidden.last().first().toULongLong();c.setCollecting(false);QCOMPARE(c.state(),ScrollCaptureController::State::Ready);QVERIFY(!c.confirmHidden(old,layout()));QCOMPARE(calls,0);
+        c.setCollecting(true);QTRY_COMPARE(hidden.size(),2);auto token=hidden.last().first().toULongLong();QVERIFY(token!=old);QVERIFY(c.confirmHidden(token,layout()));c.frameCaptured(token,layout(),frame(0));QCOMPARE(c.frameCount(),1);
+        QTRY_COMPARE_WITH_TIMEOUT(hidden.size(),3,1600);token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.frameCaptured(token,layout(),frame(0));QCOMPARE(skipped.size(),1);QCOMPARE(failed.size(),0);QVERIFY(c.collecting());
+        QTRY_COMPARE_WITH_TIMEOUT(hidden.size(),4,1600);token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.setCollecting(false);QCOMPARE(cancels,1);c.frameCaptured(token,layout(),frame(60));QCOMPARE(c.frameCount(),1);QCOMPARE(c.preview(),frame(0));
+        c.setCollecting(true);QTRY_COMPARE(hidden.size(),5);token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.frameFailed(token,QStringLiteral("denied"));QVERIFY(!c.collecting());QCOMPARE(c.state(),ScrollCaptureController::State::Ready);QCOMPARE(c.frameCount(),1);QCOMPARE(failed.size(),1);
+    }
+    void automaticBlankSkipButProfileChangeStops() {
+        QObject backend;ScrollCaptureController c(&backend,[](quint64,QRect){return true;},[]{});QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),skipped(&c,&ScrollCaptureController::frameSkipped),failed(&c,&ScrollCaptureController::failed);
+        QImage blank(40,100,QImage::Format_RGBA8888);blank.fill(Qt::white);QVERIFY(c.begin(layout(),selection()));c.setCollecting(true);QTRY_COMPARE(hidden.size(),1);
+        auto token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.frameCaptured(token,layout(),blank);
+        QVERIFY(c.captureNext());token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.frameCaptured(token,layout(),blank);QCOMPARE(skipped.size(),1);QVERIFY(c.collecting());QCOMPARE(c.frameCount(),1);
+        QVERIFY(c.captureNext());token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));auto changed=blank;changed.setColorSpace(QColorSpace::SRgb);c.frameCaptured(token,layout(),changed);QVERIFY(!c.collecting());QCOMPARE(skipped.size(),1);QCOMPARE(failed.size(),1);QCOMPARE(c.preview(),blank);
+    }
+    void backendBufferReuseDoesNotBecomeFalseNoop() {
+        QObject backend;ScrollCaptureController c(&backend,[](quint64,QRect){return true;},[]{});QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),skipped(&c,&ScrollCaptureController::frameSkipped);
+        QByteArray bytes(40*100*4,Qt::Uninitialized);QImage borrowed(reinterpret_cast<uchar *>(bytes.data()),40,100,40*4,QImage::Format_RGBA8888);const auto first=frame(0);std::memcpy(bytes.data(),first.constBits(),size_t(bytes.size()));
+        QVERIFY(c.begin(layout(),selection()));c.setCollecting(true);QTRY_COMPARE(hidden.size(),1);auto ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameCaptured(ticket,layout(),borrowed);
+        const auto next=frame(60);std::memcpy(bytes.data(),next.constBits(),size_t(bytes.size()));QVERIFY(c.captureNext());ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameCaptured(ticket,layout(),borrowed);
+        QCOMPARE(c.frameCount(),2);QCOMPARE(skipped.size(),0);QCOMPARE(c.preview().copy(0,0,40,100),first);c.setCollecting(false);
+    }
+    void automaticLimitAndFinish() {
+        QObject backend;ScrollCaptureController c(&backend,[](quint64,QRect){return true;},[]{});QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),result(&c,&ScrollCaptureController::resultReady);
+        QVERIFY(c.begin(layout(),selection()));c.setCollecting(true);QTRY_COMPARE(hidden.size(),1);
+        for(int index=0;index<16;++index){if(index)QVERIFY(c.captureNext());const auto token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.frameCaptured(token,layout(),frame(index*30));QCOMPARE(c.frameCount(),index+1);}
+        QVERIFY(!c.collecting());c.setCollecting(true);QVERIFY(!c.collecting());QVERIFY(c.finish());QCOMPARE(result.size(),1);QCOMPARE(c.state(),ScrollCaptureController::State::Finished);
+        QTest::qWait(1100);QCOMPARE(hidden.size(),16);
+    }
+    void automaticFinishPausesPendingWithoutLosingFrames() {
+        QObject backend;ScrollCaptureController c(&backend,[](quint64,QRect){return true;},[]{});QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),results(&c,&ScrollCaptureController::resultReady);
+        QVERIFY(c.begin(layout(),selection()));for(int n=0;n<2;++n){QVERIFY(c.captureNext());auto token=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(token,layout()));c.frameCaptured(token,layout(),frame(n*50));}
+        const auto expected=c.preview();c.setCollecting(true);QTRY_COMPARE(hidden.size(),3);const auto pending=hidden.last().first().toULongLong();c.setCollecting(false);QVERIFY(c.finish());c.frameCaptured(pending,layout(),frame(90));QCOMPARE(c.state(),ScrollCaptureController::State::Finished);QCOMPARE(results.size(),1);QCOMPARE(qvariant_cast<QImage>(results.first().first()),expected);QVERIFY(c.preview().isNull());QVERIFY(!c.collecting());
+    }
+    void cancelCannotReenableCollectionSynchronously() {
+        QObject backend;
+        ScrollCaptureController c(&backend,[](quint64,QRect){return true;},[]{});
+        QVERIFY(c.begin(layout(),selection())); c.setCollecting(true);
+        connect(&c,&ScrollCaptureController::collectingChanged,&c,[&]{if(!c.collecting())c.setCollecting(true);});
+        c.cancel(); QCOMPARE(c.state(),ScrollCaptureController::State::Cancelled); QVERIFY(!c.collecting());
+        QTest::qWait(30); QCOMPARE(c.state(),ScrollCaptureController::State::Cancelled);
+    }
+    void synchronousCollectionDestruction() {
+        QObject backend;int calls=0;auto c=std::make_unique<ScrollCaptureController>(&backend,[&](quint64,QRect){++calls;return true;},[]{});
+        QVERIFY(c->begin(layout(),selection()));connect(c.get(),&ScrollCaptureController::collectingChanged,&backend,[&]{if(c&&c->collecting())c.reset();});c->setCollecting(true);QVERIFY(!c);QTest::qWait(30);QCOMPARE(calls,0);
+        c=std::make_unique<ScrollCaptureController>(&backend,[](quint64,QRect){return true;},[]{});QVERIFY(c->begin(layout(),selection()));connect(c.get(),&ScrollCaptureController::stateChanged,&backend,[&]{if(c&&c->state()==ScrollCaptureController::State::WaitingForHidden)c.reset();});c->setCollecting(true);QTRY_VERIFY(!c);
+    }
     void fractionalCoordinateMapping() {
         for (qreal dpr : {1.,1.25,1.5,2.}) {
             auto l=layout(); l.dpr=dpr; l.nativePixels=QSize(qRound(200*dpr),qRound(160*dpr));

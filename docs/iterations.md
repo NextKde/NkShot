@@ -2217,3 +2217,39 @@ All page content is generated test data. The test-only capture dependency suppli
 frames; these images are not evidence of native desktop acquisition. Actual KDE
 Screenshot API 5 capture, focus/hide timing, mixed-DPR desktops and GPU rendering
 remain unverified. No automatic scrolling or input injection was added.
+
+## 083 — Collect frames while the user scrolls
+
+The scrolling panel now offers **Collect while scrolling**, off by default.
+Enabling it starts serial frame collection; the user still scrolls the target.
+After each completed request the controller waits about one second before the next.
+It does not inject input, activate the target or change other applications' windows.
+API5 caller-window exclusion is still mandatory for every native request.
+
+Turning collection off cancels the pending ticket, ignores its late result and
+keeps accepted pixels. Exact unchanged frames, including blank frames with matching
+size, DPR and color profile, are skipped quietly. Unsafe overlap or capture/display
+errors stop collection and leave a clear retry path. Sixteen accepted frames stop
+collection with a Finish prompt. Finish is available during collection even with an
+outstanding request and exports only previously accepted frames. Manual single-frame
+capture and the original image/history remain separate.
+
+Focused validation passed four CTests (16.44 seconds), including 17 controller
+QtTest results covering cadence, pending cancellation, exact blank-frame skip,
+color-profile change, borrowed backend buffers, limits and synchronous reentry.
+Six actual Qt UI cases passed: continuous light/dark/compact, controlled display
+removal, manual capture and long-image tiled inspection. The compact continuous
+case was additionally checked at the production minimum 420 × 420. UI actions
+verified pause/resume, rejected-frame retry and Finish during pending capture,
+including late-result isolation and an exact PNG of the accepted composite.
+Static checks passed 18/18; whitespace passed.
+
+Reviewed actual application captures: [collecting](screenshots/083-collecting.png),
+[dark](screenshots/083-collecting-dark.png),
+[minimum-size retry](screenshots/083-retry-compact.png), and
+[display removed, result retained](screenshots/083-display-removed.png).
+These use generated synthetic page pixels and a test-only capture dependency.
+Display removal invokes the real window handler under that test; no monitor was
+physically unplugged. Real KWin acquisition, non-activation/focus behavior, caller
+exclusion and GPU rendering still require native KDE acceptance. No translation,
+packaging, certificate or security-setting changes are included.

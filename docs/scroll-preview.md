@@ -11,7 +11,8 @@ Start NkShot normally. From an existing screenshot's More menu, choose
 is image-mode only. Unsupported desktops can open the panel and read the reason;
 they cannot select a region, capture a frame or produce a result.
 
-The user scrolls the target and explicitly captures each next frame. API5 window
+The user scrolls the target. Capture each frame manually, or explicitly enable
+**Collect while scrolling** for periodic collection. API5 window
 exclusion remains mandatory; making the entry discoverable does not remove that
 safety check or establish native acceptance.
 
@@ -25,15 +26,22 @@ safety check or establish native acceptance.
 3. Drag a region on that display, then fine-tune it and choose Use region or Enter.
    Mouse release no longer commits immediately. Esc cancels and restores hidden
    windows. Keep sticky headers, animation and other changing content outside it.
-4. Choose Capture first. Scroll the target yourself, then Capture next. No wheel
-   injection or automatic scrolling happens. Accepted-frame count and failure
-   guidance are in the compact panel. Cancellation and timeouts preserve safety.
+4. Choose Capture first, then scroll and Capture next, or turn on **Collect while
+   scrolling**. Collection is off by default. It requests one frame at a time,
+   waiting about one second after each completed frame. Scroll the target yourself:
+   no wheel injection or automatic scrolling happens. Unchanged frames are skipped.
+   Turn the same control off to pause, including during a pending request; late
+   results from that request are discarded. Accepted pixels remain available.
+   Unsafe alignment, capture errors or changed display geometry stop collection
+   with an explanation. Adjust the target and retry manually or enable collection
+   again. At 16 accepted frames collection stops; inspect and Finish.
 5. Review the accepted composite in **Alignment preview**. Fit shows the page;
    **100%** enables pixel inspection and scrolling using only visible 1024×1024
    image tiles, rather than uploading a whole tall image as one GPU texture. **Seams** marks append joins
    only in the preview, never in saved pixels. If a frame is rejected, the accepted
    image stays visible and **Retry frame** captures again after you adjust the scroll.
-6. After at least two accepted frames, Finish opens an independent pin preview
+6. Finish stops collection and any pending request. After at least two accepted
+   frames, it opens an independent pin preview
    with Copy/Save As. Original image, undo history and export state are unchanged.
    Failed result-window creation retains the result for a Finish retry.
 

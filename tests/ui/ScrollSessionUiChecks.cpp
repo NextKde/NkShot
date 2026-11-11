@@ -19,6 +19,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QFile>
+#include <QEvent>
 #include <QWheelEvent>
 #include <QtTest/QTest>
 
@@ -54,12 +55,15 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         if(point.x()<0||point.y()<0||point.x()>view->width()||point.y()>view->height())return false;
         QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,point.toPoint());return true;
     };
+    const bool continuous=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_CONTINUOUS");
     const bool longPreview=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SESSION_LONG");
     const int frameHeight=longPreview?2200:420, secondOffset=longPreview?1400:180, thirdOffset=longPreview?2800:410;
     const Layout layout{QStringLiteral("synthetic-page"),QRectF(0,0,640,frameHeight),QSize(640,frameHeight),1};
     QObject backendLifetime;
     QImage pending;
     int requests=0;
+    bool holdFrame=false;
+    quint64 heldTicket=0;
     window=new ScrollCaptureWindow(viewer->engine());
     // Let the constructor's real, unavailable compositor query finish before
     // the compile-time friend replaces only the controller capture dependency.
@@ -69,6 +73,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         ++requests;
         if(rect!=QRect(0,0,640,frameHeight)||pending.isNull())return false;
         const QImage frame=pending;
+        if(holdFrame){heldTicket=ticket;return true;}
         QMetaObject::invokeMethod(window,[&,ticket,frame]{if(window)window->m_controller->frameCaptured(ticket,layout,frame);},Qt::QueuedConnection);
         return true;
     },[]{},window);
@@ -78,7 +83,8 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     });
     window->m_phase=2;window->m_available=true;
     if(!window->m_controller->begin(layout,layout.logicalGeometry))return fail(QStringLiteral("Synthetic selected-region controller setup failed"));
-    window->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SESSION_COMPACT")?420:760,600);
+    const bool compact=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SESSION_COMPACT");
+    window->resize(compact?420:760,continuous&&compact?420:600);
     window->show();Q_EMIT window->changed();
     if(!QTest::qWaitFor([&]{return window->rootObject()&&window->rootObject()->size()==QSizeF(window->size());},1500))
         return fail(QStringLiteral("Actual scroll session view not ready"));
@@ -87,6 +93,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         if(!click(window,"nkshotScrollPrimary"))return false;
         return QTest::qWaitFor([&]{return requests==before+1&&!window->busy();},3000);
     };
+    if(!continuous) {
     // A separate synthetic session verifies ambiguous-overlap UI recovery.
     QImage blank(640,frameHeight,QImage::Format_RGBA8888);blank.fill(Qt::white);
     if(!deliver(blank)||window->frameCount()!=1)return fail(QStringLiteral("Ambiguous fixture first frame failed"));
@@ -96,6 +103,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         return fail(QStringLiteral("Ambiguous overlap did not preserve preview and enable retry"));
     window->m_controller->cancel();
     if(!window->m_controller->begin(layout,layout.logicalGeometry))return fail(QStringLiteral("New synthetic page session could not begin"));
+    }
     QImage page(640,longPreview?6000:1300,QImage::Format_RGBA8888);
     for(int y=0;y<page.height();++y)for(int x=0;x<page.width();++x) {
         quint32 n=quint32(x+1)*2654435761u ^ quint32(y+1)*2246822519u;
@@ -111,6 +119,52 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     const QImage first=page.copy(0,0,640,frameHeight);
     QImage second=page.copy(0,secondOffset,640,frameHeight);
     {QPainter painter(&second);painter.fillRect(510,70,12,10,QColor(220,90,90));}
+    if(continuous) {
+        QSignalSpy skipped(window->m_controller,&Controller::frameSkipped);
+        const auto collecting=[&]{return window->property("collecting").toBool();};
+        const auto shot=[&](const QString &suffix){
+            QSignalSpy frame(window,&QQuickWindow::frameSwapped);window->update();
+            return QTest::qWaitFor([&]{return !frame.isEmpty();},1500)&&window->grabWindow().save(path+suffix);
+        };
+        pending=first;
+        if(!click(window,"nkshotScrollCollect")||!QTest::qWaitFor([&]{return collecting()&&window->frameCount()==1&&!window->busy();},3000))
+            return fail(QStringLiteral("Actual Collect control did not start first frame"));
+        pending=second;
+        if(!QTest::qWaitFor([&]{return window->frameCount()==2&&!window->busy();},3000))
+            return fail(QStringLiteral("Continuous collection did not append second frame"));
+        const QImage afterTwo=window->m_controller->preview();
+        if(afterTwo.size()!=QSize(640,frameHeight+secondOffset)
+            ||afterTwo.copy(0,0,640,frameHeight)!=first
+            ||afterTwo.copy(0,frameHeight,640,secondOffset)!=page.copy(0,frameHeight,640,secondOffset))
+            return fail(QStringLiteral("Continuous accepted pixels differ from source page"));
+        if(!QTest::qWaitFor([&]{return !skipped.isEmpty()&&!window->busy();},3000)
+            ||!collecting()||window->frameCount()!=2||window->m_controller->preview()!=afterTwo)
+            return fail(QStringLiteral("Unchanged continuous frame did not skip without altering preview"));
+        if(!shot(QStringLiteral(".collecting.png")))return fail(QStringLiteral("Collecting screenshot failed"));
+        if(!click(window,"nkshotScrollCollect")||collecting())return fail(QStringLiteral("Actual Pause control failed"));
+        const int pausedRequests=requests;QTest::qWait(1200);
+        if(requests!=pausedRequests||window->m_controller->preview()!=afterTwo)
+            return fail(QStringLiteral("Paused collection continued requesting frames"));
+        if(!shot(QStringLiteral(".paused.png")))return fail(QStringLiteral("Paused screenshot failed"));
+        pending=second;pending.fill(Qt::red);
+        if(!click(window,"nkshotScrollCollect")||!QTest::qWaitFor([&]{return !collecting()&&!window->busy()&&window->property("retryFrame").toBool();},3000)
+            ||window->frameCount()!=2||window->m_controller->preview()!=afterTwo)
+            return fail(QStringLiteral("Bad continuous overlap did not auto-pause and preserve accepted pixels"));
+        if(!shot(QStringLiteral(".retry.png")))return fail(QStringLiteral("Continuous retry screenshot failed"));
+        if(!deliver(page.copy(0,thirdOffset,640,frameHeight))||window->frameCount()!=3)
+            return fail(QStringLiteral("Manual retry after continuous error failed"));
+        const QImage beforePendingPause=window->m_controller->preview();
+        holdFrame=true;heldTicket=0;pending=second;
+        if(!click(window,"nkshotScrollCollect")||!QTest::qWaitFor([&]{return heldTicket!=0&&window->busy();},3000))
+            return fail(QStringLiteral("Pending-frame pause fixture did not reach real capture request"));
+        if(!click(window,"nkshotScrollCollect")||collecting())
+            return fail(QStringLiteral("Actual Pause unavailable during in-flight frame"));
+        const auto stale=heldTicket;
+        window->m_controller->frameCaptured(stale,layout,page.copy(0,thirdOffset+100,640,frameHeight));
+        holdFrame=false;
+        if(window->frameCount()!=3||window->m_controller->preview()!=beforePendingPause||window->busy())
+            return fail(QStringLiteral("Late frame after Pause altered accepted preview"));
+    } else {
     if(!deliver(first)||window->frameCount()!=1)return fail(QStringLiteral("Textured first frame not accepted"));
     if(!deliver(second)||window->frameCount()!=2)return fail(QStringLiteral("Variable-overlap frame with small dynamic island rejected"));
     const QImage afterTwo=window->m_controller->preview();
@@ -130,6 +184,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         return fail(QStringLiteral("Retained preview/retry capture failed"));
     if(!deliver(page.copy(0,thirdOffset,640,frameHeight))||window->frameCount()!=3)
         return fail(QStringLiteral("Retry after rejected frames did not accept next variable offset"));
+    }
     const QImage composite=window->m_controller->preview();
     if(composite.size()!=QSize(640,frameHeight+thirdOffset)||composite!=page.copy(0,0,640,frameHeight+thirdOffset)
         ||window->property("previewSize").toSize()!=composite.size()
@@ -172,10 +227,39 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     if(!QTest::qWaitFor([&]{return !rendered.isEmpty();},1500)||!window->grabWindow().save(path+QStringLiteral(".pixels.png")))
         return fail(QStringLiteral("Actual session preview screenshot failed"));
     if(app.clipboard()->text()!=sentinel||!unchanged())return fail(QStringLiteral("Collection changed original document/clipboard"));
+    QPointer<Controller> finishingController;
+    quint64 finishingTicket=0;
+    int pinsBeforeFinish=0;
+    for(auto view:QGuiApplication::allWindows())if(qobject_cast<PinnedImageWindow *>(view))++pinsBeforeFinish;
+    if(continuous) {
+        holdFrame=true;heldTicket=0;pending=page.copy(0,thirdOffset+100,640,frameHeight);
+        if(!click(window,"nkshotScrollCollect")||!QTest::qWaitFor([&]{return heldTicket!=0&&window->busy();},3000))
+            return fail(QStringLiteral("Finish pending fixture did not reach in-flight capture"));
+        finishingController=window->m_controller;finishingTicket=heldTicket;
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_DISPLAY_REMOVED")) {
+            window->handleScreenRemoved(window->m_screen);
+            if(window->collecting()||window->available()||window->busy()||!window->isVisible()
+                ||window->m_controller->preview()!=composite||!window->canFinish())
+                return fail(QStringLiteral("Removed display did not stop and retain an inspectable result"));
+            QTest::qWait(50);
+            if(!window->grabWindow().save(path+QStringLiteral(".removed.png")))return fail(QStringLiteral("Removed-display result screenshot failed"));
+        }
+    }
     if(!click(window,"nkshotScrollFinish"))return fail(QStringLiteral("Actual Finish action unreachable"));
+    if(continuous&&finishingController)
+        finishingController->frameCaptured(finishingTicket,layout,pending);
+
     if(!QTest::qWaitFor([&]{for(auto view:QGuiApplication::allWindows())
         if(auto candidate=qobject_cast<PinnedImageWindow *>(view))if(candidate->snapshot()==composite)pin=candidate;
         return pin&&pin->isVisible();},1500))return fail(QStringLiteral("Finish did not create actual separate composite pin"));
+    if(continuous) {
+        QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+        QCoreApplication::processEvents();
+        int pinsAfterFinish=0;
+        for(auto view:QGuiApplication::allWindows())if(qobject_cast<PinnedImageWindow *>(view))++pinsAfterFinish;
+        if(pinsAfterFinish!=pinsBeforeFinish+1||!pin||pin->snapshot()!=composite)
+            return fail(QStringLiteral("Finish pending/late frame added pixels or created extra result pins"));
+    }
     if(!click(pin,"nkshotPinCopy")||app.clipboard()->image().convertToFormat(QImage::Format_RGBA8888)!=composite)return fail(QStringLiteral("Finished pin explicit Copy mismatch"));
     QTemporaryDir files;
     if(!files.isValid()||!click(pin,"nkshotPinSave"))return fail(QStringLiteral("Finished pin Save unavailable"));

@@ -252,3 +252,9 @@ retry and Finish/pin-export route. It cannot validate the native KWin backend.
 `NKSHOT_TEST_SCROLL_SESSION_COMPACT=1` checks 420-pixel width; the usual dark flag
 checks theme. Production has no environment switch to inject frames. Existing
 `NKSHOT_TEST_SCROLL_PREVIEW=1` still verifies unavailable API5 behavior separately.
+
+For 083 continuous collection, add `NKSHOT_TEST_SCROLL_CONTINUOUS=1` to the
+`NKSHOT_TEST_SCROLL_SESSION=1` controlled-frame UI check. The existing dark and
+compact flags apply. This drives the actual checkbox, periodic requests, pause,
+unchanged-frame skip, failed-frame retry and Finish during an outstanding request;
+it does not replace native KDE acquisition acceptance.

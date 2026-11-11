@@ -100,3 +100,8 @@ accepted-composite/seam inspection and explicit rejected-frame retry. These are
 validated with controlled synthetic frames, not native desktop acceptance. Real
 KWin API5 capture, focus, exclusion and end-to-end scrolling on a user's page remain
 next gates; automatic input/scrolling is not introduced.
+
+083 adds opt-in continuous frame collection while the user scrolls, with one
+pending request, pause/late-result isolation and retained progress on failure.
+This reduces repeated panel switching but is not automatic scrolling, and does
+not remove the outstanding native desktop acceptance gate.

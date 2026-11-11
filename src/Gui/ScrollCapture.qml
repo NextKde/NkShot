@@ -76,6 +76,19 @@ Item {
                 Accessible.role: Accessible.StaticText
             }
         }
+        QQC.CheckBox {
+            objectName: "nkshotScrollCollect"
+            visible: root.phase === 2
+            Layout.fillWidth: true
+            text: i18nc("@option:check", "Collect while scrolling")
+            palette.buttonText: Kos.AppTheme.paletteText
+            palette.text: Kos.AppTheme.paletteText
+            palette.windowText: Kos.AppTheme.paletteText
+            checked: scrollWindow.collecting
+            enabled: scrollWindow.collecting || (scrollWindow.available && scrollWindow.canCapture)
+            onToggled: scrollWindow.setCollecting(checked)
+            Accessible.description: i18nc("@info", "Start or pause continuous frame collection. Scroll the target yourself.")
+        }
         ColumnLayout {
             visible: root.phase === 2
             Layout.fillWidth: true; Layout.fillHeight: true
@@ -199,7 +212,7 @@ Item {
                 visible: root.phase === 2
                 objectName: "nkshotScrollFinish"
                 text: i18nc("@action", "Finish")
-                enabled: !scrollWindow.busy && scrollWindow.canFinish
+                enabled: (scrollWindow.collecting || !scrollWindow.busy) && scrollWindow.canFinish
                 onClicked: scrollWindow.finishCapture()
             }
             ActionButton {
@@ -209,7 +222,7 @@ Item {
                     : scrollWindow.busy ? i18nc("@info", "Capturing…")
                     : scrollWindow.retryFrame ? i18nc("@action", "Retry frame")
                     : scrollWindow.frameCount === 0 ? i18nc("@action", "Capture first") : i18nc("@action", "Capture next")
-                enabled: scrollWindow.available && !scrollWindow.busy && (root.phase === 0 || scrollWindow.canCapture)
+                enabled: scrollWindow.available && !scrollWindow.collecting && !scrollWindow.busy && (root.phase === 0 || scrollWindow.canCapture)
                 onClicked: root.phase === 0 ? scrollWindow.selectRegion() : scrollWindow.captureNext()
             }
         }

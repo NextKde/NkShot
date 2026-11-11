@@ -19,11 +19,13 @@ struct ScrollOutputLayout {
 // define a single fixed physical rectangle; the native frame must later match.
 QRect scrollSelectionPixels(const ScrollOutputLayout &, const QRectF &globalLogicalSelection);
 
-// GUI/controller-thread only. No capture action is exposed to users yet.
+// GUI/controller-thread only. Manual and opt-in timed collection use the same
+// strict region/metadata and hide-barrier checks; no scroll input is injected.
 // Backend callbacks feed frameCaptured/frameFailed with their original ticket.
 // The callback owner must outlive its functions, monitored via backendLifetime.
 class ScrollCaptureController : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool collecting READ collecting WRITE setCollecting NOTIFY collectingChanged)
 public:
     enum class State { Idle, Ready, WaitingForHidden, Capturing, Finished, Cancelled };
     using Request = std::function<bool(quint64, QRect)>;
@@ -32,6 +34,8 @@ public:
     ~ScrollCaptureController() override;
     bool begin(const ScrollOutputLayout &, const QRectF &globalLogicalSelection);
     bool captureNext();
+    void setCollecting(bool collecting);
+    bool collecting() const { return m_collecting; }
     // A UI/compositor adapter must establish actual exclusion/repaint, NOT a
     // guessed sleep, and re-read output geometry before confirming this ticket.
     bool confirmHidden(quint64 ticket, const ScrollOutputLayout &current);
@@ -45,12 +49,17 @@ public:
     QVector<int> seams() const { return m_session.seams(); }
 Q_SIGNALS:
     void stateChanged();
+    void collectingChanged();
+    void frameSkipped();
     void hideWindowsRequested(quint64 ticket);
     void restoreWindowsRequested();
     void frameAccepted(int count);
     void failed(const QString &reason);
     void resultReady(const QImage &result);
 private:
+    class Transition;
+    void scheduleCollection(int delay);
+    void stopCollection();
     void setState(State);
     void restore();
     void rejectPending(const QString &reason, bool abortBackend);
@@ -62,6 +71,10 @@ private:
     ScrollCaptureSession::Region m_region;
     State m_state = State::Idle;
     QTimer m_timeout;
+    QTimer m_collectionTimer;
+    QImage m_lastAccepted;
+    quint64 m_collectionEpoch = 0;
+    bool m_collecting = false;
     quint64 m_pending = 0;
     bool m_windowsHidden = false;
     bool m_transition = false;

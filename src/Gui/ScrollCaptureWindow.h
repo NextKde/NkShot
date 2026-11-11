@@ -12,6 +12,7 @@ class ScrollCaptureWindow : public QQuickView {
     Q_PROPERTY(QUrl previewSource READ previewSource NOTIFY changed)
     Q_PROPERTY(QSize previewSize READ previewSize NOTIFY changed)
     Q_PROPERTY(QVariantList seamRows READ seamRows NOTIFY changed)
+    Q_PROPERTY(bool collecting READ collecting NOTIFY changed)
     Q_PROPERTY(bool retryFrame READ retryFrame NOTIFY changed)
     Q_PROPERTY(QStringList outputs READ outputs CONSTANT)
     Q_PROPERTY(int outputIndex READ outputIndex WRITE setOutputIndex NOTIFY changed)
@@ -29,6 +30,8 @@ public:
     QUrl previewSource() const;
     QSize previewSize() const { return m_preview.size(); }
     QVariantList seamRows() const;
+    bool collecting() const { return m_controller->collecting(); }
+    Q_INVOKABLE void setCollecting(bool enabled);
     bool retryFrame() const { return m_retryFrame; }
     QStringList outputs() const { return m_outputs; }
     int outputIndex() const { return m_outputIndex; }
@@ -56,6 +59,7 @@ private:
     friend class ScrollSessionUiChecks;
 #endif
     void bindController();
+    void handleScreenRemoved(QScreen *screen);
     void updatePreview();
     QString m_providerId;
     ScrollPreviewProvider *m_previewProvider = nullptr;
