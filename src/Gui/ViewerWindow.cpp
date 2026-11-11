@@ -737,6 +737,7 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
     const bool gif = format == QStringLiteral("gif");
     const bool includeAudio = m_clipJob->includeAudio();
     const QString cropAspect = m_clipJob->cropAspect();
+    const QRect cropRect = m_clipJob->cropRect();
     const QFileInfo sourceFile(source.toLocalFile());
     auto dialog = new QFileDialog;
     m_clipSaveDialog = dialog;
@@ -760,8 +761,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         m_clipSaveDialog = nullptr;
         Q_EMIT choosingClipOutputChanged();
     });
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, includeAudio, cropAspect, startMs, endMs] {
-        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->busy()
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, includeAudio, cropAspect, cropRect, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->busy()
             || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
         const auto files = dialog->selectedFiles();
         if (files.size() != 1) return;

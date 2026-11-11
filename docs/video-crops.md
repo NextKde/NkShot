@@ -53,3 +53,10 @@ Reviewed screenshots: [light preview](screenshots/094-crop-light.png),
 [narrow preview](screenshots/094-crop-compact.png), and
 [crop options](screenshots/094-crop-options.png). Expanded options preserve the
 preview and Cancel action at 420 × 520; collapsing them gives the video more room.
+
+## Adjustable framing (095)
+
+The presets now also support [dragging and keyboard positioning](video-reframing.md).
+Center remains the default and can be restored; arbitrary crop resizing is not
+implemented. The Details label is now Frame because positioning is no longer
+restricted to the center.

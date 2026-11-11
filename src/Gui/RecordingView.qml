@@ -98,6 +98,9 @@ FocusScope {
         objectName: "nkshotVideoCropOverlay"
         anchors.fill: videoOutput
         visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.cropAspect !== "original" && !root.captureActive
+        interactive: visible && !clipPopup.locked
+        onPositionRequested: (x, y) => {clipPopup.stopPreview(); contextWindow.clipJob.setCropPosition(x, y)}
+        onCenterRequested: {clipPopup.stopPreview(); contextWindow.clipJob.resetCropPosition()}
         sourceSize: contextWindow.clipJob.sourceSize
         cropRect: contextWindow.clipJob.cropRect
         readonly property real fittedScale: sourceSize.width > 0 && sourceSize.height > 0

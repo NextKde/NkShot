@@ -116,6 +116,9 @@ class IdentityTests(unittest.TestCase):
             self.assertRegex(overlay, r'required property \w+ ' + prop)
         self.assertIn('videoOutput.contentRect', read('src/Gui/RecordingView.qml'))
         self.assertIn('m_clipJob->cropAspect() != cropAspect', read('src/Gui/ViewerWindow.cpp'))
+        self.assertIn('m_clipJob->cropRect() != cropRect', read('src/Gui/ViewerWindow.cpp'))
+        self.assertIn('signal positionRequested', overlay)
+        self.assertIn('signal centerRequested', overlay)
 
     def test_capture_actions_still_present(self):
         overlay = read('src/Gui/CaptureOverlay.qml')

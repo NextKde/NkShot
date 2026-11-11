@@ -645,12 +645,51 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!overlay||!frame||!overlay->isVisible()||expectedCrop.width()>=sourceSize.width()||expectedCrop.height()!=sourceSize.height()
             ||!QTest::qWaitFor([&]{return frame->height()>10&&qAbs(frame->width()/frame->height()-qreal(expectedCrop.width())/expectedCrop.height())<.01;},1000)
             ||!capture(QStringLiteral(".crop-options.png")))return fail(QStringLiteral("Crop preview does not reflect export geometry"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP")) {
+            const auto center=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
+            QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,center);
+            for(int i=1;i<=6;++i)QTest::mouseMove(viewer(),center+QPoint(i*3,0),20);
+            QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,center+QPoint(18,0));
+            if(!QTest::qWaitFor([&]{return job->property("cropRect").toRect().x()>expectedCrop.x();},1000)
+                ||job->property("cropCentered").toBool())return fail(QStringLiteral("Actual crop drag did not reframe the export"));
+            auto moved=job->property("cropRect").toRect();
+            QTest::keyClick(viewer(),Qt::Key_Left);
+            if(job->property("cropRect").toRect().x()!=moved.x()-2)return fail(QStringLiteral("Crop arrow fine adjustment failed"));
+            QTest::keyClick(viewer(),Qt::Key_Home);
+            if(job->property("cropRect").toRect()!=expectedCrop||!job->property("cropCentered").toBool())
+                return fail(QStringLiteral("Crop Home did not restore center"));
+            QTest::keyClick(viewer(),Qt::Key_Right,Qt::ShiftModifier);
+            if(job->property("cropRect").toRect().x()!=expectedCrop.x()+10||!click(QStringLiteral("nkshotClipCenterCrop"))
+                ||job->property("cropRect").toRect()!=expectedCrop)return fail(QStringLiteral("Crop fast adjustment/Center action failed"));
+            // A second independent drag starts from the current rectangle, not
+            // accumulated pointer translation from the previous gesture.
+            const auto again=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
+            QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,again);
+            for(int i=1;i<=6;++i)QTest::mouseMove(viewer(),again-QPoint(i*3,0),20);
+            QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,again-QPoint(18,0));
+            if(!QTest::qWaitFor([&]{return job->property("cropRect").toRect().x()<expectedCrop.x();},1000))
+                return fail(QStringLiteral("Repeated crop gesture did not move left independently"));
+            expectedCrop=job->property("cropRect").toRect();
+            if(!capture(QStringLiteral(".reframe-options.png")))return fail(QStringLiteral("Reframed preview evidence failed"));
+        }
     }
     auto cancelControl=visual(viewer()->contentItem(),QStringLiteral("nkshotClipCancel"));
     auto previewControl=visual(viewer()->contentItem(),QStringLiteral("nkshotSoftwareVideoPreview"));
     if(!cancelControl||!previewControl||previewControl->height()<50
         ||cancelControl->mapToScene(QPointF(0,cancelControl->height())).y()>viewer()->height()
         ||!click(QStringLiteral("nkshotClipDetails")))return fail(QStringLiteral("Details hides preview or cancel in the real window"));
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP")) {
+        QTest::qWait(150);
+        auto frame=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoCropFrame"));
+        if(!frame)return fail(QStringLiteral("Collapsed crop frame missing"));
+        const auto point=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
+        QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,point);
+        for(int i=1;i<=5;++i)QTest::mouseMove(viewer(),point+QPoint(i*2,0),20);
+        QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,point+QPoint(10,0));
+        if(!QTest::qWaitFor([&]{return job->property("cropRect").toRect().x()>expectedCrop.x();},1000))
+            return fail(QStringLiteral("Collapsed preview did not keep crop interaction"));
+        expectedCrop=job->property("cropRect").toRect();
+    }
     if(!editRange(QStringLiteral("nkshotClipEnd"),QStringLiteral("3.15"),315)
         ||!editRange(QStringLiteral("nkshotClipStart"),QStringLiteral("1.35"),135)
         ||!capture(QStringLiteral(".clip.png"))||!click(QStringLiteral("nkshotClipExport"))
@@ -658,13 +697,17 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         return fail(QStringLiteral("Imported MP4 clip time inputs/Save dialog failed"));
     if(cropExport) {
         // An asynchronous dialog must not export a different crop than requested.
-        job->setProperty("cropAspect",QStringLiteral("square"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
+            QMetaObject::invokeMethod(job,"setCropPosition",Q_ARG(int,expectedCrop.x()+2),Q_ARG(int,expectedCrop.y()));
+        else job->setProperty("cropAspect",QStringLiteral("square"));
         const auto stale=fixtures.filePath(QStringLiteral("stale-crop.mp4"));
         if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
             ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500))return fail(QStringLiteral("Crop-race dialog did not settle"));
         if(QFileInfo::exists(stale)||job->property("busy").toBool()||!job->property("outputUrl").toUrl().isEmpty())
             return fail(QStringLiteral("Changed crop was exported from an obsolete save dialog"));
         job->setProperty("cropAspect",QStringLiteral("portrait"));
+        if(qEnvironmentVariableIsSet("NKSHOT_TEST_REFRAME_CLIP"))
+            QMetaObject::invokeMethod(job,"setCropPosition",Q_ARG(int,expectedCrop.x()),Q_ARG(int,expectedCrop.y()));
         if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
             return fail(QStringLiteral("Crop export did not recover after stale dialog"));
     }

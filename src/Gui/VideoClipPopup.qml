@@ -276,7 +276,7 @@ QQC.Popup {
             Layout.fillWidth: true
             visible: root.detailsVisible
             spacing: 10
-            QQC.Label {text: i18nc("@label", "Center crop"); font: root.font; color: Kos.AppTheme.paletteText}
+            QQC.Label {text: i18nc("@label", "Frame"); font: root.font; color: Kos.AppTheme.paletteText}
             QQC.ComboBox {
                 id: cropChoice
                 objectName: "nkshotClipCropAspect"
@@ -290,8 +290,14 @@ QQC.Popup {
                 palette.text: Kos.AppTheme.paletteText
                 palette.buttonText: Kos.AppTheme.paletteText
                 background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
-                Accessible.name: i18nc("@label", "Centered video export crop")
+                Accessible.name: i18nc("@label", "Video export crop aspect")
                 onActivated: {root.stopPreview(); root.job.cropAspect = values[currentIndex]}
+            }
+            SolidButton {
+                objectName: "nkshotClipCenterCrop"
+                text: i18nc("@action", "Center")
+                enabled: root.job.ready && !root.locked && root.job.cropAspect !== "original" && !root.job.cropCentered
+                onClicked: {root.stopPreview(); root.job.resetCropPosition()}
             }
         }
         QQC.CheckBox {
@@ -318,7 +324,8 @@ QQC.Popup {
         QQC.Label {
             Layout.fillWidth: true
             visible: root.detailsVisible
-            text: (root.job.ready && !root.job.cropAvailable ? i18nc("@info", "Crop requires square-pixel video. ") : "") + (root.gif ? i18nc("@info", "New GIF: silent, looping, 10 fps, up to 640 px and 20 MiB. The original stays unchanged.")
+            text: root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", "Drag frame · Arrow keys adjust · Home centers")
+                : (root.job.ready && !root.job.cropAvailable ? i18nc("@info", "Crop requires square-pixel video. ") : "") + (root.gif ? i18nc("@info", "New GIF: silent, looping, 10 fps, up to 640 px and 20 MiB. The original stays unchanged.")
                 : i18nc("@info", "Re-encoded MP4: H.264, AAC when included. Original unchanged."))
             wrapMode: Text.Wrap
             font: root.font

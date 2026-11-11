@@ -11,6 +11,7 @@
 class QProcess;
 class VideoClipJob : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool cropCentered READ cropCentered NOTIFY changed)
     Q_PROPERTY(bool cropAvailable READ cropAvailable NOTIFY changed)
     Q_PROPERTY(QString cropAspect READ cropAspect WRITE setCropAspect NOTIFY changed)
     Q_PROPERTY(QSize sourceSize READ sourceSize NOTIFY changed)
@@ -33,6 +34,9 @@ public:
     Q_INVOKABLE void setCropAspect(const QString &aspect);
     QSize sourceSize() const { return QSize(m_width, m_height); }
     QRect cropRect() const;
+    bool cropCentered() const;
+    Q_INVOKABLE void setCropPosition(int x, int y);
+    Q_INVOKABLE void resetCropPosition();
     QString outputFormat() const { return m_format; }
     Q_INVOKABLE void setOutputFormat(const QString &format);
     QUrl sourceUrl() const { return m_source; }
@@ -58,6 +62,7 @@ private:
     void launchGifPass(bool palette);
     QString gifFilter() const;
     QString cropFilter() const;
+    QRect centeredCropRect() const;
     QString webmVideoFilter(int fps) const;
     void fail(const QString &message);
     void stop();
@@ -66,6 +71,7 @@ private:
     bool destinationUnchanged() const;
     QUrl m_source, m_output;
     QString m_ffmpeg, m_ffprobe, m_error, m_temp, m_target, m_palette;
+    QPoint m_cropPosition = QPoint(-1, -1);
     QString m_cropAspect = QStringLiteral("original");
     QString m_format = QStringLiteral("mp4");
     QByteArray m_stdout, m_stderr, m_progressBuffer;

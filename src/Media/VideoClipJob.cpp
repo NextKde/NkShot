@@ -129,7 +129,7 @@ bool VideoClipJob::destinationUnchanged() const {
 }
 void VideoClipJob::inspect(const QUrl &source) {
     stop();m_ready=false;m_mediaValid=false;m_encodersChecked=false;m_duration=0;m_audio=false;m_source=QUrl();m_output=QUrl();m_error.clear();m_progress=0;
-    m_width=0;m_height=0;m_squarePixels=false;m_cropAspect=QStringLiteral("original");
+    m_width=0;m_height=0;m_squarePixels=false;m_cropPosition=QPoint(-1,-1);m_cropAspect=QStringLiteral("original");
     const QFileInfo f(source.toLocalFile());
     m_webm=f.suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||(!m_webm&&f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive))||(m_webm&&!NkShot::LocalVideoInput::hasWebMDocType(f.absoluteFilePath()))||f.size()<=0||f.size()>(m_webm?qint64(256)*1024*1024:qint64(2)*1024*1024*1024)) {
@@ -270,7 +270,7 @@ void VideoClipJob::setOutputFormat(const QString &format) {
     } else if(!m_source.isEmpty()) {const auto source=m_source;inspect(source);}
     else Q_EMIT changed();
 }
-QRect VideoClipJob::cropRect() const {
+QRect VideoClipJob::centeredCropRect() const {
     if(!m_mediaValid||m_width<2||m_height<2)return {};
     if(m_cropAspect==QStringLiteral("original"))return QRect(0,0,m_width,m_height);
     int numerator=1,denominator=1;
@@ -283,12 +283,33 @@ QRect VideoClipJob::cropRect() const {
     else height=qBound(2,(m_width*denominator/numerator)&~1,m_height);
     return QRect(((m_width-width)/2)&~1,((m_height-height)/2)&~1,width,height);
 }
+QRect VideoClipJob::cropRect() const {
+    auto rect=centeredCropRect();
+    if(!rect.isEmpty()&&m_cropAspect!=QStringLiteral("original")&&m_cropPosition.x()>=0&&m_cropPosition.y()>=0)
+        rect.moveTopLeft(m_cropPosition);
+    return rect;
+}
+bool VideoClipJob::cropCentered() const { return cropRect()==centeredCropRect(); }
+void VideoClipJob::setCropPosition(int x,int y) {
+    if(m_busy||!m_ready||!cropAvailable()||m_cropAspect==QStringLiteral("original"))return;
+    const auto rect=cropRect();
+    // Clamp before arithmetic, including INT_MIN/INT_MAX input from callers.
+    // The final even offsets keep both image and YUV420 chroma inside source.
+    const QPoint position(qBound(0,x,m_width-rect.width())&~1,qBound(0,y,m_height-rect.height())&~1);
+    if(position==rect.topLeft())return;
+    m_cropPosition=position==centeredCropRect().topLeft()?QPoint(-1,-1):position;
+    m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+void VideoClipJob::resetCropPosition() {
+    if(m_busy||!m_ready||!cropAvailable()||m_cropAspect==QStringLiteral("original")||cropCentered())return;
+    m_cropPosition=QPoint(-1,-1);m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
 void VideoClipJob::setCropAspect(const QString &aspect) {
     if(m_busy||!m_ready||aspect==m_cropAspect)return;
     if(aspect!=QStringLiteral("original")&&!cropAvailable())return;
     if(aspect!=QStringLiteral("original")&&aspect!=QStringLiteral("square")
         &&aspect!=QStringLiteral("portrait")&&aspect!=QStringLiteral("wide"))return;
-    m_cropAspect=aspect;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+    m_cropAspect=aspect;m_cropPosition=QPoint(-1,-1);m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
 }
 QString VideoClipJob::cropFilter() const {
     if(m_cropAspect==QStringLiteral("original"))return {};
