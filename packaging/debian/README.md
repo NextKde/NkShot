@@ -1,10 +1,10 @@
 # Debian sid amd64 preview packaging
 
 This is a narrowly targeted preview, **not** a distribution-independent package.
-The current 097 artifact uses published commit
-`3eb3773d876f4d607eaad488bc534dd74ced639d`. It contains the features through
-097, including recent files, reusable copy editing, video reframing and fixed
-privacy-cover export. Offline translation development remains paused.
+The current 100 artifact uses published commit
+`dbd4068fa18b22aae38228234db8f8676645dc61`. In addition to the 097 features,
+it includes editable static video annotations (099) and horizontal image
+composition with a unified chooser (100). Offline translation remains paused.
 
 ## Supported build baseline
 
@@ -55,7 +55,7 @@ package database. Build from the exact published source, not an uncommitted tree
    For the exact 080 source above, use `0.1.0~preview080`. For a later verified
    source revision, choose its own release version and record the actual commit;
    do not reuse `preview080`. Epochs and path/control characters are rejected.
-   Historical 084/085 and the current 097 previews are documented below.
+   Historical 084/085/097 and the current 100 previews are documented below.
 
 Packaging stages CMake install manifests afresh. It does **not** copy the entire
 live prefix, a Python virtual environment, translator models, or UI test harness.
@@ -76,11 +76,11 @@ official .deb archives. This is not a substitute for validating package origins.
 
 ## Install / remove
 
-For the current **097** preview artifact, on the matching test system:
+For the current **100** preview artifact, on the matching test system:
 
 ```
 sha256sum -c SHA256SUMS
-sudo apt install ./nkshot_0.1.0~preview097_amd64.deb
+sudo apt install ./nkshot_0.1.0~preview100_amd64.deb
 nkshot
 # Removal leaves user captures/settings untouched:
 sudo apt remove nkshot
@@ -226,3 +226,41 @@ real compositor capture, PipeWire-device recording or GPU acceptance was perform
 Do not force-install this preview on an incompatible distribution. The real desktop
 acceptance gates above remain mandatory; the source-level 27/27 CTest and 23/23
 static checks plus actual Qt UI workflows do not replace those gates.
+
+## Verified 100 packaging preview (101 delivery checkpoint)
+
+Source commit: `dbd4068fa18b22aae38228234db8f8676645dc61`.
+Source tree: `95a8a059fdf8c6803df4e7dd1697c29c72b5778a`.
+Package: `nkshot_0.1.0~preview100_amd64.deb` (2,808,620 bytes).
+SHA256: `10ea6a6abd761d7a1826cbf0ebfa20df79ce95ddbddc457c92d8bc339a7b0e70`.
+Machine-readable provenance: [preview100.json](../../docs/releases/preview100.json).
+
+All 937 published source blobs matched before and after a clean production Release
+build, with tests and UI capture hooks disabled. This is the 100 app source; 101
+only records the resulting artifact. It does not include uncommitted future work.
+The archive has independent application registrations, private libraries, the
+explicit FFmpeg dependency and a fully resolved extracted ELF dependency closure.
+The package's dependency list matches a second complete scan after extraction.
+
+The nine private dependency ELF build IDs/code sections match the verified 097
+baseline; all thirteen packaged dependency files (including metadata) also match
+097 byte for byte. Strong timeline-pause export/reference and actual packaged-library
+capability probe passed. `--version` still reports upstream application version
+`6.8.3`; the distinct Debian package version is `0.1.0~preview100`.
+
+The extracted production app stayed alive and answered D-Bus Peer.Ping on a private
+test bus both at launch-only and opening a synthetic image. No QML import/type
+errors appeared. These are offscreen startup checks, not native desktop UI tests.
+The existing standalone producer/encoder fixture was reused: its source and CMake
+files are byte-identical between frozen 097 and 100. Running it with the 100
+package's private library prefix passed **10/10**. It compiles producer/encoder
+code into the fixture and is not end-to-end capture via the packaged application.
+Frozen-source static checks passed **25/25**; source100 already passed full CTest
+**27/27**, focused stitching **16/16**, and the documented actual Qt UI workflows.
+Reviewed screenshots remain source-level [099](../../docs/video-annotations.md)
+and [100](../../docs/image-composition.md) evidence, not screenshots of a native
+KDE installation of this package.
+
+No apt install/uninstall transaction, user-computer installation, native KDE,
+real PipeWire audio/video device capture or GPU acceptance was performed. Use only
+on the matching Debian sid amd64 baseline; do not force incompatible dependencies.

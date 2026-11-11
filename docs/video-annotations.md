@@ -62,5 +62,6 @@ ReferenceError/TypeError appeared in the final dark/compact workflows.
 
 Native KDE focus, GPU playback, real screen/device A/V and distribution installation
 remain separate acceptance gates. Source-level software windows are not native
-capture certification. The current downloadable preview097 predates this feature;
-099 is initially a source update, not a claim of a newly built binary package.
+capture certification. This feature first shipped as source099. Production preview100 now includes it;
+see [package scope and checks](../packaging/debian/README.md). Native desktop
+acceptance remains separate from package startup and source-level UI checks.

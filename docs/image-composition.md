@@ -52,6 +52,6 @@ are also checked. These use synthetic local inputs, not native desktop capture.
 - [420×520 chooser](screenshots/100-combine-compact.png)
 - [Actual horizontal result pin](screenshots/100-horizontal-result.png)
 
-The downloadable preview097 predates this source feature. No native KDE acceptance
-or new installable package is implied. Pixel limits are not a process-memory cap:
+Production preview100 now includes this feature; see [package checks](../packaging/debian/README.md).
+No native KDE acceptance is implied. Pixel limits are not a process-memory cap:
 the caller and combining operation may hold several image buffers concurrently.

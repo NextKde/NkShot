@@ -1,0 +1,42 @@
+{
+  "package": "nkshot",
+  "version": "0.1.0~preview100",
+  "architecture": "amd64",
+  "source_commit": "dbd4068fa18b22aae38228234db8f8676645dc61",
+  "source_tree": "95a8a059fdf8c6803df4e7dd1697c29c72b5778a",
+  "published_source_blobs_verified": 937,
+  "artifact": "nkshot_0.1.0~preview100_amd64.deb",
+  "bytes": 2808620,
+  "sha256": "10ea6a6abd761d7a1826cbf0ebfa20df79ce95ddbddc457c92d8bc339a7b0e70",
+  "build_type": "Release",
+  "BUILD_TESTING": false,
+  "NKSHOT_ENABLE_UI_CAPTURE": false,
+  "baseline": "Debian sid amd64, Qt 6.11.2, KF 6.30, Plasma 6.8 development libraries",
+  "checks_passed": [
+    "published source hashes before/after clean Release build",
+    "full extracted ELF dependency closure; rescan matches emitted Depends",
+    "explicit ffmpeg CLI dependency",
+    "independent application registrations",
+    "private dependency build IDs/code sections equal097; packaged dependency files byte-identical",
+    "strong timeline pause export/reference and packaged-library probe",
+    "production launcher version/help",
+    "production offscreen launch-only and synthetic-image open alive and D-Bus responsive; no QML import/type errors",
+    "unchanged standalone producer/encoder fixture with extracted100 private-library prefix:10/10",
+    "frozen static checks25/25; source100 CTest27/27 and source UI workflows"
+  ],
+  "not_verified": [
+    "apt install/uninstall transaction",
+    "user computer installation",
+    "native KDE windows or real capture",
+    "PipeWire devices, live audio/video synchronization",
+    "GPU encoding/playback",
+    "stable release or older distribution compatibility"
+  ],
+  "fixture_scope": "Reused standalone fixture built at097; its CMake and source are byte-identical in100. It compiles producer/encoder code, not full packaged-app recording. Packaged record library separately checked by capability probe.",
+  "application_reported_version": "6.8.3",
+  "remote_ci_status": "No status checks reported at source commit; no CI success claim",
+  "features_since097": [
+    "editable static video annotations099",
+    "horizontal image composition and unified chooser100"
+  ]
+}

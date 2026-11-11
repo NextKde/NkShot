@@ -288,5 +288,5 @@ Controlled delayed capture/Finished platforms cover gating, not native recording
 For generic source builds these external CLI tools remain optional at build time;
 MP4 Open/clip operations report their absence at runtime. Debian preview085
 packaging explicitly declares the `ffmpeg` package dependency (which supplies both
-CLIs). The existing 084 preview requires users to install it separately. Verified 085 and 097 production preview packages are documented in
+CLIs). The existing 084 preview requires users to install it separately. Verified 085, 097 and 100 production preview packages are documented in
 [packaging](../packaging/debian/README.md); native desktop acceptance remains separate.
