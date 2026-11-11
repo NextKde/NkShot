@@ -9,7 +9,7 @@ class ScrollCaptureControllerTest : public QObject {
     static QRectF selection() { return {-180,10,40,100}; }
     static QImage frame(int offset) {
         QImage image(40,100,QImage::Format_RGBA8888);
-        for(int y=0;y<100;++y) for(int x=0;x<40;++x) image.setPixelColor(x,y,QColor(x,y+offset,(x+y+offset)%256));
+        for(int y=0;y<100;++y) for(int x=0;x<40;++x) image.setPixelColor(x,y,QColor((x*7+y+offset)%256,((y+offset)*13+x)%256,(x+(y+offset)*3)%256));
         return image;
     }
 private Q_SLOTS:

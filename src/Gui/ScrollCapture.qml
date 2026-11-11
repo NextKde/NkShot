@@ -9,6 +9,8 @@ Item {
     // Kept as a binding so isolated visual tests can inspect the selector layout
     // without enabling a backend or accepting synthetic capture results.
     property int phase: scrollWindow.phase
+    property bool inspectPixels: false
+    property bool showSeams: true
     component ActionButton: QQC.Button {
         property bool primary: false
         Keys.onReturnPressed: if (enabled) clicked()
@@ -63,7 +65,8 @@ Item {
         }
         QQC.ScrollView {
             id: statusScroll
-            Layout.fillWidth: true; Layout.fillHeight: true
+            Layout.fillWidth: true; Layout.fillHeight: root.phase === 0
+            Layout.preferredHeight: root.phase === 2 ? 54 : -1
             clip: true
             QQC.Label {
                 width: statusScroll.availableWidth
@@ -73,12 +76,128 @@ Item {
                 Accessible.role: Accessible.StaticText
             }
         }
+        ColumnLayout {
+            visible: root.phase === 2
+            Layout.fillWidth: true; Layout.fillHeight: true
+            spacing: 6
+            RowLayout {
+                Layout.fillWidth: true
+                QQC.Label { text: i18nc("@label", "Alignment preview"); color: Kos.AppTheme.mutedText; Layout.fillWidth: true }
+                QQC.ToolButton {
+                    objectName: "nkshotScrollInspectPixels"
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.windowText: Kos.AppTheme.paletteText
+                    text: root.inspectPixels ? i18nc("@action", "Fit") : i18nc("@action", "100%")
+                    enabled: scrollWindow.previewSize.width > 0
+                    onClicked: root.inspectPixels = !root.inspectPixels
+                }
+                QQC.CheckBox {
+                    objectName: "nkshotScrollShowSeams"
+                    palette.buttonText: Kos.AppTheme.paletteText
+                    palette.text: Kos.AppTheme.paletteText
+                    palette.windowText: Kos.AppTheme.paletteText
+                    text: i18nc("@option:check", "Seams")
+                    checked: root.showSeams
+                    onToggled: root.showSeams = checked
+                }
+            }
+            Rectangle {
+                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.minimumHeight: 100
+                color: Kos.AppTheme.contentSecondaryBackground
+                radius: 10
+                clip: true
+                Flickable {
+                    id: previewViewport
+                    objectName: "nkshotScrollPreviewViewport"
+                    anchors.fill: parent; anchors.margins: 8
+                    contentWidth: previewImage.width; contentHeight: previewImage.height
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+                    QQC.ScrollBar.vertical: QQC.ScrollBar {}
+                    QQC.ScrollBar.horizontal: QQC.ScrollBar {}
+                    Item {
+                        id: previewImage
+                        objectName: "nkshotScrollPreviewImage"
+                        readonly property real previewScale: root.inspectPixels ? 1
+                            : Math.min(previewViewport.width / Math.max(1,scrollWindow.previewSize.width), previewViewport.height / Math.max(1,scrollWindow.previewSize.height))
+                        readonly property url source: scrollWindow.previewSource
+                        readonly property int firstColumn: Math.max(0,Math.floor(previewViewport.contentX/1024))
+                        readonly property int firstRow: Math.max(0,Math.floor(previewViewport.contentY/1024))
+                        readonly property int tileColumns: Math.max(0,Math.min(Math.ceil(previewViewport.width/1024)+1,Math.ceil(scrollWindow.previewSize.width/1024)-firstColumn))
+                        readonly property int tileRows: Math.max(0,Math.min(Math.ceil(previewViewport.height/1024)+1,Math.ceil(scrollWindow.previewSize.height/1024)-firstRow))
+                        property int tileRevision: 0
+                        readonly property int tileCount: tiles.count
+                        readonly property int status: {
+                            let revision=tileRevision
+                            if (!root.inspectPixels) return fittedImage.status
+                            if (tiles.count === 0) return Image.Null
+                            for (let i=0;i<tiles.count;++i) {
+                                let tile=tiles.itemAt(i)
+                                if (!tile || tile.status !== Image.Ready) return Image.Loading
+                            }
+                            return Image.Ready
+                        }
+                        x: root.inspectPixels ? 0 : Math.max(0,(previewViewport.width-width)/2)
+                        width: scrollWindow.previewSize.width * previewScale
+                        height: scrollWindow.previewSize.height * previewScale
+                        Image {
+                            id: fittedImage
+                            anchors.fill: parent
+                            visible: !root.inspectPixels
+                            source: root.inspectPixels ? "" : scrollWindow.previewSource
+                            sourceSize: Qt.size(Math.max(1,Math.min(1024,Math.ceil(previewViewport.width))),Math.max(1,Math.min(1024,Math.ceil(previewViewport.height))))
+                            cache: false
+                        }
+                        Repeater {
+                            id: tiles
+                            onItemAdded: (index,item) => { previewImage.tileRevision++ }
+                            onItemRemoved: (index,item) => { previewImage.tileRevision++ }
+                            model: root.inspectPixels ? previewImage.tileColumns*previewImage.tileRows : 0
+                            Image {
+                                required property int index
+                                objectName: "nkshotScrollPreviewTile"
+                                x: (previewImage.firstColumn + index % previewImage.tileColumns)*1024
+                                y: (previewImage.firstRow + Math.floor(index/previewImage.tileColumns))*1024
+                                width: Math.min(1024,scrollWindow.previewSize.width-x)
+                                height: Math.min(1024,scrollWindow.previewSize.height-y)
+                                source: scrollWindow.previewSource.toString()+"/tile/"+x+"/"+y+"/"+width+"/"+height
+                                sourceSize: Qt.size(width,height)
+                                cache: false; smooth: false
+                            }
+                        }
+                        Repeater {
+                            model: root.showSeams ? scrollWindow.seamRows : []
+                            Rectangle {
+                                required property var modelData
+                                x: 0; y: modelData * previewImage.previewScale - 1
+                                width: previewImage.width; height: 2
+                                color: "#e59a31"
+                            }
+                        }
+                    }
+                }
+                QQC.Label {
+                    anchors.centerIn: parent
+                    visible: scrollWindow.previewSize.width === 0
+                    text: i18nc("@info", "Accepted frames appear here.")
+                    color: Kos.AppTheme.mutedText
+                }
+            }
+            QQC.Label {
+                Layout.fillWidth: true
+                text: i18nc("@info", "Inspect joins before finishing. Seam marks are not saved.")
+                color: Kos.AppTheme.mutedText; font.pixelSize: 11; wrapMode: Text.Wrap
+            }
+        }
         RowLayout {
             Layout.fillWidth: true
             ActionButton { text: i18nc("@action", "Cancel"); onClicked: scrollWindow.cancelPreview() }
             Item { Layout.fillWidth: true }
             ActionButton {
                 visible: root.phase === 2
+                objectName: "nkshotScrollFinish"
                 text: i18nc("@action", "Finish")
                 enabled: !scrollWindow.busy && scrollWindow.canFinish
                 onClicked: scrollWindow.finishCapture()
@@ -88,6 +207,7 @@ Item {
                 primary: true
                 text: root.phase === 0 ? i18nc("@action", "Select region")
                     : scrollWindow.busy ? i18nc("@info", "Capturing…")
+                    : scrollWindow.retryFrame ? i18nc("@action", "Retry frame")
                     : scrollWindow.frameCount === 0 ? i18nc("@action", "Capture first") : i18nc("@action", "Capture next")
                 enabled: scrollWindow.available && !scrollWindow.busy && (root.phase === 0 || scrollWindow.canCapture)
                 onClicked: root.phase === 0 ? scrollWindow.selectRegion() : scrollWindow.captureNext()
@@ -110,7 +230,7 @@ Item {
         readonly property rect selectionRect: Qt.rect(Math.min(origin.x,end.x), Math.min(origin.y,end.y), Math.abs(end.x-origin.x), Math.abs(end.y-origin.y))
         readonly property int pixelWidth: Math.round(Math.max(origin.x,end.x)*scrollWindow.selectionScale)-Math.round(Math.min(origin.x,end.x)*scrollWindow.selectionScale)
         readonly property int pixelHeight: Math.round(Math.max(origin.y,end.y)*scrollWindow.selectionScale)-Math.round(Math.min(origin.y,end.y)*scrollWindow.selectionScale)
-        readonly property bool regionValid: pixelWidth>0 && pixelHeight>24 && pixelWidth<=8192 && pixelHeight<=32000 && pixelWidth*pixelHeight<=40000000
+        readonly property bool regionValid: pixelWidth>=8 && pixelHeight>24 && pixelWidth<=8192 && pixelHeight<=8192 && pixelWidth*pixelHeight<=16000000
         function adjust(dx,dy,resizeRegion,fast) {
             if (selectionRect.width<=0 || selectionRect.height<=0) {
                 origin=Qt.point(Math.floor(width/4),Math.floor(height/4))
@@ -195,7 +315,7 @@ Item {
                 id: hint
                 anchors.centerIn: parent; width: parent.width - 28
                 text: selector.pixelWidth>0 && selector.pixelHeight>0 && !selector.regionValid
-                    ? i18nc("@info", "Use a region at least 25 px tall, no wider than 8192 px and no more than 40 MP.")
+                    ? i18nc("@info", "Use a region at least 8 px wide and 25 px tall, at most 8192 px per side and 16 MP.")
                     : scrollWindow.phase === 1 ? scrollWindow.statusText : i18nc("@info", "Drag a region, or use arrows to move.\nAlt + arrows resize; Shift adjusts faster.")
                 wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; color: "white"
             }

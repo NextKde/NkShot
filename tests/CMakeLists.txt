@@ -76,11 +76,11 @@ ecm_add_test(ImageTransformsTest.cpp ../src/Imaging/ImageTransforms.cpp
 set_tests_properties(image_transforms_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # Isolated frame-session core; no live desktop capture acceptance claim.
-ecm_add_test(ScrollCaptureSessionTest.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/ScrollFrameCrop.cpp ../src/Imaging/VerticalStitcher.cpp
+ecm_add_test(ScrollCaptureSessionTest.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/ScrollFrameAligner.cpp ../src/Imaging/ScrollFrameCrop.cpp ../src/Imaging/VerticalStitcher.cpp
     TEST_NAME scroll_capture_session_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(scroll_capture_session_test PROPERTIES TIMEOUT 20)
 
-ecm_add_test(ScrollCaptureControllerTest.cpp ../src/Imaging/ScrollCaptureController.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/VerticalStitcher.cpp
+ecm_add_test(ScrollCaptureControllerTest.cpp ../src/Imaging/ScrollCaptureController.cpp ../src/Imaging/ScrollCaptureSession.cpp ../src/Imaging/ScrollFrameAligner.cpp ../src/Imaging/VerticalStitcher.cpp
     TEST_NAME scroll_capture_controller_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(scroll_capture_controller_test PROPERTIES TIMEOUT 20)
 
@@ -162,3 +162,7 @@ set_tests_properties(owned_recording_output_test PROPERTIES TIMEOUT 30)
 ecm_add_test(StatusNotifierAvailabilityTest.cpp ../src/Platforms/StatusNotifierAvailability.cpp ../src/Platforms/StatusNotifierAvailability.h
     TEST_NAME status_notifier_availability_test LINK_LIBRARIES Qt::Test Qt::Core Qt::DBus)
 set_tests_properties(status_notifier_availability_test PROPERTIES TIMEOUT 30)
+
+ecm_add_test(ScrollFrameAlignerTest.cpp ../src/Imaging/ScrollFrameAligner.cpp
+    TEST_NAME scroll_frame_aligner_test LINK_LIBRARIES Qt::Test Qt::Gui)
+set_tests_properties(scroll_frame_aligner_test PROPERTIES TIMEOUT 45)

@@ -94,3 +94,9 @@ and adapter gate are not a delivered user-facing scrolling feature.
 Unavailable-state/selection-layout tests do not establish native success. The
 next gate is real desktop capture, focus/restoration, permissions, fractional DPI
 and exported result acceptance; see [preview guide](scroll-preview.md).
+
+082 advances the manual scrolling route with a conservative tolerance matcher,
+accepted-composite/seam inspection and explicit rejected-frame retry. These are
+validated with controlled synthetic frames, not native desktop acceptance. Real
+KWin API5 capture, focus, exclusion and end-to-end scrolling on a user's page remain
+next gates; automatic input/scrolling is not introduced.

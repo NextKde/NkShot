@@ -18,7 +18,35 @@
 #include <QDBusPendingReply>
 #include <QDBusVariant>
 #include <KLocalizedString>
+#include <QQuickImageProvider>
+#include <QMutex>
+#include <QMutexLocker>
 using NkShot::Imaging::ScrollCaptureController;
+class ScrollPreviewProvider final : public QQuickImageProvider {
+public:
+    ScrollPreviewProvider() : QQuickImageProvider(QQuickImageProvider::Image) {}
+    void setImage(const QImage &image) { QMutexLocker lock(&m_mutex); m_image=image; }
+    QImage requestImage(const QString &id, QSize *size, const QSize &requested) override {
+        QMutexLocker lock(&m_mutex);
+        QImage image=m_image;
+        const auto parts=id.split(QLatin1Char('/'));
+        if(parts.size()>1) {
+            if(parts.size()!=6 || parts[1]!=QLatin1String("tile")) return {};
+            bool valid=true;
+            const auto number=[&](int index) { bool ok=false; const int value=parts[index].toInt(&ok); valid&=ok; return value; };
+            const int x=number(2),y=number(3),w=number(4),h=number(5);
+            const QRect crop(x,y,w,h);
+            if(!valid || w<1 || h<1 || w>1024 || h>1024 || !image.rect().contains(crop)) return {};
+            image=image.copy(crop);
+        }
+        if(size)*size=image.size();
+        return requested.isValid() ? image.scaled(requested,Qt::KeepAspectRatio,Qt::SmoothTransformation) : image;
+    }
+
+private:
+    QMutex m_mutex;
+    QImage m_image;
+};
 ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
     : QQuickView(engine,nullptr),m_engine(engine),m_backend(new ScrollFrameKWin(this)),
       m_controller(new ScrollCaptureController(m_backend,[this](quint64 ticket,QRect rect){return m_backend->request(ticket,m_screen,rect);},[this]{m_backend->cancel();},this))
@@ -30,6 +58,10 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
     for(auto screen:QGuiApplication::screens()) {m_screens.append(screen);m_outputs.append(screen->name().isEmpty()?i18nc("@item","Display %1",m_screens.size()):screen->name());}
     if(!m_screens.isEmpty()) m_screen=m_screens.first();
     connect(qGuiApp,&QGuiApplication::screenRemoved,this,[this](QScreen *screen){if(screen==m_screen) cancelPreview();});
+    static quint64 nextPreview = 0;
+    m_providerId=QStringLiteral("nkshotscroll%1").arg(++nextPreview);
+    m_previewProvider=new ScrollPreviewProvider;
+    engine->addImageProvider(m_providerId,m_previewProvider);
     m_status=i18nc("@info","Checking compositor window exclusion…");
     loadView(this);
     new QShortcut(QKeySequence(Qt::Key_Escape),this,this,&ScrollCaptureWindow::cancelPreview);
@@ -40,14 +72,7 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
         // requires API5 and filters this process in the compositor render itself.
         QMetaObject::invokeMethod(this,[this,ticket]{m_controller->confirmHidden(ticket,currentLayout());},Qt::QueuedConnection);
     });
-    connect(m_controller,&ScrollCaptureController::stateChanged,this,&ScrollCaptureWindow::changed);
-    connect(m_controller,&ScrollCaptureController::failed,this,&ScrollCaptureWindow::setStatus);
-    connect(m_controller,&ScrollCaptureController::frameAccepted,this,[this](int count){
-        setStatus(i18ncp("@info","%1 frame accepted. Scroll the target, then capture next.","%1 frames accepted. Scroll the target, then capture next.",count));
-    });
-    connect(m_controller,&ScrollCaptureController::resultReady,this,[this](const QImage &image){
-        m_result=image; showResult();
-    });
+    bindController();
     connect(QCoreApplication::instance(),&QCoreApplication::aboutToQuit,this,[this]{delete this;});
     if(!QDBusConnection::sessionBus().isConnected()) {
         setStatus(i18nc("@info","Unavailable: connect to a KDE desktop with KWin ScreenShot2 API 5 or later. No screenshot has been taken."));
@@ -64,6 +89,34 @@ ScrollCaptureWindow::ScrollCaptureWindow(QQmlEngine *engine)
             :i18nc("@info","Unavailable: safe window exclusion requires KWin ScreenShot2 API 5 or later. No delay-based fallback is used."));
     });
 }
+void ScrollCaptureWindow::bindController()
+{
+    connect(m_controller,&ScrollCaptureController::stateChanged,this,&ScrollCaptureWindow::changed);
+    connect(m_controller,&ScrollCaptureController::failed,this,[this](const QString &reason){
+        m_retryFrame=true;
+        setStatus(i18nc("@info","%1 Accepted frames are kept. Adjust the scroll position and retry this frame.",reason));
+    });
+    connect(m_controller,&ScrollCaptureController::frameAccepted,this,[this](int count){
+        m_retryFrame=false; updatePreview();
+        setStatus(i18ncp("@info","%1 frame accepted. Scroll the target, then capture next.","%1 frames accepted. Scroll the target, then capture next.",count));
+    });
+    connect(m_controller,&ScrollCaptureController::resultReady,this,[this](const QImage &image){
+        m_result=image; showResult();
+    });
+}
+void ScrollCaptureWindow::updatePreview()
+{
+    m_preview=m_controller->preview(); m_previewSeams=m_controller->seams();
+    m_previewProvider->setImage(m_preview); ++m_previewRevision;
+}
+QUrl ScrollCaptureWindow::previewSource() const
+{
+    return m_preview.isNull()?QUrl():QUrl(QStringLiteral("image://%1/%2").arg(m_providerId).arg(m_previewRevision));
+}
+QVariantList ScrollCaptureWindow::seamRows() const
+{
+    QVariantList rows; for(int row:m_previewSeams) rows.append(row); return rows;
+}
 void ScrollCaptureWindow::loadView(QQuickView *view)
 {
     auto context=new QQmlContext(m_engine->rootContext(),view);
@@ -75,6 +128,7 @@ void ScrollCaptureWindow::loadView(QQuickView *view)
 ScrollCaptureWindow::~ScrollCaptureWindow()
 {
     m_controller->cancel(); delete m_overlay.data(); restoreWindows();
+    if(m_engine)m_engine->removeImageProvider(m_providerId);
 }
 void ScrollCaptureWindow::setStatus(const QString &text) {m_status=text;Q_EMIT changed();}
 void ScrollCaptureWindow::setOutputIndex(int index)
@@ -127,7 +181,7 @@ void ScrollCaptureWindow::acceptRegion(const QRectF &local)
     if(!m_controller->begin(layout,local.translated(layout.logicalGeometry.topLeft()))) {
         setStatus(i18nc("@info","This region is too small, too large, or no longer on this display. Drag a new region."));return;
     }
-    m_phase=2;
+    m_phase=2; setMinimumSize({420,420}); resize(640,560);
     if(m_overlay) {auto overlay=m_overlay.data();m_overlay=nullptr;overlay->removeEventFilter(this);overlay->close();overlay->deleteLater();}
     setStatus(i18nc("@info","Capture the first frame, then scroll the target yourself. Finish creates a separate image; the original stays unchanged."));
     show();raise();requestActivate();

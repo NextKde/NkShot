@@ -2,11 +2,17 @@
 #pragma once
 #include <QQuickView>
 #include <QPointer>
+#include <QVariantList>
 #include "Imaging/ScrollCaptureController.h"
 class ScrollFrameKWin;
 class QScreen;
+class ScrollPreviewProvider;
 class ScrollCaptureWindow : public QQuickView {
     Q_OBJECT
+    Q_PROPERTY(QUrl previewSource READ previewSource NOTIFY changed)
+    Q_PROPERTY(QSize previewSize READ previewSize NOTIFY changed)
+    Q_PROPERTY(QVariantList seamRows READ seamRows NOTIFY changed)
+    Q_PROPERTY(bool retryFrame READ retryFrame NOTIFY changed)
     Q_PROPERTY(QStringList outputs READ outputs CONSTANT)
     Q_PROPERTY(int outputIndex READ outputIndex WRITE setOutputIndex NOTIFY changed)
     Q_PROPERTY(qreal selectionScale READ selectionScale NOTIFY changed)
@@ -20,6 +26,10 @@ class ScrollCaptureWindow : public QQuickView {
 public:
     explicit ScrollCaptureWindow(QQmlEngine *engine);
     ~ScrollCaptureWindow() override;
+    QUrl previewSource() const;
+    QSize previewSize() const { return m_preview.size(); }
+    QVariantList seamRows() const;
+    bool retryFrame() const { return m_retryFrame; }
     QStringList outputs() const { return m_outputs; }
     int outputIndex() const { return m_outputIndex; }
     void setOutputIndex(int index);
@@ -42,6 +52,17 @@ protected:
     bool event(QEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
 private:
+#ifdef NKSHOT_ENABLE_UI_CAPTURE
+    friend class ScrollSessionUiChecks;
+#endif
+    void bindController();
+    void updatePreview();
+    QString m_providerId;
+    ScrollPreviewProvider *m_previewProvider = nullptr;
+    QImage m_preview;
+    QVector<int> m_previewSeams;
+    quint64 m_previewRevision = 0;
+    bool m_retryFrame = false;
     NkShot::Imaging::ScrollOutputLayout currentLayout() const;
     void restoreWindows();
     void loadView(QQuickView *view);

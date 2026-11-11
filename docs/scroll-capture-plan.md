@@ -1,6 +1,8 @@
 # Rolling capture feasibility and acceptance plan
 
-Current status: [discoverable manual preview](scroll-preview.md) (079 entry, 058
+Current status (082): scrolling-only conservative tolerance and in-session composite/seam inspection with rejected-frame retry are integrated. Synthetic controlled-frame tests do not certify native capture.
+
+[Discoverable manual preview](scroll-preview.md) (079 entry, 058
 integration, 059 keyboard refinement) connects the selector, panel, controller and
 API5 adapter. The entry no longer needs an environment flag; the API5 safety gate
 and missing native KWin acceptance remain. Numbered sections below record the evolving implementation;

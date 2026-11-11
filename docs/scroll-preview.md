@@ -28,7 +28,12 @@ safety check or establish native acceptance.
 4. Choose Capture first. Scroll the target yourself, then Capture next. No wheel
    injection or automatic scrolling happens. Accepted-frame count and failure
    guidance are in the compact panel. Cancellation and timeouts preserve safety.
-5. After at least two accepted frames, Finish opens an independent pin preview
+5. Review the accepted composite in **Alignment preview**. Fit shows the page;
+   **100%** enables pixel inspection and scrolling using only visible 1024×1024
+   image tiles, rather than uploading a whole tall image as one GPU texture. **Seams** marks append joins
+   only in the preview, never in saved pixels. If a frame is rejected, the accepted
+   image stays visible and **Retry frame** captures again after you adjust the scroll.
+6. After at least two accepted frames, Finish opens an independent pin preview
    with Copy/Save As. Original image, undo history and export state are unchanged.
    Failed result-window creation retains the result for a Finish retry.
 
@@ -36,8 +41,27 @@ Every actual frame independently rechecks API5 and explicitly asks the composito
 to omit all windows from the caller PID. This is not a fixed-delay repaint guess.
 Changed output layout/scale, failed captures, unsafe/ambiguous/no overlap and size
 limits reject the candidate. There are at most 16 accepted frames and existing
-40 MP/8192-width/32000-height output limits. Exact matching is deliberately
-conservative and may reject ordinary pages with animations or sticky content.
+40 MP/8192-width/32000-height output limits. Each frame is limited to 8192 pixels
+per side and 16 MP. The scrolling-only matcher tolerates bounded pixel noise and
+small changed islands, but rejects weak texture/coverage, competing offsets,
+reverse/no progress and detected fixed headers. Keep animation and sticky content
+outside the selected area. Ordinary low-information pages can still be rejected;
+a smaller scroll step or more distinctive region is safer than a guessed join.
+
+Matching uses consecutive actual accepted frames. A successful estimate appends
+only the new tail to the accepted composite; no averaging, blending, warping or
+reconstruction is performed. Previously accepted pixels are retained. A changed
+small overlap island may therefore retain the older appearance. The exact
+file-composition matcher is separate and unchanged.
+
+The bounded search samples at most 48×24 positions per signed displacement,
+requires 94% overall and textured-anchor agreement, broad spatial coverage within the actual textured footprint (not the surrounding white margins) and an
+8-point runner-up separation, then checks the complete chosen overlap. A near tie may be fully checked only
+when there are at most eight competing candidates and no more than 32 million
+compared pixels in total; otherwise it is rejected. Per-channel
+tolerance is 8 levels. These are conservative heuristics, not a proof of semantic
+identity or a probability of correctness; inspect the joins. Search is bounded by
+frame dimensions and does not compare every pixel at every displacement.
 
 ## What has and has not been checked
 
@@ -58,9 +82,13 @@ rules; end-to-end Finish/export from real scrolling. Selector keyboard movement,
 implemented and exercised with offscreen Qt input. Actual native compositor focus
 and screen-reader acceptance remain pending.
 
-The cloud environment has no KWin and forbids Unix socket creation, so even a test
-DBus could not be started. No mock image is routed through the product as a real
-capture. See [source evidence and architecture](scroll-capture-plan.md) and the
+The cloud environment has no KWin. Dedicated tests can use an isolated loopback
+D-Bus session, but that does not provide a compositor. The 082 test-only friend
+replaces the controller's capture dependency with controlled synthetic frames to
+exercise the real session, provider, preview, retry, Finish and pin export. It is
+compiled only into the opted-in UI harness; no production environment override
+can make the native backend accept synthetic frames. Such screenshots are labeled
+synthetic alignment diagnostics, not successful desktop captures. See [source evidence and architecture](scroll-capture-plan.md) and the
 [capability matrix](capability-matrix.md).
 
 ## Fine-tuning a region (059)

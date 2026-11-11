@@ -35,6 +35,7 @@ public:
     State state() const { return m_state; }
     int frameCount() const { return m_frameCount; }
     QImage preview() const { return m_composite; }
+    QVector<int> seams() const { return m_seams; }
 private:
     bool consumes(quint64 ticket);
     Region m_region;
@@ -45,5 +46,7 @@ private:
     qint64 m_maximumPixels;
     int m_frameCount = 0;
     QImage m_composite;
+    QImage m_lastFrame;
+    QVector<int> m_seams;
 };
 }

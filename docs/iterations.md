@@ -2183,3 +2183,37 @@ Reviewed captures: [English → Chinese](screenshots/080-en-zh.png),
 [360-pixel window](screenshots/080-narrow.png), and
 [missing-pack setup](screenshots/080-setup.png). All text is synthetic and no private
 media is included. Native KDE/GPU acceptance is not claimed by these software tests.
+
+## 082 — Inspectable, retryable manual scrolling capture
+
+This stage resumes the published 080 baseline; paused 081 translation work is not
+included. Manual scrolling sessions now estimate a conservative unique vertical
+alignment despite small pixel noise or a localized content change. Texture coverage,
+competing shifts, stationary headers, reverse movement and no progress are checked;
+low-confidence frames are rejected without changing the accepted result. Original
+pixels are appended, never blended or reconstructed. Exact file stitching is unchanged.
+
+The session shows its actual composite, optional seam marks, Fit and 100% inspection.
+Native-size inspection requests visible tiles no larger than 1024 × 1024 rather than
+uploading a whole long image as one texture. A failed frame leaves the preview and
+Finish available, with an explicit Retry frame action. These are alignment inspection
+aids, not a guarantee of correct capture on every page.
+
+Focused validation passed four CTests (13.05 seconds), including 17 aligner QtTest
+results and real QPainter text in left-aligned and centered columns. The retained
+glyph fixture exposed coarse sampling aliases and white-center header false positives;
+bounded full candidate comparison and local shape checks corrected them without
+weakening the uniqueness threshold. Five actual application UI cases passed: light,
+dark, 420-pixel width, a 5000-pixel composite inspected across a tile boundary, and
+unsupported-platform handling. Controlled synthetic frames flowed through the real
+controller, session, preview and pinned-result PNG export; rejection/retry preserved
+accepted pixels. Static checks passed 18/18 and whitespace checks passed.
+
+Reviewed software-rendered window captures: [alignment preview](screenshots/082-preview.png),
+[dark preview](screenshots/082-preview-dark.png),
+[rejected frame and retry](screenshots/082-retry-compact.png), and
+[long-image pixel inspection](screenshots/082-long-pixels.png).
+All page content is generated test data. The test-only capture dependency supplies
+frames; these images are not evidence of native desktop acquisition. Actual KDE
+Screenshot API 5 capture, focus/hide timing, mixed-DPR desktops and GPU rendering
+remain unverified. No automatic scrolling or input injection was added.

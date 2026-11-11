@@ -42,6 +42,7 @@ public:
     State state() const { return m_state; }
     int frameCount() const { return m_session.frameCount(); }
     QImage preview() const { return m_session.preview(); }
+    QVector<int> seams() const { return m_session.seams(); }
 Q_SIGNALS:
     void stateChanged();
     void hideWindowsRequested(quint64 ticket);

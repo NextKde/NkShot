@@ -237,3 +237,18 @@ set `NKSHOT_TEST_TRANSLATION=1` and an ordinary synthetic input image.
 `NKSHOT_TEST_TRANSLATION_DEFAULT=1` removes all explicit overrides and exercises
 the standard XDG layout; `NKSHOT_TEST_TRANSLATION_NARROW=1` checks 360-pixel width.
 The setup-link test inspects its fixed documentation URL without opening a browser.
+
+## Scrolling alignment and preview (082)
+
+The scrolling session uses `ScrollFrameAligner`; file-based exact composition
+continues to use `VerticalStitcher`. Focused tests are `scroll_frame_aligner_test`,
+`scroll_capture_session_test`, `scroll_capture_controller_test` and
+`vertical_stitcher_test`. Real QPainter text/white-margin fixtures require the GUI
+platform to be set to offscreen when no desktop exists.
+
+The opted-in UI harness flag `NKSHOT_TEST_SCROLL_SESSION=1` supplies explicitly
+synthetic frames through the real controller/session into the actual preview,
+retry and Finish/pin-export route. It cannot validate the native KWin backend.
+`NKSHOT_TEST_SCROLL_SESSION_COMPACT=1` checks 420-pixel width; the usual dark flag
+checks theme. Production has no environment switch to inject frames. Existing
+`NKSHOT_TEST_SCROLL_PREVIEW=1` still verifies unavailable API5 behavior separately.

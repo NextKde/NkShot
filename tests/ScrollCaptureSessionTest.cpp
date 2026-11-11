@@ -108,7 +108,7 @@ private Q_SLOTS:
         QImage first(40,100,QImage::Format_RGBA8888); first.fill(Qt::red);
         QVERIFY(s.acceptFrame(*s.requestFrame(),region(),first).accepted());
         auto changed=first; changed.setPixelColor(0,99,Qt::blue);
-        QCOMPARE(s.acceptFrame(*s.requestFrame(),region(),changed).stitchError,StitchError::AmbiguousOverlap);
+        QCOMPARE(s.acceptFrame(*s.requestFrame(),region(),changed).stitchError,StitchError::NoOverlap);
         changed.setColorSpace(QColorSpace::SRgb);
         QCOMPARE(s.acceptFrame(*s.requestFrame(),region(),changed).stitchError,StitchError::IncompatibleFrames);
         QCOMPARE(s.frameCount(),1); QCOMPARE(s.preview(),first);
