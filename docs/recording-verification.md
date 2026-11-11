@@ -145,3 +145,32 @@ error/completion notification, while `destroy()` returns early for a null source
 That path may leave shutdown pending and is **not fixed by 064**. It needs a
 separately verified dependency patch, not an arbitrary timer pretending encoding
 has finished. Capture pause/resume remains unimplemented.
+
+## Patched dependency initialization failure (065)
+
+The specific null-source termination gap above is now fixed in the isolated
+**patched** KPipeWire build. The unpatched public `PipeWireRecord` probe produced
+`Failed to create PipeWire context`, emitted no error/completion, then hung during
+destruction after Stop; the external eight-second watchdog exited 124. Running
+the same probe against the patched library emitted error and Idle and exited 0.
+
+Both original, unpatched files byte-match the pinned upstream commit recorded in
+`third_party/patches/kpipewire-initialize-failure.json`. The inspected master branch
+also retained the failing initialization branch at review time. The downstream
+patch keeps the failed source alive for normal producer-thread cleanup, emits the
+error, and queues initialization only after handlers are connected. Normal cleanup
+emits completion once and exits the thread; repeated cleanup is guarded. No fake
+completion timer or successful recording signal is added.
+
+`recording_initialize_failure_test` links the actual installed recording library.
+It deliberately uses an absent PipeWire context configuration and verifies six
+attempts across normal failure, Stop on error and immediate Stop. Each must report
+one nonempty error, one completion, inactive recording, no new output or change to existing file bytes, a closed
+owned descriptor and a returning destructor. Environment changes are scoped to
+the test process and restored exactly. CTest's timeout detects the old hang; it
+does not convert it to success. This is real failure-path execution, not simulated
+successful capture. Hardware codecs and native KDE recording remain unverified.
+
+The library patch must be applied when rebuilding the pinned dependency, as shown
+in [building.md](building.md). Installing unpatched distribution binaries does not
+include this fix. The patch has not been submitted or accepted upstream.

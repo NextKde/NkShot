@@ -39,7 +39,25 @@ git -C "$KQUICKIMAGEEDITOR_SOURCE" apply "$NKSHOT_SOURCE/third_party/patches/kqu
 This fixes a reproduced incremental-shadow boundary difference. The patch targets
 commit `ac7568044defc89c494b0d6edb60073cb0ad8b25`; do not blindly reapply it to a
 newer upstream version. `shadow_repaint_test` detects whether the linked library
-still exhibits the issue. Then build NkShot:
+still exhibits the issue.
+
+Before building the pinned KPipeWire 6.8.3 source, apply its initialization-failure
+fix as well:
+
+```sh
+git -C "$KPIPEWIRE_SOURCE" apply --check "$NKSHOT_SOURCE/third_party/patches/kpipewire-initialize-failure.patch"
+git -C "$KPIPEWIRE_SOURCE" apply "$NKSHOT_SOURCE/third_party/patches/kpipewire-initialize-failure.patch"
+```
+
+The patch targets commit `f30b39c53092673d136660c8deaf24d3935723eb`. Its companion
+JSON records original source hashes. It preserves the normal cleanup path after
+stream initialization fails and connects completion/error handlers before starting
+asynchronous initialization. Build and install that patched dependency into the
+same prefix before configuring NkShot. Do not blindly apply it to a newer version
+or modify a distribution's installed binaries. This is a local downstream patch,
+not an upstream-accepted change. `recording_initialize_failure_test` directly
+checks the linked library and intentionally fails/times out against the affected
+unpatched implementation. Then build NkShot:
 
 ```sh
 cmake -S . -B build -G Ninja \

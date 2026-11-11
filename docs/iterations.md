@@ -1428,3 +1428,31 @@ No real KWin/PipeWire start/stop, encoder write failure, audio synchronization o
 hot-unplug acceptance is claimed. The recording verification guide records a
 pre-existing dependency initialization path that can omit error/completion signals;
 it remains open rather than being masked with a fake completion timeout.
+
+## 065 — Fix real KPipeWire initialization-failure shutdown
+
+A standalone program using the installed public PipeWireRecord API reproduced the
+null-source shutdown failure: no error/completion was emitted, Stop left Rendering,
+and destruction timed out (exit 124). Both relevant local source files were
+byte-compared with the published pinned upstream commit. The inspected upstream
+master also retained the faulty initialization branch.
+
+The minimal downstream patch retains the failed source for normal cleanup,
+emits its error (with a nonempty fallback), and posts asynchronous initialization
+after installing all error/completion handlers. The same probe then exited 0.
+The patch and original-file hashes are shipped with build instructions, and
+`git apply --check` passes against the clean pinned archive. No system binaries
+were modified; the isolated development prefix was rebuilt and installed.
+
+The new test exercises the real linked library six times across ordinary failure,
+Stop on error and immediate Stop. It verifies exactly one error/completion, no
+output creation or change to existing bytes, descriptor closure and returning destruction. Independent review
+found no patch blocker and prompted the additional stop cases and exact environment
+restoration. Build, CTest 12/12, static 18/18 and whitespace checks pass. Upstream
+video encoder checks remain 11 passed/6 skipped; audio checks remain 5 passed.
+
+No UI changes were needed. The actual [playback regression window](screenshots/065-playback-regression.png)
+was reviewed using synthetic video. These results validate failed initialization,
+not successful KWin capture, recording pause/resume or audio/video synchronization.
+The fix applies to the documented patched dependency, not arbitrary installed
+KPipeWire versions, and it is not represented as upstream-accepted.

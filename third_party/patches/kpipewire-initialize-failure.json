@@ -1,0 +1,13 @@
+{
+  "upstream": "https://github.com/KDE/kpipewire",
+  "commit": "f30b39c53092673d136660c8deaf24d3935723eb",
+  "version": "6.8.3",
+  "patch": "kpipewire-initialize-failure.patch",
+  "status": "Local downstream fix; not submitted or accepted upstream",
+  "original_sha256": {
+    "src/pipewireproduce.cpp": "90a097c45571b1bce7ccb5e2387ff44d24eacd20a19d2302505fe91b5590432f",
+    "src/pipewirebaseencodedstream.cpp": "af85bc2860c15d83206ce9fa6c487f476aa727267d5ad8329a71e1f056eb1fe7"
+  },
+  "regression_test": "recording_initialize_failure_test",
+  "acceptance": "Real linked-library failed-context error/completion/destruction only; successful native capture remains unverified"
+}

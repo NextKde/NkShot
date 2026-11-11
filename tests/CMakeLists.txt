@@ -95,3 +95,7 @@ set_tests_properties(recording_output_path_test PROPERTIES TIMEOUT 10)
 # Queued Qt callback lifetime tests, not compositor capture tests.
 ecm_add_test(CaptureStreamLeaseTest.cpp TEST_NAME capture_stream_lease_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(capture_stream_lease_test PROPERTIES TIMEOUT 10)
+
+# Actual linked KPipeWire failure/termination regression; requires the documented patch.
+ecm_add_test(RecordingInitializeFailureTest.cpp TEST_NAME recording_initialize_failure_test LINK_LIBRARIES Qt::Test Qt::Gui K::KPipeWireRecord)
+set_tests_properties(recording_initialize_failure_test PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

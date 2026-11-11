@@ -1,0 +1,37 @@
+--- a/src/pipewireproduce.cpp
++++ b/src/pipewireproduce.cpp
+@@ -111,7 +111,13 @@
+     if (!created || !m_stream->error().isEmpty()) {
+         qCWarning(PIPEWIRERECORD_LOGGING) << "failed to set up stream for" << m_nodeId << m_stream->error();
+         m_error = m_stream->error();
+-        m_stream.reset(nullptr);
++        if (m_error.isEmpty()) {
++            m_error = QStringLiteral("Failed to initialize the PipeWire capture stream");
++        }
++        Q_EMIT encodingError(m_error);
++        // Retain the source until normal cleanup: destroy() also emits finished
++        // and quits the producer thread, even when no encoder was initialized.
++        QMetaObject::invokeMethod(this, &PipeWireProduce::destroy, Qt::QueuedConnection);
+         return;
+     }
+     connect(m_stream.get(), &PipeWireSourceStream::streamParametersChanged, this, &PipeWireProduce::handleStreamParametersChanged);
+--- a/src/pipewirebaseencodedstream.cpp
++++ b/src/pipewirebaseencodedstream.cpp
+@@ -221,7 +221,6 @@
+     d->m_produce->setRequestedSize(d->m_requestedSize);
+     d->m_produce->moveToThread(d->m_produceThread.get());
+     d->m_produceThread->start();
+-    QMetaObject::invokeMethod(d->m_produce.get(), &PipeWireProduce::initialize, Qt::QueuedConnection);
+ 
+     connect(d->m_produce.get(), &PipeWireProduce::started, this, [this]() {
+         d->m_active = true;
+@@ -250,6 +249,9 @@
+             close(d->m_fd.value());
+         }
+     });
++    // A fast initialization failure must not outrun the error/finished handlers.
++    QMetaObject::invokeMethod(d->m_produce.get(), &PipeWireProduce::initialize, Qt::QueuedConnection);
++
+ }
+ 
+ void PipeWireBaseEncodedStream::stop()
