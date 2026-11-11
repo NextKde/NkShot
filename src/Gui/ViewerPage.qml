@@ -218,7 +218,7 @@ EmptyPage {
                             objectName: "nkshotResizeImageAction"
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
-                            text: contextWindow.resizingImage ? i18nc("@info", "Preparing copy…") : i18nc("@action", "Resize a copy…")
+                            text: contextWindow.resizingImage ? i18nc("@info", "Preparing copy…") : i18nc("@action", "Size and orientation…")
                             icon.name: "transform-scale"
                             icon.color: palette.buttonText
                             enabled: !contextWindow.resizingImage
@@ -644,7 +644,7 @@ EmptyPage {
 
     ResizeImagePopup {
         id: resizePopup
-        onCreateCopy: (pixelWidth) => contextWindow.resizeImageCopy(pixelWidth)
+        onCreateCopy: (pixelWidth, quarterTurns, mirror) => contextWindow.resizeImageCopy(pixelWidth, quarterTurns, mirror)
     }
 
     Shortcut {

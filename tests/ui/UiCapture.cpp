@@ -1847,6 +1847,7 @@ void installUiCaptureHook(QApplication &application)
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_RESIZE") || qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY")) {
                 const bool beautify = qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY");
+                const bool orient = !beautify && qEnvironmentVariableIsSet("NKSHOT_TEST_ORIENTATION");
                 const int presentationStyle = qEnvironmentVariableIntValue("NKSHOT_TEST_PRESENTATION_STYLE");
                 const bool limitTest = qEnvironmentVariableIsSet("NKSHOT_TEST_BEAUTIFY_LIMIT");
                 const int presentationPadding = limitTest ? 0 : 48;
@@ -1867,6 +1868,13 @@ void installUiCaptureHook(QApplication &application)
                     return QTest::qWaitFor([&] { return popup->property("opened").toBool(); }, 1000);
                 };
                 if (!openResize()) { application.exit(140); return; }
+                if(orient) {
+                    for(const auto &name:{QStringLiteral("nkshotCopyRotate"),QStringLiteral("nkshotCopyMirror")}) {
+                        auto item=visualItem(viewer->contentItem(),name);
+                        if(!item) {application.exit(238);return;}
+                        QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());
+                    }
+                }
                 viewer->grabWindow().save(destination + QStringLiteral(".dialog.png"));
                 QTest::keyClick(viewer, Qt::Key_Escape);
                 if (!QTest::qWaitFor([&] { return !popup->property("visible").toBool(); }, 1000)
@@ -1898,6 +1906,14 @@ void installUiCaptureHook(QApplication &application)
                     QTest::qWait(200);
                     viewer->grabWindow().save(destination + QStringLiteral(".configured.png"));
                 } else {
+                    if(orient) {
+                        auto rotate=visualItem(viewer->contentItem(),QStringLiteral("nkshotCopyRotate"));
+                        auto mirror=visualItem(viewer->contentItem(),QStringLiteral("nkshotCopyMirror"));
+                        if(!rotate||!mirror||popup->property("quarterTurns").toInt()!=0||popup->property("horizontalMirror").toBool()) {application.exit(236);return;}
+                        for(int n=0;n<5;++n)QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,rotate->mapToScene(QPointF(rotate->width()/2,rotate->height()/2)).toPoint());
+                        for(int n=0;n<3;++n)QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,mirror->mapToScene(QPointF(mirror->width()/2,mirror->height()/2)).toPoint());
+                        if(popup->property("quarterTurns").toInt()!=1||!popup->property("horizontalMirror").toBool()) {application.exit(237);return;}
+                    }
                     auto widthInput = visualItem(viewer->contentItem(), QStringLiteral("nkshotResizeWidth"));
                     auto field = widthInput ? widthInput->property("contentItem").value<QQuickItem *>() : nullptr;
                     if (!field) { application.exit(142); return; }
@@ -1906,6 +1922,7 @@ void installUiCaptureHook(QApplication &application)
                     for (char c : QByteArray("320")) QTest::keyClick(viewer, c);
                     QTest::keyClick(viewer, Qt::Key_Tab);
                     if (widthInput->property("value").toInt() != 320) { application.exit(143); return; }
+                    QTest::qWait(100);viewer->grabWindow().save(destination+QStringLiteral(".configured.png"));
                 }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
                     create->mapToScene(QPointF(create->width()/2, create->height()/2)).toPoint());
@@ -1915,7 +1932,8 @@ void installUiCaptureHook(QApplication &application)
                     return preview && !viewer->resizingImage();
                 }, 5000)) { application.exit(144); return; }
                 const auto expected = beautify ? NkShot::Imaging::composePresentation(original,
-                    {presentationPadding, NkShot::Imaging::PresentationStyle(presentationStyle), QStringLiteral("NkShot demo"), true}) : original.scaled(320, qMax(1, qRound(double(original.height()) * 320 / original.width())), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                    {presentationPadding, NkShot::Imaging::PresentationStyle(presentationStyle), QStringLiteral("NkShot demo"), true}) : orient ? NkShot::Imaging::orientedCopy(original,1,true,320)
+                    : original.scaled(320, qMax(1, qRound(double(original.height()) * 320 / original.width())), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
                 if (!samePixels(preview->snapshot(), expected) || !samePixels(document->renderToImage(), original)
                     || document->undoStackDepth() != depth) { application.exit(145); return; }
                 preview->resize(beautify ? QSize(720, 540) : QSize(440, 340)); QTest::qWait(200);

@@ -191,10 +191,10 @@ QSize ViewerWindow::imageSnapshotSize() const
 {
     return SpectacleCore::instance()->annotationDocument()->renderToImage().size();
 }
-void ViewerWindow::resizeImageCopy(int width)
+void ViewerWindow::resizeImageCopy(int width, int quarterTurns, bool mirror)
 {
-    createImageCopy([width](const QImage &snapshot) { return NkShot::Imaging::resizedToWidth(snapshot, width); },
-        i18nc("@title:window", "Resized Copy — NkShot"),
+    createImageCopy([width, quarterTurns, mirror](const QImage &snapshot) { return NkShot::Imaging::orientedCopy(snapshot, quarterTurns, mirror, width); },
+        i18nc("@title:window", "Image Copy — NkShot"),
         i18nc("@info", "The resized copy could not be created. Choose a smaller valid width. Your original and edits are unchanged."));
 }
 void ViewerWindow::beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded)

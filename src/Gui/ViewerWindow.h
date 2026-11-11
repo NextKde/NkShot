@@ -58,7 +58,7 @@ public:
     Q_INVOKABLE void scanImageCode();
     bool scanningCode() const { return m_scanningCode; }
     Q_INVOKABLE QSize imageSnapshotSize() const;
-    Q_INVOKABLE void resizeImageCopy(int width);
+    Q_INVOKABLE void resizeImageCopy(int width, int quarterTurns = 0, bool mirror = false);
     Q_INVOKABLE void beautifyImageCopy(int padding, int style, const QString &watermark, bool rounded);
     bool resizingImage() const { return m_resizingImage; }
     Q_INVOKABLE void combineImages(bool stackWithoutOverlap = false);

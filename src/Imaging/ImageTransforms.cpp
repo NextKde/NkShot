@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "ImageTransforms.h"
 #include <QtMath>
+#include <QTransform>
 namespace NkShot::Imaging {
+QImage orientedCopy(const QImage &source, int quarterTurns, bool mirror, int width, qint64 maximumPixels)
+{
+    if (source.isNull() || quarterTurns < 0 || quarterTurns > 3 || maximumPixels < 1
+        || width < 1 || width > 8192) return {};
+    if (quarterTurns == 0 && !mirror) return resizedToWidth(source, width, maximumPixels);
+    if (qint64(source.width()) * source.height() > maximumPixels) return {};
+    const auto size = quarterTurns % 2 ? source.size().transposed() : source.size();
+    const qint64 height = qMax<qint64>(1, qRound64(double(size.height()) * width / size.width()));
+    if (height > 32000 || width * height > maximumPixels) return {};
+    auto result = quarterTurns ? source.transformed(QTransform().rotate(quarterTurns * 90), Qt::FastTransformation) : source;
+    if (mirror) result = result.flipped(Qt::Horizontal);
+    return resizedToWidth(result, width, maximumPixels);
+}
 QImage resizedToWidth(const QImage &source, int width, qint64 maximumPixels)
 {
     if (source.isNull() || width < 1 || width > 8192 || maximumPixels < 1) return {};

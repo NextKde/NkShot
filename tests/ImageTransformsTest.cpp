@@ -6,6 +6,31 @@ using namespace NkShot::Imaging;
 class ImageTransformsTest : public QObject {
     Q_OBJECT
 private Q_SLOTS:
+    void orientationPixelsAndMetadata() {
+        QImage source(3,2,QImage::Format_RGBA8888);
+        for(int y=0;y<2;++y)for(int x=0;x<3;++x)source.setPixelColor(x,y,QColor(20+x*60,30+y*90,70,80+x*20+y*10));
+        source.setDevicePixelRatio(2);source.setColorSpace(QColorSpace::DisplayP3);
+        const auto original=source.copy();
+        for(int turns=0;turns<4;++turns)for(bool mirror:{false,true}) {
+            const int w=turns%2?2:3,h=turns%2?3:2;
+            const auto result=orientedCopy(source,turns,mirror,w);
+            QCOMPARE(result.size(),QSize(w,h));QCOMPARE(result.devicePixelRatio(),2.);
+            QCOMPARE(result.colorSpace(),source.colorSpace());
+            for(int y=0;y<2;++y)for(int x=0;x<3;++x) {
+                int ox=x,oy=y;
+                if(turns==1){ox=1-y;oy=x;}if(turns==2){ox=2-x;oy=1-y;}if(turns==3){ox=y;oy=2-x;}
+                if(mirror)ox=w-1-ox;
+                QCOMPARE(result.pixelColor(ox,oy),source.pixelColor(x,y));
+            }
+            QCOMPARE(source,original);
+        }
+        QVERIFY(orientedCopy(source,-1,false,3).isNull());
+        QVERIFY(orientedCopy(source,4,false,3).isNull());
+        QVERIFY(orientedCopy(source,0,false,3,5).isNull());
+        QVERIFY(orientedCopy(source,0,false,0).isNull());
+        QVERIFY(orientedCopy(source,0,false,8193).isNull());
+        QCOMPARE(orientedCopy(source,1,true,4).size(),QSize(4,6));
+    }
     void sharingCanvasAndWatermark() {
         QImage source(100, 60, QImage::Format_RGBA8888); source.fill(QColor("#2868b0"));
         source.setDevicePixelRatio(1.5); source.setColorSpace(QColorSpace::SRgb);
