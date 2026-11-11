@@ -12,7 +12,6 @@
 #include "settings.h"
 #include <KLocalizedString>
 #include <KMemoryInfo>
-#include <QFuture>
 #include <QGuiApplication>
 #include <QWindow>
 #include <QScreen>
@@ -25,7 +24,6 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
-#include <QtConcurrentRun>
 
 using namespace Qt::StringLiterals;
 
@@ -122,9 +120,42 @@ VideoPlatformWayland::VideoPlatformWayland(QObject *parent)
     QMetaObject::invokeMethod(this, &VideoPlatformWayland::initialize, Qt::QueuedConnection);
 }
 
+VideoPlatformWayland::~VideoPlatformWayland()
+{
+    // Member destructors can emit recorder signals; disconnect before the lease dies.
+    if(m_recorder) m_recorder->disconnect(this);
+    m_streamLease.retire();m_memoryTimer.stop();
+}
+
 void VideoPlatformWayland::initialize()
 {
     m_recorder = std::make_unique<PipeWireRecord>();
+    // Exactly one state/error subscription per recorder, never one per attempt.
+    connect(m_recorder.get(), &PipeWireRecord::errorFound, this, &VideoPlatformWayland::failRecording);
+    connect(m_recorder.get(), &PipeWireRecord::stateChanged, this, [this] {
+        const auto state = m_recorder->state();
+        if (state == PipeWireRecord::Idle) {
+            m_memoryTimer.stop();m_startPending=false;m_resetRecorder=true;
+            m_streamLease.retire();
+            if (m_attemptFailed) {
+                setRecordingState(RecordingState::NotRecording);
+                return;
+            }
+            if (recordingState() == RecordingState::Recording || recordingState() == RecordingState::Rendering) {
+                const auto output=QUrl::fromLocalFile(m_recorder->output());
+                setRecordingState(RecordingState::Finished);
+                Q_EMIT recordingSaved(output);
+            }
+        } else if (!m_attemptFailed && !m_stopRequested && state == PipeWireRecord::Recording) {
+            m_startPending=false;
+            m_memoryTimer.start(5000, Qt::CoarseTimer, this);
+            setRecordingMode(m_requestedMode);
+            setRecordingState(RecordingState::Recording);
+        } else if (!m_attemptFailed && state == PipeWireRecord::Rendering) {
+            m_memoryTimer.stop();
+            setRecordingState(RecordingState::Rendering);
+        }
+    });
     Q_EMIT supportedRecordingModesChanged();
     Q_EMIT supportedFormatsChanged();
 }
@@ -167,13 +198,25 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
         return;
     }
 
-    auto startRecordingTask = [this, fileUrl, recordingMode, options, includePointer]() {
+    const auto epoch=++m_startEpoch;
+    const QPointer<QScreen> selectedScreen=options.value(screenKey).value<QScreen *>();
+    const bool hadScreen=bool(selectedScreen);
+    auto startRecordingTask = [this, fileUrl, recordingMode, options, includePointer, epoch, selectedScreen, hadScreen]() {
+        if(epoch!=m_startEpoch) return;
+        if (m_startPending || (m_recorder && m_recorder->state() != PipeWireRecord::Idle)) {
+            qWarning() << "Recording request ignored while another attempt is pending or draining.";
+            return;
+        }
         if (recordingState() == RecordingState::Recording) {
             qWarning() << "Warning: Tried to start recording while already recording.";
             return;
         }
         if (recordingState() == RecordingState::Rendering) {
             qWarning() << "Warning: Tried to start recording while already rendering.";
+            return;
+        }
+        if(hadScreen && !selectedScreen) {
+            Q_EMIT recordingFailed(i18nc("@info", "The selected screen is no longer available."));
             return;
         }
         if (!fileUrl.isEmpty() && !fileUrl.isLocalFile()) {
@@ -192,6 +235,16 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
             selectAndRecord(fileUrl, recordingMode, includePointer);
             return;
         }
+        // Start tasks run queued, outside a recorder signal's emission. A fresh
+        // recorder cannot inherit producer-thread cleanup or errors from a prior attempt.
+        if (m_resetRecorder) {
+            m_recorder->disconnect(this);
+            m_recorder.reset();
+            initialize();
+            m_resetRecorder=false;
+        }
+        m_streamLease.retire();
+        m_attemptFailed=false;m_stopRequested=false;
         // No compositor stream can start against a previous attempt's file.
         m_recorder->setNodeId(0);
         m_recorder->setOutput(QString());
@@ -320,9 +373,13 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
             Q_EMIT recordingFailed(i18nc("@info", "The selected capture source is unavailable."));
             return;
         }
+        const auto generation=m_streamLease.adopt(stream);
+        m_startPending=true;m_requestedMode=recordingMode;
         m_recorder->setMaxPendingFrames(availableFrames(m_frameBytes));
         m_recorder->setNodeId(0);
-        connect(stream, &ScreencastingStream::created, this, [this, stream, recordingMode] {
+        connect(stream, &ScreencastingStream::created, this, [this, stream, recordingMode, generation] {
+            if (!m_streamLease.accepts(stream,generation) || m_attemptFailed) return;
+            m_startPending=false;
             m_recorder->setNodeId(stream->nodeId());
             if (!m_recorder->output().isEmpty()) {
                 m_recorder->start();
@@ -330,58 +387,46 @@ void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode rec
             setRecordingMode(recordingMode);
             setRecordingState(VideoPlatform::RecordingState::Recording);
         });
-        connect(stream, &ScreencastingStream::failed, this, [this](const QString &error) {
-            setRecordingState(VideoPlatform::RecordingState::NotRecording);
-            Q_EMIT recordingFailed(error);
+        connect(stream, &ScreencastingStream::failed, this, [this,stream,generation](const QString &error) {
+            if(m_streamLease.accepts(stream,generation)) failRecording(error);
         });
-        connect(stream, &ScreencastingStream::closed, this, [this, recordingMode]() {
-            finishRecording();
-            setRecordingState(VideoPlatform::RecordingState::Finished);
-            if (recordingMode == Screen) {
-                Q_EMIT recordingFailed(i18nc("@info",
-                                             "The stream closed because the target screen "
-                                             "changed in a way that disrupted the recording."));
-            } else if (recordingMode == Window) {
-                Q_EMIT recordingFailed(i18nc("@info",
-                                             "The stream closed because the target window "
-                                             "changed in a way that disrupted the recording."));
-            } else if (recordingMode == Region) {
-                Q_EMIT recordingFailed(i18nc("@info",
-                                             "The stream closed because a screen containing the target "
-                                             "region changed in a way that disrupted the recording."));
-            }
+        connect(stream, &ScreencastingStream::closed, this, [this,stream,generation] {
+            if(m_streamLease.accepts(stream,generation))
+                failRecording(i18nc("@info", "Recording stopped because its capture source became unavailable."));
         });
 
-        connect(m_recorder.get(), &PipeWireRecord::stateChanged, this, [this, recordingMode] {
-            if (m_recorder->state() == PipeWireRecord::Idle) {
-                m_memoryTimer.stop();
-                if (recordingState() != RecordingState::NotRecording && recordingState() != RecordingState::Finished) {
-                    setRecordingState(VideoPlatform::RecordingState::Finished);
-                    Q_EMIT recordingSaved(QUrl::fromLocalFile(m_recorder->output()));
-                }
-            } else if (m_recorder->state() == PipeWireRecord::Recording) {
-                m_memoryTimer.start(5000, Qt::CoarseTimer, this);
-                setRecordingMode(recordingMode);
-                setRecordingState(VideoPlatform::RecordingState::Recording);
-            } else if (m_recorder->state() == PipeWireRecord::Rendering) {
-                m_memoryTimer.stop();
-                setRecordingState(VideoPlatform::RecordingState::Rendering);
-            }
-        });
     };
 
-    if (m_recorderFuture.isValid() && !m_recorderFuture.isFinished()) {
-        m_recorderFuture = m_recorderFuture.then(this, startRecordingTask);
-    } else {
-        startRecordingTask();
-    }
+    // Avoid deleting/reinitializing a recorder from inside its own signal emission.
+    QMetaObject::invokeMethod(this, startRecordingTask, Qt::QueuedConnection);
+}
+
+void VideoPlatformWayland::failRecording(const QString &message)
+{
+    if(m_attemptFailed) return;
+    m_attemptFailed=true;m_startPending=false;m_stopRequested=true;
+    m_streamLease.quiesce();m_memoryTimer.stop();
+    setRecordingState(RecordingState::NotRecording);
+    if(m_recorder) m_recorder->stop();
+    Q_EMIT recordingFailed(message);
 }
 
 void VideoPlatformWayland::finishRecording()
 {
+    m_stopRequested=true;
+    ++m_startEpoch; // Cancel start work that has not reached the GUI queue yet.
     if (!m_recorder) {
         return;
     }
+    if(m_startPending) {
+        m_startPending=false;m_attemptFailed=true;
+        m_streamLease.retire();
+        setRecordingState(RecordingState::NotRecording);
+        Q_EMIT recordingCanceled(i18nc("@info", "Recording canceled before capture started."));
+        return;
+    }
+    // Suppress callbacks, but retain the actual source until encoder draining ends.
+    m_streamLease.quiesce();
     m_recorder->stop();
 }
 
@@ -418,9 +463,11 @@ void VideoPlatformWayland::selectAndRecord(const QUrl &fileUrl, RecordingMode re
 
     QDBusPendingReply<QVariantMap> asyncReply = QDBusConnection::sessionBus().asyncCall(message);
     QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(asyncReply, this);
-    auto onFinished = [this, fileUrl, recordingMode, includePointer](QDBusPendingCallWatcher *self) {
+    const auto selectionEpoch=m_startEpoch;
+    auto onFinished = [this, fileUrl, recordingMode, includePointer, selectionEpoch](QDBusPendingCallWatcher *self) {
         QDBusPendingReply<QVariantMap> reply = *self;
         self->deleteLater();
+        if(selectionEpoch!=m_startEpoch) return;
         if (!reply.isValid()) {
             const auto &error = self->error();
             if (error.name() == u"org.kde.KWin.Error.UserCancel"_s) {

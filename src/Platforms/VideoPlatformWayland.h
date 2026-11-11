@@ -7,8 +7,8 @@
 #pragma once
 
 #include "VideoPlatform.h"
+#include "CaptureStreamLease.h"
 #include <PipeWireRecord>
-#include <QFuture>
 #include <memory>
 
 class Screencasting;
@@ -23,6 +23,7 @@ class VideoPlatformWayland final : public VideoPlatform
 
 public:
     VideoPlatformWayland(QObject *parent = nullptr);
+    ~VideoPlatformWayland() override;
 
     RecordingModes supportedRecordingModes() const override;
     Formats supportedFormats() const override;
@@ -39,12 +40,19 @@ protected:
 
 private:
     void initialize();
+    void failRecording(const QString &message);
     bool mkDirPath(const QUrl &fileUrl);
     void selectAndRecord(const QUrl &fileUrl, RecordingMode recordingMode, bool includePointer);
 
     Screencasting *const m_screencasting;
     std::unique_ptr<PipeWireRecord> m_recorder;
-    QFuture<void> m_recorderFuture;
+    NkShot::CaptureStreamLease m_streamLease{this};
+    quint64 m_startEpoch = 0;
+    bool m_startPending = false;
+    bool m_attemptFailed = false;
+    bool m_stopRequested = false;
+    bool m_resetRecorder = false;
+    RecordingMode m_requestedMode = NoRecordingModes;
     int m_frameBytes;
     QBasicTimer m_memoryTimer;
 };

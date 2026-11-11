@@ -165,6 +165,22 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(start.count('encoder == Encoder::NoEncoder'), 2)
         self.assertIn('if (!stream)', start)
 
+    def test_recording_callbacks_are_scoped_and_connected_once(self):
+        source = read('src/Platforms/VideoPlatformWayland.cpp')
+        initialize = source[source.index('void VideoPlatformWayland::initialize()'):source.index('VideoPlatform::RecordingModes VideoPlatformWayland::supportedRecordingModes')]
+        start = source[source.index('auto startRecordingTask ='):source.index('void VideoPlatformWayland::failRecording')]
+        self.assertEqual(source.count('&PipeWireRecord::stateChanged'), 1)
+        self.assertEqual(source.count('&PipeWireRecord::errorFound'), 1)
+        self.assertIn('&PipeWireRecord::stateChanged', initialize)
+        self.assertIn('&PipeWireRecord::errorFound', initialize)
+        self.assertEqual(start.count('m_streamLease.accepts(stream,generation)'), 3)
+        self.assertIn('Qt::QueuedConnection', start)
+        self.assertIn('if (m_attemptFailed)', initialize)
+        self.assertIn('m_startPending ||', start)
+        self.assertIn('!m_stopRequested && state == PipeWireRecord::Recording', initialize)
+        self.assertIn('if(epoch!=m_startEpoch) return;', start)
+        self.assertIn('if(selectionEpoch!=m_startEpoch) return;', source)
+
 
 if __name__ == '__main__':
     unittest.main()

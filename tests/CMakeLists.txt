@@ -91,3 +91,7 @@ set_tests_properties(local_text_extraction_test PROPERTIES TIMEOUT 40 ENVIRONMEN
 # Real filesystem preflight only; does not establish native recording acceptance.
 ecm_add_test(RecordingOutputPathTest.cpp TEST_NAME recording_output_path_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(recording_output_path_test PROPERTIES TIMEOUT 10)
+
+# Queued Qt callback lifetime tests, not compositor capture tests.
+ecm_add_test(CaptureStreamLeaseTest.cpp TEST_NAME capture_stream_lease_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(capture_stream_lease_test PROPERTIES TIMEOUT 10)

@@ -115,3 +115,33 @@ Independent static review identified remaining lifecycle work: old streams are
 not retired or generation-isolated, recorder state callbacks accumulate per start,
 and encoder write failures need explicit handling. These are not claimed fixed by
 063. Real KWin failure injection and A/V recording acceptance remain necessary.
+
+## Callback lifetime and error recovery hardening (064)
+
+The recorder state/error connections are now installed once per recorder, not once
+per start. A capture-stream lease gives each source a generation. Disconnecting a
+Qt signal does not remove already queued callbacks, so created/failed/closed
+callbacks also verify that generation before touching the active recorder.
+
+Stopping invalidates callbacks but **retains the compositor source while encoding
+drains**. The source is released at recorder Idle. Failure is latched before stop;
+subsequent state changes cannot report that attempt as successfully saved. A late
+producer started notification cannot switch the UI back to Recording after Stop.
+Queued starts and window-selection replies have cancellation epochs; screen
+pointers are guarded across queued dispatch. Pending capture can be canceled.
+The next completed attempt gets a fresh recorder outside signal emission, avoiding
+reusing its prior producer-thread cleanup. Destructor connections are removed
+before member teardown.
+
+Tests use real Qt queued signals to reproduce a late created/failed/closed callback
+after replacing a stream, repeated attempts, and stop-time quiescence without early
+source destruction. Structural assertions check single recorder subscriptions and
+adapter guards. These tests do not drive KWin, PipeWire or real encoder failures.
+Native start/stop/restart, disk-full, device removal and A/V acceptance remain open.
+
+An independent dependency-source audit also found a pre-existing KPipeWire edge:
+`PipeWireProduce::initialize()` can clear a failed source and return without an
+error/completion notification, while `destroy()` returns early for a null source.
+That path may leave shutdown pending and is **not fixed by 064**. It needs a
+separately verified dependency patch, not an arbitrary timer pretending encoding
+has finished. Capture pause/resume remains unimplemented.

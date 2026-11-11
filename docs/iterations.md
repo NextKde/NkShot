@@ -1399,3 +1399,32 @@ The [playback regression screenshot](screenshots/063-playback-regression.png)
 is an actual software window using synthetic media, not evidence that recording
 startup or compositor capture succeeded. Real KDE failure injection, disk-full
 handling and complete recording lifecycle acceptance remain open.
+
+## 064 — Isolate capture callbacks and recorder attempt cleanup
+
+Capture stream callbacks now verify a generation, including callbacks already
+queued before disconnect. A retired source cannot start, fail or stop a later
+attempt. Recorder state/error subscriptions are installed once per recorder.
+Failures suppress saved-success notifications, and the next completed attempt
+uses a clean recorder. Stop-time callbacks are quiesced while the actual source
+remains alive until encoder draining completes. Pending source starts can be
+canceled, and a late producer-started signal cannot reopen the recording UI after
+Stop. No capture UI or public recording API was changed.
+
+Independent static review identified and corrected three introduced edges before
+freezing: a queued start escaping an immediate Stop, early compositor-source
+delete during encoder draining, and a raw screen pointer surviving until queued
+dispatch. Selection replies also carry an epoch. Recorder connections are removed
+before destructor member teardown.
+
+Real Qt queued-signal tests exercise stale created/failed/closed callbacks,
+replacement, twenty repeated attempts and source retention while quiesced. Source
+assertions enforce one recorder state/error subscription and adapter guards.
+Build, CTest 11/11, static 18/18 and whitespace checks pass. The unchanged
+[playback window regression](screenshots/064-playback-regression.png) was reviewed
+using synthetic media; it is not a screenshot of native capture success.
+
+No real KWin/PipeWire start/stop, encoder write failure, audio synchronization or
+hot-unplug acceptance is claimed. The recording verification guide records a
+pre-existing dependency initialization path that can omit error/completion signals;
+it remains open rather than being masked with a fake completion timeout.
