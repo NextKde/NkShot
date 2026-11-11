@@ -1815,3 +1815,75 @@ capture audio-device synchronization, native portals, GPU and high-DPI acceptanc
 remain open. The shared real probe timeout is tested; the GIF-specific
 five-minute encode/palette timeout itself was not waited out.
 See [scope](video-clips.md) and [reproduction](../tests/ui/README.md#gif-clip-export-073).
+
+## 074 — Request a real desktop-portal color picker
+
+The existing color tool now distinguishes Screenshot and Screen. Its entry moved
+out of Read from image into the viewer's main More menu. The launch-only start
+page also exposes Pick a color through a compact More menu replacing the former
+Help button position; Configure remains direct and Help remains in that menu.
+The actual --launchonly workflow needs no screenshot or loaded file. No permanent
+toolbar button, desktop screenshot or injected input was added.
+
+Screen uses org.freedesktop.portal.Screenshot.PickColor, not the screenshot-local
+sampler under a new name. Explicit Pick starts a request; its swatch/HEX/RGB result
+is copied only by an explicit Copy action or shortcut. The result is opaque sRGB,
+displayed at 8-bit precision. The small result card does not simulate desktop
+pixels or a magnifier. Waiting/error controls have clearly disabled appearance.
+
+The real-DBus client subscribes before the method call, binds to the unique portal
+owner, accepts only a strictly typed finite (ddd) tuple within [0,1], and handles
+early responses and a different valid returned request path. Cancellation,
+timeout, owner changes and destruction invalidate the result. A delayed method
+reply still receives best-effort Close on its actual handle after the client
+object is gone. Synchronous change-signal cancellation/destruction is guarded.
+Wayland parent export is asynchronous; stale completion is released and a prior
+color cannot reappear after a cancelled new attempt.
+
+KDE's native picker may remain active after Request.Close. The UI therefore says
+Stop waiting and explicitly tells the user to press Esc in the desktop picker,
+rather than claiming to forcibly close the compositor cursor.
+
+Development checks caught and corrected real edge cases: QColor's ambiguous empty
+assignment retaining a valid color, a response-subscription race for a returned
+alternate handle, cancelled calls whose actual handle arrived later, a synchronous
+destruction hazard, and the disabled Screenshot option still changing ComboBox
+display through keyboard navigation in a no-image window. Existing image-sampler
+pixel/keyboard/copy/history assertions were preserved; its old video prohibition
+was updated to the new independent Screen contract rather than weakening those
+assertions.
+
+Verification uses real QtDBus serialization and actual QML controls:
+- Full CTest passes 17/17, including 23/23 protocol results with no skips.
+  Static checks pass 18/18 and whitespace checks pass. A fixed-delay test
+  assumption was replaced by confirming the fake had received PickColor before
+  checking destruction/timeout Close, so it cannot mistake an unstarted request
+  for failed cleanup. Final UI logs contain no QML binding/type/reference errors.
+- Five final UI scenarios pass: light, dark, 420×520, video/no-image, and genuine
+  launch-only startup. Pending minimize/Escape/close, explicit copy, source
+  switching, malformed-response retry and no-image keyboard selection are covered.
+  The original 068 image sampler regression also passes.
+- Eighteen independently implemented Gio portal/UI scenarios pass, including
+  early responses, 0/1 color boundaries, malformed tuple types/counts, NaN/range/
+  missing color, cancellation/failure/disconnection, no service, deliberately late
+  responses and delayed actual-handle Close, plus video and launch-only entry.
+- Seventeen independent older-workflow baselines pass. Independent MP4 decoding
+  still verifies 70 frames/3.5 seconds, source frames 25/94, correctly shifted
+  audio pulses and unchanged source hash.
+
+Reviewed captures use a separate test-only portal on a dedicated private bus.
+They are real NkShot software-window screenshots with simulated color responses,
+**not photographs or screenshots of native desktop selection**:
+[light result](screenshots/074-screen-light.png),
+[dark result](screenshots/074-screen-dark.png),
+[420×520 result](screenshots/074-screen-compact.png),
+[waiting](screenshots/074-screen-compact.png.waiting.png),
+[cancelled](screenshots/074-screen-compact.png.cancelled.png),
+[invalid response](screenshots/074-screen-compact.png.error.png),
+[empty startup entry](screenshots/074-screen-startup.png.entry.png), and
+[startup result](screenshots/074-screen-startup.png).
+
+Real KDE/OpenGL selection, native cancellation/focus, Wayland handle lifecycle,
+multiple monitors/mixed DPI, HDR and display-profile accuracy remain unverified.
+This stage does not certify capture or recording. See [protocol and scope](screen-color-picker.md)
+and [reproduction](../tests/ui/README.md#desktop-portal-color-picking-074).

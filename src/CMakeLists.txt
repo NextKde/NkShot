@@ -49,6 +49,8 @@ target_sources(spectacle PRIVATE
     Media/VideoClipJob.h
     Gui/QuickNoteWindow.cpp
     Gui/QuickNoteWindow.h
+    Platforms/ScreenColorPicker.cpp
+    Platforms/ScreenColorPicker.h
     Gui/ColorPickerWindow.cpp
     Gui/ColorPickerWindow.h
     Imaging/ColorSample.cpp

@@ -184,7 +184,7 @@ codes are not enumerated, and damaged-code accuracy is not guaranteed.
 
 ## Sample image colors (068)
 
-More → Read from image → Pick a color opens a focused sampler for an immutable
+More → Pick a color → Screenshot opens a focused sampler for an immutable
 snapshot of the edited image. Click or drag to select an image pixel; arrow keys
 move one physical image pixel. Tab returns to the image for keyboard navigation.
 The 11×11 neighborhood is enlarged without interpolation, with the selected pixel
@@ -271,3 +271,6 @@ Cancel, hide, minimize and close invalidate asynchronous word requests. A late
 completion cannot reopen the mode after hiding and showing the pin. This is local
 word-range selection, not full system Live Text parity, OCR accuracy certification,
 native screen capture, touch/trackpad acceptance or GPU/monitor-DPI validation.
+
+The separate **Screen** source (074) requests the desktop portal rather than
+sampling this image. See [screen color picking and native acceptance limits](screen-color-picker.md).

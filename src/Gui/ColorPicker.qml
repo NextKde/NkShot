@@ -6,7 +6,7 @@ import Kos.Ui as Kos
 
 QQC.Pane {
     id: root
-    padding: 20
+    padding: 16
     palette.text: Kos.AppTheme.paletteText
     palette.windowText: Kos.AppTheme.paletteText
     palette.buttonText: Kos.AppTheme.paletteText
@@ -14,6 +14,7 @@ QQC.Pane {
 
     component PickerButton: QQC.ToolButton {
         implicitHeight: 36
+        opacity: enabled ? 1 : 0.38
         icon.color: Kos.AppTheme.paletteText
         QQC.ToolTip.visible: hovered
         QQC.ToolTip.text: text
@@ -42,7 +43,7 @@ QQC.Pane {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 14
+        spacing: 10
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 42
@@ -52,7 +53,7 @@ QQC.Pane {
                 anchors.rightMargin: 12
                 spacing: 4
                 QQC.Label { text: i18nc("@title", "Pick a color"); font.pixelSize: 20; font.bold: true; color: Kos.AppTheme.paletteText }
-                QQC.Label { width: parent.width; text: i18nc("@info", "From a snapshot of your edited image"); color: Kos.AppTheme.mutedText; font.pixelSize: 12; elide: Text.ElideRight }
+                QQC.Label { width: parent.width; text: colorWindow.screenMode ? i18nc("@info", "Choose with your desktop’s color picker") : i18nc("@info", "From a snapshot of your edited image"); color: Kos.AppTheme.mutedText; font.pixelSize: 12; elide: Text.ElideRight }
             }
             PickerButton {
                 id: closeButton
@@ -64,10 +65,42 @@ QQC.Pane {
                 onClicked: colorWindow.close()
             }
         }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            QQC.Label {text: i18nc("@label", "Source"); color: Kos.AppTheme.mutedText; Layout.fillWidth: true}
+            QQC.ComboBox {
+                id: sourceChoice
+                objectName: "nkshotColorSource"
+                implicitWidth: 160
+                implicitHeight: 32
+                model: [i18nc("@item", "Screenshot"), i18nc("@item", "Screen")]
+                currentIndex: colorWindow.screenMode ? 1 : 0
+                palette.text: Kos.AppTheme.paletteText
+                palette.buttonText: Kos.AppTheme.paletteText
+                background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 8; elevation: 0}
+                Accessible.name: i18nc("@label", "Color source")
+                delegate: QQC.ItemDelegate {
+                    required property int index
+                    required property string modelData
+                    width: sourceChoice.width
+                    text: modelData
+                    enabled: index === 1 || colorWindow.hasImage
+                    highlighted: sourceChoice.highlightedIndex === index
+                }
+                onActivated: index => {
+                    colorWindow.screenMode = index === 1
+                    // Keyboard navigation may activate a disabled delegate.
+                    // Restore the authoritative source after the C++ guard.
+                    currentIndex = Qt.binding(function() { return colorWindow.screenMode ? 1 : 0 })
+                }
+            }
+        }
         Rectangle {
+            visible: !colorWindow.screenMode
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumHeight: 120
+            Layout.minimumHeight: 100
             color: Kos.AppTheme.contentBackground
             radius: 12
             border.color: viewport.activeFocus ? Kos.AppTheme.accent : Kos.AppTheme.border
@@ -76,10 +109,14 @@ QQC.Pane {
                 objectName: "nkshotColorViewport"
                 anchors.fill: parent
                 anchors.margins: 12
-                focus: true
+                focus: !colorWindow.screenMode
                 activeFocusOnTab: true
-                Component.onCompleted: forceActiveFocus()
-                readonly property real imageScale: Math.min(width / colorWindow.imageSize.width, height / colorWindow.imageSize.height)
+                Component.onCompleted: if (!colorWindow.screenMode) forceActiveFocus()
+                Connections {
+                    target: colorWindow
+                    function onSourceModeChanged() { if (!colorWindow.screenMode) Qt.callLater(viewport.forceActiveFocus) }
+                }
+                readonly property real imageScale: Math.min(width / Math.max(1, colorWindow.imageSize.width), height / Math.max(1, colorWindow.imageSize.height))
                 readonly property real imageWidth: colorWindow.imageSize.width * imageScale
                 readonly property real imageHeight: colorWindow.imageSize.height * imageScale
                 Checker {
@@ -88,7 +125,7 @@ QQC.Pane {
                 }
                 Image {
                     anchors.fill: parent
-                    source: colorWindow.imageSource
+                    source: colorWindow.hasImage ? colorWindow.imageSource : ""
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                 }
@@ -116,12 +153,84 @@ QQC.Pane {
                 Accessible.name: i18nc("@info", "Image color sampler. Click to choose a pixel, or use the arrow keys.")
             }
         }
+        Rectangle {
+            visible: colorWindow.screenMode
+            Layout.fillWidth: true
+            Layout.maximumWidth: 420
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: screenContent.implicitHeight + 40
+            color: Kos.AppTheme.contentBackground
+            border.color: Kos.AppTheme.border
+            radius: 12
+            ColumnLayout {
+                id: screenContent
+                anchors.centerIn: parent
+                width: parent.width - 32
+                spacing: 12
+                Rectangle {
+                    objectName: "nkshotScreenSwatch"
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 64
+                    Layout.preferredHeight: 64
+                    color: colorWindow.hasSample ? colorWindow.sampleColor : Kos.AppTheme.controlBackground
+                    border.color: Kos.AppTheme.border
+                    radius: 14
+                    QQC.Label {anchors.centerIn: parent; visible: !colorWindow.hasSample; text: "○"; font.pixelSize: 28; color: Kos.AppTheme.mutedText}
+                }
+                QQC.Label {
+                    objectName: "nkshotScreenHex"
+                    Layout.fillWidth: true
+                    text: colorWindow.hasSample ? colorWindow.hexValue : i18nc("@info", "Choose a screen color")
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    color: Kos.AppTheme.paletteText
+                    font.pixelSize: 18
+                    font.weight: Font.DemiBold
+                }
+                QQC.Label {
+                    Layout.fillWidth: true
+                    text: colorWindow.hasSample ? i18nc("@info", "%1 · sRGB, 8-bit", colorWindow.rgbValue) : i18nc("@info", "No image is captured by this window")
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    color: Kos.AppTheme.mutedText
+                    font.pixelSize: 12
+                }
+                QQC.Label {
+                    objectName: "nkshotScreenStatus"
+                    Layout.fillWidth: true
+                    text: colorWindow.screenStatus
+                    textFormat: Text.PlainText
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    color: Kos.AppTheme.mutedText
+                    font.pixelSize: 12
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    PickerButton {
+                        objectName: "nkshotScreenPick"
+                        text: colorWindow.hasSample ? i18nc("@action", "Pick again") : i18nc("@action", "Pick a color…")
+                        enabled: !colorWindow.screenPending
+                        onClicked: colorWindow.pickScreenColor()
+                    }
+                    PickerButton {
+                        objectName: "nkshotScreenCancel"
+                        visible: colorWindow.screenPending
+                        text: i18nc("@action", "Stop waiting")
+                        onClicked: colorWindow.cancelScreenPick()
+                    }
+                }
+            }
+        }
+        Item { visible: colorWindow.screenMode; Layout.fillHeight: true }
         RowLayout {
+            visible: !colorWindow.screenMode
             Layout.fillWidth: true
             spacing: 14
             Item {
-                Layout.preferredWidth: 88
-                Layout.preferredHeight: 88
+                Layout.preferredWidth: 66
+                Layout.preferredHeight: 66
                 Checker { anchors.fill: parent }
                 Image { anchors.fill: parent; source: colorWindow.neighborhoodSource; cache: false; smooth: false }
                 Rectangle { anchors.centerIn: parent; width: 8; height: 8; color: "transparent"; border.width: 1; border.color: "white"; visible: colorWindow.hasSample
@@ -167,14 +276,14 @@ QQC.Pane {
                 id: feedback
                 objectName: "nkshotColorFeedback"
                 Layout.fillWidth: true
-                text: i18nc("@info", "No changes to your image")
+                text: colorWindow.screenMode ? i18nc("@info", "Copy only when ready") : i18nc("@info", "No changes to your image")
                 color: Kos.AppTheme.mutedText
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
                 Connections {
                     target: colorWindow
                     function onValueCopied(value) { feedback.text = i18nc("@info", "Copied %1", value) }
-                    function onSampleChanged() { feedback.text = i18nc("@info", "No changes to your image") }
+                    function onSampleChanged() { feedback.text = colorWindow.screenMode ? i18nc("@info", "Copy only when ready") : i18nc("@info", "No changes to your image") }
                 }
             }
             PickerButton {

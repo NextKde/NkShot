@@ -8,6 +8,7 @@ import QtQuick.Window
 import QtQuick.Controls as QQC
 import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
+import Kos.Ui as Kos
 import org.kde.spectacle.private
 
 /**
@@ -53,15 +54,35 @@ EmptyPage {
             text: i18n("Configure NkShot…")
             onClicked: contextWindow.showPreferencesDialog()
         }
-        // Only ToolButton supports the menu button style with qqc2-desktop-style
         QQC.ToolButton {
+            id: startupMore
+            objectName: "nkshotStartupMore"
             y: dprRound((parent.height - height) / 2)
             flat: false
-            icon.name: "help-contents"
-            text: i18n("Help")
-            down: pressed || HelpMenu.visible
+            icon.name: "view-more-symbolic"
+            text: i18nc("@action:menu", "More")
+            down: pressed || startupMenu.visible
             Accessible.role: Accessible.ButtonMenu
-            onPressed: HelpMenu.popup(this)
+            onPressed: startupMenu.popup(startupMore, 0, startupMore.height)
+            QQC.Menu {
+                id: startupMenu
+                objectName: "nkshotStartupMenu"
+                width: 240
+                padding: 6
+                background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5}
+                QQC.MenuItem {
+                    objectName: "nkshotStartupColorAction"
+                    text: i18nc("@action", "Pick a color…")
+                    icon.name: "color-picker"
+                    onTriggered: contextWindow.openColorPicker()
+                }
+                QQC.MenuSeparator {}
+                QQC.MenuItem {
+                    text: i18n("Help")
+                    icon.name: "help-contents"
+                    onTriggered: Qt.callLater(function() { HelpMenu.popup(startupMore) })
+                }
+            }
         }
     }
 

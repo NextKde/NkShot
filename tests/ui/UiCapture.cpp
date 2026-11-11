@@ -3,7 +3,11 @@
 #include "Gui/ViewerWindow.h"
 #include "Gui/ScrollCaptureWindow.h"
 #include "Platforms/ScrollFrameKWin.h"
+#include "Platforms/ScreenColorPicker.h"
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusMessage>
+#include <QProcess>
 #include "Gui/PinnedImageWindow.h"
 #include "Gui/QuickNoteWindow.h"
 #include "Gui/ColorPickerWindow.h"
@@ -89,6 +93,147 @@ static bool samePixels(const QImage &a, const QImage &b)
 }
 
 
+
+static void runScreenColorChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
+{
+    const auto fail=[&](const char *step){
+        qCritical()<<"Screen color UI failure:"<<step;
+        for(auto window:QGuiApplication::allWindows())if(auto picker=qobject_cast<ColorPickerWindow *>(window))picker->close();
+        QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+        application.exit(254);
+    };
+    if (!qEnvironmentVariableIsSet("NKSHOT_TEST_PRIVATE_BUS")) {fail("explicit private bus required");return;}
+    const bool external=qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_EXTERNAL");
+    const bool video=qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_VIDEO");
+    const bool startup=qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_STARTUP");
+    const bool noImage=video||startup;
+    const auto expectedStatus=qEnvironmentVariable("NKSHOT_TEST_SCREEN_EXPECT",QStringLiteral("success"));
+    const auto expectedHex=qEnvironmentVariable("NKSHOT_TEST_SCREEN_HEX",QStringLiteral("#336699"));
+    auto document=SpectacleCore::instance()->annotationDocument();
+    const auto original=startup ? document->baseImage() : document->renderToImage();const auto depth=document->undoStackDepth();
+    if(startup&&!original.isNull()){fail("launch-only must have no image");return;}
+    const auto originalVideo=SpectacleCore::instance()->currentVideo();
+    QApplication::clipboard()->setText(QStringLiteral("screen color unchanged"));
+    QProcess fake;
+    const QString service=QStringLiteral("org.freedesktop.portal.Desktop");
+    auto bus=QDBusConnection::sessionBus();
+    if (!bus.isConnected()) {fail("private bus connection");return;}
+    if (!external) {
+        if (bus.interface()->isServiceRegistered(service).value()) {fail("private portal owner conflict");return;}
+        fake.start(QCoreApplication::applicationDirPath()+QStringLiteral("/screen_color_picker_test"),{QStringLiteral("--fake"),QStringLiteral("ui")});
+        if (!fake.waitForStarted() || !QTest::qWaitFor([&]{return bus.interface()->isServiceRegistered(service).value();},3000)) {fail("fake portal startup");return;}
+    }
+    const auto stopFake=qScopeGuard([&]{if(fake.state()!=QProcess::NotRunning){fake.terminate();fake.waitForFinished(3000);}});
+    const auto mode=[&](const QString &value){
+        auto message=QDBusMessage::createMethodCall(service,QStringLiteral("/org/freedesktop/portal/desktop"),QStringLiteral("org.nkshot.TestPortal.Control"),QStringLiteral("SetMode"));
+        message.setArguments({value});return bus.call(message,QDBus::Block,1000).type()!=QDBusMessage::ErrorMessage;
+    };
+    if(video)SpectacleCore::instance()->setVideoMode(true);
+    if(startup){
+        auto button=visualItem(viewer->contentItem(),QStringLiteral("nkshotStartupMore"));
+        if(!button||!button->isVisible()){fail("launch-only More entry");return;}
+        QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,button->mapToScene(QPointF(button->width()/2,button->height()/2)).toPoint());
+    } else {
+        auto more=viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+        if(!more||!QMetaObject::invokeMethod(more,"open")){fail("More menu");return;}
+    }
+    QTest::qWait(150);
+    if(startup&&!viewer->grabWindow().save(destination+QStringLiteral(".entry.png"))){fail("launch-only entry capture");return;}
+    auto entry=visualItem(viewer->contentItem(),startup?QStringLiteral("nkshotStartupColorAction"):QStringLiteral("nkshotColorPickerAction"));
+    if(!entry||!entry->isVisible()||!entry->isEnabled()){fail("independent menu entry");return;}
+    QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,entry->mapToScene(QPointF(entry->width()/2,entry->height()/2)).toPoint());
+    QPointer<ColorPickerWindow> picker;
+    if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows())if(auto p=qobject_cast<ColorPickerWindow *>(w))picker=p;return picker&&picker->status()==QQuickView::Ready;},3000)){fail("picker open");return;}
+    picker->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_COMPACT")?QSize(420,520):QSize(640,560));picker->requestActivate();QTest::qWait(150);
+    const auto click=[&](const char *name){auto item=visualItem(picker->contentItem(),QString::fromLatin1(name));if(!item||!item->isVisible()||!item->isEnabled())return false;QTest::mouseClick(picker,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());return true;};
+    if(noImage){
+        if(picker->property("hasImage").toBool()||!picker->property("screenMode").toBool()){fail("video defaults to independent Screen");return;}
+        if(!click("nkshotColorSource")){fail("no-image source selector");return;}
+        QTest::keyClick(picker,Qt::Key_Home);QTest::keyClick(picker,Qt::Key_Return);
+        auto selector=visualItem(picker->contentItem(),QStringLiteral("nkshotColorSource"));
+        if(!picker->property("screenMode").toBool()||!selector||selector->property("currentIndex").toInt()!=1){fail("no-image Screenshot disabled for keyboard");return;}
+    }
+    else {
+        if(!click("nkshotColorSource")){fail("source selector");return;}
+        QTest::keyClick(picker,Qt::Key_End);QTest::keyClick(picker,Qt::Key_Return);
+        if(!picker->property("screenMode").toBool()){fail("Screen source selection");return;}
+    }
+    QTest::qWait(200); // Source-mode layout and the combo popup must settle before hit testing.
+    if(picker->hasSample()||picker->property("screenPending").toBool()||QApplication::clipboard()->text()!=QStringLiteral("screen color unchanged")){fail("no implicit request or copy");return;}
+    if(!click("nkshotScreenPick")){fail("explicit Pick");return;}
+    if(!external) {
+        if(!QTest::qWaitFor([&]{return picker->property("screenPending").toBool();},1000)){qWarning()<<picker->property("screenStatus")<<picker->property("screenMode")<<picker->isVisible();fail("pending state");return;}
+        QTest::qWait(80);
+        if(!picker->grabWindow().save(destination+QStringLiteral(".waiting.png"))){fail("pending capture");return;}
+    }
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_EXTERNAL_CANCEL")){
+        const auto pickMarker=qEnvironmentVariable("NKSHOT_TEST_SCREEN_PICK_MARKER");
+        const auto pickLog=qEnvironmentVariable("NKSHOT_TEST_SCREEN_PICK_LOG");
+        if(!pickMarker.isEmpty()){
+            if(!QTest::qWaitFor([&]{return QFileInfo::exists(pickMarker);},5000)){fail("external method received before cancellation");return;}
+        } else if(!pickLog.isEmpty()){
+            if(!QTest::qWaitFor([&]{QFile log(pickLog);return log.open(QIODevice::ReadOnly)&&log.readAll().contains("\"event\": \"pick\"");},3000)){fail("external method received before cancellation");return;}
+        } else QTest::qWait(300);
+        if(!click("nkshotScreenCancel")){fail("external stop waiting");return;}
+    }
+    if(!QTest::qWaitFor([&]{return !picker->property("screenPending").toBool();},5000)){fail("portal response");return;}
+    auto portalJob=picker->findChild<ScreenColorPicker *>();
+    if(!portalJob||portalJob->status()!=expectedStatus){qWarning()<<(portalJob?portalJob->status():QString())<<picker->property("screenStatus");fail("exact portal outcome");return;}
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_EXTERNAL_CANCEL")){
+        QTest::qWait(1800);
+        if(portalJob->status()!=expectedStatus||picker->hasSample()||QApplication::clipboard()->text()!=QStringLiteral("screen color unchanged")){fail("late response after stop waiting ignored");return;}
+    }
+    if(expectedStatus==QStringLiteral("success")){
+        if(!picker->hasSample()||picker->hexValue()!=expectedHex||QApplication::clipboard()->text()!=QStringLiteral("screen color unchanged")){qWarning()<<picker->hexValue()<<picker->property("screenStatus");fail("wire result and no auto copy");return;}
+        if(!click("nkshotColorCopyHex")||QApplication::clipboard()->text()!=expectedHex){fail("explicit HEX copy");return;}
+        if(!click("nkshotColorCopyRgb")||QApplication::clipboard()->text()!=picker->rgbValue()){fail("explicit RGB copy");return;}
+        QTest::keyClick(picker,Qt::Key_C,Qt::ControlModifier);
+        if(QApplication::clipboard()->text()!=expectedHex){fail("keyboard copy");return;}
+    } else {
+        if(picker->hasSample()||QApplication::clipboard()->text()!=QStringLiteral("screen color unchanged")){fail("failed selection cannot copy");return;}
+        QTest::keyClick(picker,Qt::Key_C,Qt::ControlModifier);QTest::qWait(80);
+        if(QApplication::clipboard()->text()!=QStringLiteral("screen color unchanged")){fail("failed selection keyboard copy remains inert");return;}
+    }
+    QTest::qWait(200);
+    if(!picker->grabWindow().save(destination)){fail("result capture");return;}
+    if(!external){
+        if(!mode(QStringLiteral("hold"))||!click("nkshotScreenPick")||!QTest::qWaitFor([&]{return picker->property("screenPending").toBool();},1000)||!click("nkshotScreenCancel")
+            ||!QTest::qWaitFor([&]{return !picker->property("screenPending").toBool();},1000)||picker->hasSample()){fail("stop waiting");return;}
+        QTest::qWait(200);if(!picker->grabWindow().save(destination+QStringLiteral(".cancelled.png"))){fail("cancel capture");return;}
+        if(!mode(QStringLiteral("malformed"))||!click("nkshotScreenPick")||!QTest::qWaitFor([&]{return !picker->property("screenPending").toBool();},3000)||picker->hasSample()){fail("malformed tuple rejected");return;}
+        QTest::qWait(200);if(!picker->grabWindow().save(destination+QStringLiteral(".error.png"))){fail("error capture");return;}
+        if(!mode(QStringLiteral("ui"))||!click("nkshotScreenPick")||!QTest::qWaitFor([&]{return !picker->property("screenPending").toBool();},3000)||!picker->hasSample()){fail("explicit retry");return;}
+        if(QApplication::clipboard()->text()!=expectedHex){fail("retry must not copy");return;}
+        if(!mode(QStringLiteral("hold"))||!click("nkshotScreenPick")||!QTest::qWaitFor([&]{return picker->property("screenPending").toBool();},1000)){fail("pending minimize setup");return;}
+        picker->setWindowStates(Qt::WindowMinimized);
+        if(!QTest::qWaitFor([&]{return !picker->property("screenPending").toBool();},1000)||picker->hasSample()){fail("minimize invalidates pending result");return;}
+        picker->setWindowStates(Qt::WindowNoState);picker->show();picker->requestActivate();QTest::qWait(150);
+        if(picker->property("screenPending").toBool()||picker->hasSample()){fail("restore does not restart or revive color");return;}
+        if(!noImage){
+            if(!click("nkshotColorSource")){fail("return source selector");return;}
+            QTest::keyClick(picker,Qt::Key_Home);QTest::keyClick(picker,Qt::Key_Return);
+            if(picker->property("screenMode").toBool()||picker->hasSample()){fail("screenshot state isolated");return;}
+            auto viewport=visualItem(picker->contentItem(),QStringLiteral("nkshotColorViewport"));
+            if(!viewport||!viewport->isVisible()){fail("screenshot viewport returns");return;}
+            QTest::mouseClick(picker,Qt::LeftButton,Qt::NoModifier,viewport->mapToScene(QPointF(viewport->width()/2,viewport->height()/2)).toPoint());
+            if(!picker->hasSample()||QApplication::clipboard()->text()!=expectedHex){fail("image sampling still explicit");return;}
+        }
+    }
+    if(!external){
+        if(!picker->property("screenMode").toBool()){
+            if(!click("nkshotColorSource")){fail("close-pending source selector");return;}
+            QTest::keyClick(picker,Qt::Key_End);QTest::keyClick(picker,Qt::Key_Return);QTest::qWait(150);
+        }
+        if(!mode(QStringLiteral("hold"))||!click("nkshotScreenPick")||!QTest::qWaitFor([&]{return picker->property("screenPending").toBool();},1000)){fail("pending Escape setup");return;}
+        QTest::keyClick(picker,Qt::Key_Escape);
+        if(!picker||picker->property("screenPending").toBool()||picker->hasSample()){fail("Escape stops waiting without reviving old color");return;}
+        if(!click("nkshotScreenPick")||!QTest::qWaitFor([&]{return picker->property("screenPending").toBool();},1000)||!click("nkshotColorClose")){fail("close pending request");return;}
+    } else QTest::keyClick(picker,Qt::Key_Escape);
+    if(!QTest::qWaitFor([&]{return picker.isNull();},1000)||!(startup ? document->baseImage().isNull() : samePixels(original,document->renderToImage()))||depth!=document->undoStackDepth()
+        ||originalVideo!=SpectacleCore::instance()->currentVideo()){fail("close and source/history/video isolation");return;}
+    qInfo()<<"Screen portal UI passed; external:"<<external<<"video:"<<video<<"launch-only:"<<startup<<"expected result:"<<expectedStatus;
+    application.exit(0);
+}
 
 static void runWordScrollChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
 {
@@ -930,6 +1075,7 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_COLOR")) { runScreenColorChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORD_SCROLL")) { runWordScrollChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS")) { runInlineTextChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_TASK_MENU")) {
@@ -955,7 +1101,9 @@ void installUiCaptureHook(QApplication &application)
                 const auto expected = NkShot::Imaging::colorSampleSnapshot(original);
                 const auto depth = document->undoStackDepth();
                 QApplication::clipboard()->setText(QStringLiteral("untouched"));
-                if (!openTaskMenu(viewer, QStringLiteral("nkshotOcrLanguageMenu"))) { fail("menu"); return; }
+                auto more=viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotMoreMenu"));
+                if (!more || !QMetaObject::invokeMethod(more,"open")) { fail("menu"); return; }
+                QTest::qWait(150);
                 auto action = visualItem(viewer->contentItem(), QStringLiteral("nkshotColorPickerAction"));
                 if (!action || !action->isVisible()) { fail("action"); return; }
                 QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier, action->mapToScene(QPointF(action->width()/2, action->height()/2)).toPoint());
@@ -1023,8 +1171,14 @@ void installUiCaptureHook(QApplication &application)
                 if (!picker || picker->hasSample()) { fail("reopen"); return; }
                 picker->requestActivate(); QTest::qWait(100); QTest::keyClick(picker, Qt::Key_Escape); QTest::qWait(100);
                 if (picker || !samePixels(original, document->renderToImage()) || depth != document->undoStackDepth()) { fail("close / source isolation"); return; }
+                const auto beforeVideoCopy=QApplication::clipboard()->text();
                 SpectacleCore::instance()->setVideoMode(true);
-                if (viewer->openColorPicker()) { fail("video guard"); return; }
+                picker=qobject_cast<ColorPickerWindow *>(viewer->openColorPicker());
+                if(!picker||picker->property("hasImage").toBool()||!picker->property("screenMode").toBool()
+                    ||picker->property("screenPending").toBool()||picker->hasSample()
+                    ||QApplication::clipboard()->text()!=beforeVideoCopy){fail("independent Screen in video context");return;}
+                picker->close();
+                if(!QTest::qWaitFor([&]{return picker.isNull();},1000)){fail("video Screen closes");return;}
                 SpectacleCore::instance()->setVideoMode(false);
                 qInfo() << "Color sampler actual menu, pixels, keyboard, drag, explicit copy, resize, repeated open, hide/close and source isolation passed";
                 application.exit(0); return;

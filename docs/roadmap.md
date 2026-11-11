@@ -29,13 +29,13 @@ See [iterations](iterations.md), [building](building.md) and
    any external provider requires explicit opt-in identifying data/destination.
 4. **Recording beyond capture:** local MP4 clip export (072) and bounded silent GIF Maker (073) are implemented; actual KWin/PipeWire recording/A/V acceptance,
    then recording annotation, click effects and camera overlays where feasible.
-5. **Other verified reference gaps:** dedicated color picking,
+5. **Other verified reference gaps:** real desktop color-picker acceptance,
    spotlight/magnifier and AI erase/background removal. Do not label ordinary
    editor tools as these workflows or add fake placeholders.
 
 Quick-note image cards are implemented in 066 as a session-only workflow, not a
-persistent notes application. Image-local color sampling is implemented in 068;
-a global desktop eyedropper remains a separate gap.
+persistent notes application. Image-local color sampling is implemented in 068 and a desktop portal client in 074;
+real native desktop-picker behavior remains a separate acceptance gate.
 
 ## Release gates
 

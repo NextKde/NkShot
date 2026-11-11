@@ -96,3 +96,9 @@ feature or enable it in packaging defaults. No automated scrolling is provided.
 Local MP4 clips can also be exported as bounded, silent looping GIFs through the
 same contextual panel. See [video clip and GIF scope](docs/video-clips.md); this is
 file post-processing, not completed native recording acceptance.
+
+More → Pick a color now offers either immutable Screenshot sampling or a separate
+Screen request through the desktop portal. The launch-only start page also has
+this entry, without first taking a screenshot. Results require explicit Copy;
+real KDE/OpenGL/native-cancel acceptance remains outstanding. See
+[screen color scope](docs/screen-color-picker.md).

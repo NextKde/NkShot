@@ -485,3 +485,57 @@ selects 1.25–4.75 seconds; the new output in `NKSHOT_TEST_CLIP_OUTPUT` (defaul
 probe checks GIF metadata and actual Qt decoding at 640×360 with 35 frames,
 then observes looping/pause/resume without changing the source or clipboard.
 External analysis remains responsible for precise frame content and duration.
+
+### Desktop portal color picking (074)
+
+The production picker has no test injection hook. The test-only UI build drives
+the real More → Pick a color → Screen controls and uses a separately running
+portal process on an explicitly private bus.
+
+With a normal development system's dbus-run-session, run:
+```sh
+dbus-run-session -- env NKSHOT_TEST_PRIVATE_BUS=1 \
+  QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  NKSHOT_TEST_SCREEN_COLOR=1 NKSHOT_TEST_UI_CAPTURE=/tmp/screen-color.png \
+  ./build/bin/nkshot --new-instance --edit-existing /tmp/generated-pattern.png
+```
+Build `screen_color_picker_test` beside the application first. The harness starts
+its `--fake ui` subprocess, which returns a real D-Bus sRGB tuple after a short
+delay. It checks initial inactivity, pending/success/cancel/error/retry, explicit
+HEX/RGB/keyboard copy, source switching and unchanged image/history/video.
+Screenshots show simulated portal responses, not native cursor interaction.
+
+Use `NKSHOT_TEST_SCREEN_COMPACT=1` for 420×520 and the existing
+`NKSHOT_TEST_DARK=1` for the dark palette. `NKSHOT_TEST_SCREEN_VIDEO=1` verifies
+the entry without an image, including the disabled Screenshot source keyboard
+path. The existing `NKSHOT_TEST_COLOR=1` regression continues to test the 068
+image sampler; its entry moved from Read from image to the main More menu.
+
+For a separately implemented portal on the supplied private bus, set
+`NKSHOT_TEST_SCREEN_EXTERNAL=1`. The harness does not start or replace a service.
+`NKSHOT_TEST_SCREEN_EXPECT=success|cancelled|error` selects the expected outcome,
+and `NKSHOT_TEST_SCREEN_HEX` selects the expected successful 8-bit HEX result.
+`NKSHOT_TEST_SCREEN_EXTERNAL_CANCEL=1` clicks Stop waiting and then waits 1.8
+seconds to verify that a deliberately late response cannot restore a sample,
+change status or modify the clipboard.
+
+The real-protocol unit test covers typed tuple boundaries, early responses,
+different returned handles, invalid responses, owner loss, request cancellation,
+timeout and delayed-handle cleanup. Run it only on a dedicated test bus:
+```sh
+dbus-run-session -- env NKSHOT_TEST_PRIVATE_BUS=1 ./build/bin/screen_color_picker_test
+```
+When dbus-run-session is installed, CTest wraps this test automatically. Otherwise
+the caller must provide a private DBUS_SESSION_BUS_ADDRESS and the explicit flag.
+No test should register the portal service name on a user's desktop session.
+Wayland export, compositor cursor behavior and real KDE/GPU selection remain
+separate native acceptance work.
+
+For the genuine empty startup workflow, use `--launchonly` instead of
+`--edit-existing` and set `NKSHOT_TEST_SCREEN_STARTUP=1` with the Screen flags.
+The harness requires a null image document, clicks the start page's actual More
+button, records the menu in `.entry.png`, then drives the full Screen flow.
+No synthetic image is loaded merely to make the entry available.
+External cancellation can additionally use `NKSHOT_TEST_SCREEN_PICK_MARKER`:
+the external test service creates the marker only after receiving PickColor, so
+the test cancels a real request rather than guessing a network delay.

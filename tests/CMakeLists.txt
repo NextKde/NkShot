@@ -117,3 +117,17 @@ set_tests_properties(color_sample_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA
 ecm_add_test(VideoClipTest.cpp ../src/Media/VideoClipJob.cpp ../src/Media/VideoClipJob.h
     TEST_NAME video_clip_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(video_clip_test PROPERTIES TIMEOUT 180)
+
+# Portal protocol integration: explicitly supplied private session bus only.
+add_executable(screen_color_picker_test ScreenColorPickerTest.cpp ../src/Platforms/ScreenColorPicker.cpp ../src/Platforms/ScreenColorPicker.h)
+target_link_libraries(screen_color_picker_test PRIVATE Qt::Test Qt::Gui Qt::DBus)
+find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
+if(DBUS_RUN_SESSION_EXECUTABLE)
+    add_test(NAME screen_color_picker_test COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} -- ${CMAKE_COMMAND} -E env
+        NKSHOT_TEST_PRIVATE_BUS=1 $<TARGET_FILE:screen_color_picker_test>)
+else()
+    # Isolated environments can supply a private bus explicitly. Never silently
+    # attach the test portal to a user's ordinary desktop session.
+    add_test(NAME screen_color_picker_test COMMAND screen_color_picker_test)
+endif()
+set_tests_properties(screen_color_picker_test PROPERTIES TIMEOUT 45)

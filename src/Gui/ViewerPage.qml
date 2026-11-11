@@ -248,13 +248,6 @@ EmptyPage {
                             enabled: !contextWindow.scanningCode
                             onTriggered: contextWindow.scanImageCode()
                         }
-                        QQC.MenuItem {
-                            objectName: "nkshotColorPickerAction"
-                            text: i18nc("@action", "Pick a color…")
-                            icon.name: "color-picker"
-                            icon.color: palette.buttonText
-                            onTriggered: contextWindow.openColorPicker()
-                        }
                         QQC.Label {
                             visible: !SpectacleCore.ocrAvailable
                             width: 228
@@ -309,6 +302,13 @@ EmptyPage {
                         }
                     }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
+                    QQC.MenuItem {
+                        objectName: "nkshotColorPickerAction"
+                        text: i18nc("@action", "Pick a color…")
+                        icon.name: "color-picker"
+                        icon.color: palette.buttonText
+                        onTriggered: contextWindow.openColorPicker()
+                    }
                     QQC.MenuItem {
                         objectName: "nkshotScrollPreviewEntry"
                         visible: contextWindow.scrollPreviewEnabled && !SpectacleCore.videoMode

@@ -503,14 +503,15 @@ void ViewerWindow::scanImageCode()
 
 QQuickWindow *ViewerWindow::openColorPicker()
 {
-    if (SpectacleCore::instance()->videoMode() || !isVisible()) return nullptr;
+    if (!isVisible()) return nullptr;
     if (m_colorPicker && !m_colorPicker->isVisible()) delete m_colorPicker;
     if (!m_colorPicker) {
-        auto picker = new ColorPickerWindow(SpectacleCore::instance()->annotationDocument()->renderToImage(), engine());
-        if (!picker->valid() || picker->status() != QQuickView::Ready) {
+        auto picker = new ColorPickerWindow(m_mode == Dialog || SpectacleCore::instance()->videoMode() ? QImage()
+            : SpectacleCore::instance()->annotationDocument()->renderToImage(), engine());
+        if (picker->status() != QQuickView::Ready) {
             delete picker;
             InlineMessageModel::instance()->push(InlineMessageModel::Warning,
-                i18nc("@info", "Color sampling needs an image of at most 20 megapixels. Crop or resize a copy and try again."));
+                i18nc("@info", "The color picker could not be opened. Try again."));
             return nullptr;
         }
         m_colorPicker = picker;

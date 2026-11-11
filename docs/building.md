@@ -124,3 +124,16 @@ Debian FFmpeg 9.0.2. See [clip scope and safety](video-clips.md).
 GIF export additionally requires FFmpeg’s GIF/PNG encoders and palettegen/paletteuse
 filters. Its capability checks are independent of MP4 H.264/AAC encoders. No new
 application-linked library or automatic installer is introduced.
+
+## Desktop portal screen colors (074)
+
+The screen picker reuses QtDBus and KF6 WindowSystem. It requires a desktop portal
+implementing Screenshot.PickColor at runtime, not an extra capture library.
+KWindowSystem 6.28 or newer supplies the non-deprecated asynchronous
+exportToplevel API used for Wayland parent identifiers.
+
+Protocol tests must never own the portal name on a normal desktop session.
+CTest runs them through dbus-run-session when that tool is available. In isolated
+build roots without it, supply a dedicated private test bus and explicitly set
+NKSHOT_TEST_PRIVATE_BUS=1; absence is a test failure, not a silent skip.
+The test executable's --fake mode is only a test service, not production code.
