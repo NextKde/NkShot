@@ -165,3 +165,19 @@ fixture is split into two non-overlapping halves. The actual menu, picker reuse,
 cancel/reopen, reversed numeric filename selection, exact reconstructed pixels,
 preview close and unchanged editor are checked. Stack mode intentionally does
 not run overlap duplicate rejection; duplicate retention is covered by core tests.
+
+## Local recording playback
+
+Create a non-personal silent video using an installed FFmpeg:
+
+```
+ffmpeg -f lavfi -i 'testsrc2=size=640x360:rate=20' -t 4 -c:v libx264 -pix_fmt yuv420p playback.mp4
+```
+
+Set `NKSHOT_TEST_PLAYBACK=/absolute/path/playback.mp4` with the ordinary viewer
+fixture/capture setup. The test switches to the real recording view, supplies the
+local file, clicks Play/Pause and seeks, checks a real software frame and verifies
+file bytes did not change. Run DARK and UI_SIZE=640x420 variants. For a corrupt
+MP4, add `NKSHOT_TEST_PLAYBACK_ERROR=1` to check its visible retry flow. This does
+not exercise desktop recording, audio, GPU rendering or performance. The screenshot
+shows actual decoded test-pattern frames, not a composited stand-in.

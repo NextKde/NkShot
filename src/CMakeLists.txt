@@ -36,6 +36,8 @@ target_sources(spectacle PRIVATE
     Geometry.cpp
     OcrManager.cpp
     Imaging/VerticalStitcher.cpp
+    Gui/SoftwareVideoPreview.cpp
+    Gui/SoftwareVideoPreview.h
     Gui/OcrTextWindow.cpp
     Gui/OcrTextWindow.h
     Gui/PinnedImageWindow.cpp
@@ -118,6 +120,7 @@ target_link_libraries(spectacle PRIVATE
     Qt6::QuickDialogs2
     Qt::Concurrent
     Qt::DBus
+    Qt::Multimedia
     Qt::PrintSupport
     Qt::Qml
     Qt::Quick

@@ -4,6 +4,8 @@
  */
 
 import QtQuick
+import QtQuick.Window
+import Kos.Ui as Kos
 import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import QtMultimedia
@@ -12,6 +14,22 @@ import org.kde.spectacle.private
 
 FocusScope {
     id: root
+    objectName: "nkshotRecordingView"
+    // A reusable local playback view; capture remains owned by SpectacleCore.
+    property url sourceUrl: SpectacleCore.currentVideo
+    readonly property bool playbackFailed: (animatedImage.source.toString().length > 0 && animatedImage.status === Image.Error)
+        || (!hasAnimatedImage && mediaPlayer.error !== MediaPlayer.NoError)
+    function reloadMedia() {
+        mediaPlayer.source = ""
+        animatedImage.source = ""
+        Qt.callLater(function() {
+            animatedImage.source = Qt.binding(function() {
+                const format = SpectacleCore.videoPlatform.formatForPath(root.sourceUrl.toString())
+                return (format === VideoPlatform.WebP || format === VideoPlatform.Gif) ? root.sourceUrl : ""
+            })
+            mediaPlayer.source = Qt.binding(function() { return root.hasAnimatedImage ? "" : root.sourceUrl })
+        })
+    }
     readonly property bool hasAnimatedImage: animatedImage.status === Image.Ready
     readonly property bool hasContent: hasAnimatedImage || mediaPlayer.hasVideo
     readonly property bool playing: hasAnimatedImage ? animatedImage.playing : mediaPlayer.playing
@@ -50,9 +68,9 @@ FocusScope {
         id: animatedImage
         anchors.fill: parent
         source: {
-            const format = SpectacleCore.videoPlatform.formatForPath(SpectacleCore.currentVideo.toString())
+            const format = SpectacleCore.videoPlatform.formatForPath(root.sourceUrl.toString())
             if (format === VideoPlatform.WebP || format === VideoPlatform.Gif) {
-                return SpectacleCore.currentVideo
+                return root.sourceUrl
             }
             return ""
         }
@@ -62,9 +80,17 @@ FocusScope {
 
     VideoOutput {
         id: videoOutput
-        visible: mediaPlayer.hasVideo
+        visible: mediaPlayer.hasVideo && GraphicsInfo.api !== GraphicsInfo.Software
         anchors.fill: parent
         fillMode: VideoOutput.PreserveAspectFit
+    }
+
+    SoftwareVideoPreview {
+        objectName: "nkshotSoftwareVideoPreview"
+        anchors.fill: parent
+        sink: videoOutput.videoSink
+        active: GraphicsInfo.api === GraphicsInfo.Software && mediaPlayer.hasVideo
+        visible: active
     }
 
     AudioOutput {
@@ -73,7 +99,8 @@ FocusScope {
 
     MediaPlayer {
         id: mediaPlayer
-        source: root.hasAnimatedImage ? "" : SpectacleCore.currentVideo
+        objectName: "nkshotMediaPlayer"
+        source: root.hasAnimatedImage ? "" : root.sourceUrl
         videoOutput: videoOutput
         audioOutput: audioOutput
         onHasVideoChanged: if (hasVideo) {
@@ -81,6 +108,57 @@ FocusScope {
         }
         onPlaybackStateChanged: if (playbackState === MediaPlayer.StoppedState) {
             pause()
+        }
+    }
+
+    QQC.Pane {
+        anchors.centerIn: parent
+        width: Math.min(420, parent.width - 24)
+        visible: root.playbackFailed && !SpectacleCore.videoPlatform.isRecording
+        padding: 20
+        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 16; elevation: 0 }
+        contentItem: ColumnLayout {
+            spacing: 12
+            QQC.Label {
+                Layout.fillWidth: true
+                text: i18nc("@title", "This recording could not be played")
+                font.bold: true
+                wrapMode: Text.Wrap
+                color: Kos.AppTheme.paletteText
+            }
+            QQC.Label {
+                Layout.fillWidth: true
+                text: i18nc("@info", "The file may be incomplete or its format unavailable. The original file has not been changed.")
+                wrapMode: Text.Wrap
+                color: Kos.AppTheme.mutedText
+            }
+            QQC.Label {
+                Layout.fillWidth: true
+                text: mediaPlayer.errorString
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                visible: text.length > 0
+                color: Kos.AppTheme.mutedText
+            }
+            QQC.Button {
+                id: retryButton
+                objectName: "nkshotPlaybackRetry"
+                implicitHeight: 34
+                leftPadding: 14
+                rightPadding: 14
+                palette.buttonText: Kos.AppTheme.accentText
+                background: Kos.KosSurface {
+                    fillColor: Kos.AppTheme.accent
+                    radius: 10
+                    elevation: 0
+                    strokeWidth: 0
+                    hovered: retryButton.hovered
+                    pressed: retryButton.down
+                    focused: retryButton.visualFocus
+                }
+                text: i18nc("@action", "Retry playback")
+                onClicked: root.reloadMedia()
+            }
         }
     }
 
@@ -98,6 +176,7 @@ FocusScope {
 
     FloatingToolBar {
         id: toolBar
+        objectName: "nkshotPlaybackControls"
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.margins: padding * 2
@@ -109,6 +188,7 @@ FocusScope {
             spacing: parent.spacing
             TtToolButton {
                 id: playPauseButton
+                objectName: "nkshotPlaybackToggle"
                 containmentMask: Item {
                     parent: playPauseButton
                     anchors {
@@ -132,6 +212,32 @@ FocusScope {
             }
             QQC.Slider {
                 id: seekBar
+                objectName: "nkshotPlaybackSeek"
+                Accessible.name: i18nc("@label", "Recording position")
+                background: Rectangle {
+                    x: seekBar.leftPadding
+                    y: seekBar.topPadding + (seekBar.availableHeight - height) / 2
+                    width: seekBar.availableWidth
+                    height: 4
+                    radius: 2
+                    color: Kos.AppTheme.border
+                    Rectangle {
+                        width: seekBar.visualPosition * parent.width
+                        height: parent.height
+                        radius: parent.radius
+                        color: Kos.AppTheme.accent
+                    }
+                }
+                handle: Rectangle {
+                    x: seekBar.leftPadding + seekBar.visualPosition * (seekBar.availableWidth - width)
+                    y: seekBar.topPadding + (seekBar.availableHeight - height) / 2
+                    width: 14
+                    height: 14
+                    radius: 7
+                    color: Kos.AppTheme.contentBackground
+                    border.color: Kos.AppTheme.accent
+                    border.width: 2
+                }
                 containmentMask: Item {
                     parent: seekBar
                     anchors {
@@ -169,12 +275,12 @@ FocusScope {
                 }
             }
         }
-        layer.enabled: true // makes opacity animations look better
+        layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
         state: "normal"
         states: [
             State {
                 name: "hovered"
-                when: tbHoverHandler.hovered && root.hasContent
+                when: (tbHoverHandler.hovered || !root.playing) && root.hasContent
                 PropertyChanges {
                     target: toolBar
                     opacity: 1
@@ -182,7 +288,7 @@ FocusScope {
             },
             State {
                 name: "normal"
-                when: !tbHoverHandler.hovered || !root.hasContent
+                when: (root.playing && !tbHoverHandler.hovered) || !root.hasContent
                 PropertyChanges {
                     target: toolBar
                     opacity: 0
@@ -199,7 +305,7 @@ FocusScope {
                         value: true
                     }
                     OpacityAnimator {
-                        duration: Kirigami.Units.longDuration
+                        duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
                         easing.type: Easing.OutCubic
                     }
                 }
@@ -208,7 +314,7 @@ FocusScope {
                 to: "normal"
                 SequentialAnimation {
                     OpacityAnimator {
-                        duration: Kirigami.Units.longDuration
+                        duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
                         easing.type: Easing.OutCubic
                     }
                     PropertyAction {

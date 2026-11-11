@@ -222,6 +222,66 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK")) {
+                const auto path = qEnvironmentVariable("NKSHOT_TEST_PLAYBACK");
+                QFile input(path);
+                if (!input.open(QIODevice::ReadOnly)) { application.exit(111); return; }
+                const auto original = input.readAll(); input.close();
+                SpectacleCore::instance()->setVideoMode(true);
+                QQuickItem *recording = nullptr;
+                if (!QTest::qWaitFor([&] {
+                    recording = visualItem(viewer->contentItem(), QStringLiteral("nkshotRecordingView"));
+                    return recording != nullptr;
+                }, 2000)) { application.exit(112); return; }
+                recording->setProperty("sourceUrl", QUrl::fromLocalFile(path));
+                const bool expectError = qEnvironmentVariableIsSet("NKSHOT_TEST_PLAYBACK_ERROR");
+                if (!QTest::qWaitFor([&] { return recording->property(expectError ? "playbackFailed" : "hasContent").toBool(); }, 15000)) {
+                    qCritical() << "Playback state timeout" << recording->property("playbackFailed");
+                    application.exit(113); return;
+                }
+                if (expectError) {
+                    auto retry = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackRetry"));
+                    if (!retry || !retry->isVisible()) { application.exit(114); return; }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        retry->mapToScene(QPointF(retry->width()/2, retry->height()/2)).toPoint());
+                    QTest::qWait(400);
+                    if (!QTest::qWaitFor([&] { return recording->property("playbackFailed").toBool(); }, 5000)) {
+                        application.exit(115); return;
+                    }
+                } else {
+                    auto toggle = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackToggle"));
+                    auto controls = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackControls"));
+                    auto seek = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackSeek"));
+                    auto player = recording->findChild<QObject *>(QStringLiteral("nkshotMediaPlayer"));
+                    auto softwareVideo = visualItem(viewer->contentItem(), QStringLiteral("nkshotSoftwareVideoPreview"));
+                    if (!toggle || !controls || !seek || !player
+                        || !QTest::qWaitFor([&] { return controls->isVisible() && controls->opacity() > 0.9; }, 2000)) {
+                        application.exit(116); return;
+                    }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        toggle->mapToScene(QPointF(toggle->width()/2, toggle->height()/2)).toPoint());
+                    if (!QTest::qWaitFor([&] { return recording->property("playing").toBool() && player->property("position").toLongLong() > 100; }, 3000)) {
+                        application.exit(117); return;
+                    }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        toggle->mapToScene(QPointF(toggle->width()/2, toggle->height()/2)).toPoint());
+                    if (!QTest::qWaitFor([&] { return !recording->property("playing").toBool(); }, 1000)) { application.exit(118); return; }
+                    if (!softwareVideo || !QTest::qWaitFor([&] { return softwareVideo->property("hasFrame").toBool(); }, 2000)) {
+                        application.exit(121); return;
+                    }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        seek->mapToScene(QPointF(seek->width()*0.6, seek->height()/2)).toPoint());
+                    if (!QTest::qWaitFor([&] { return player->property("position").toLongLong() > 1500; }, 2000)) {
+                        application.exit(119); return;
+                    }
+                }
+                QTest::qWait(300);
+                if (!viewer->grabWindow().save(destination) || !input.open(QIODevice::ReadOnly) || input.readAll() != original) {
+                    application.exit(120); return;
+                }
+                qInfo() << "NkShot real local playback/error-retry and source immutability passed, error scenario:" << expectError;
+                application.exit(0); return;
+            }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_RESULT")) {
                 const bool chinese = qEnvironmentVariableIsSet("NKSHOT_TEST_OCR_CHINESE");
                 const QString expected = chinese ? QStringLiteral("中文截图编辑12345") : QStringLiteral("HELLO NKSHOT 12345");

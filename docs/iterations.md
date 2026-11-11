@@ -915,3 +915,35 @@ Reviewed [entry](screenshots/047-stack-entry.png),
 Inputs are synthetic local images; native portals, maximum-memory stress and
 real desktop scrolling/capture remain unverified. Mixed width/profile/scale
 images are rejected instead of being silently resized.
+
+## 048 — Actual recording playback, software frames and failure recovery UI
+
+Playback review exposed a real gap: QtMultimedia decoded the H.264 sample and
+advanced position, but VideoOutput displayed no pixels with Qt's software scene
+graph. Add a dedicated QVideoSink-backed SoftwareVideoPreview that paints actual
+decoded frames only for the software renderer. The existing GPU VideoOutput path
+and MediaPlayer decoding/audio ownership remain unchanged. The view accepts an
+independent sourceUrl for reuse while defaulting to the recorded file.
+
+Paused recordings now keep controls visible without hunting for a hover target.
+The seek control uses shared Kos colors and a round handle. Playback failures
+show a readable card, original-file assurance, diagnostic and styled Retry button;
+retry restores source bindings. Reduced-motion settings apply to control fades,
+and software rendering avoids the opacity layer that previously produced bad
+corners. No synthetic success status or screenshot composition is used.
+
+Final build, CTest 5/5 and static checks 16/16 pass. A locally generated silent
+4-second H.264 MP4 is decoded by the actual QtMultimedia FFmpeg backend. UI tests
+click Play/Pause and seek to about 2.4 seconds, require a real software video
+frame, and verify the file bytes are unchanged. Corrupt-MP4 tests click Retry and
+verify a stable failure state without file mutation. Light/dark and 640×420
+playback pass. Reviewed actual [light](screenshots/048-playback-light.png),
+[dark](screenshots/048-playback-dark.png), [compact](screenshots/048-playback-compact.png),
+[error](screenshots/048-playback-error.png) and
+[dark error](screenshots/048-playback-error-dark.png). The colorful image is a
+codec test-pattern video, not an application design mockup.
+
+This validates local playback, NOT desktop recording. Real KWin/PipeWire capture,
+GPU video presentation, audio, HDR/rotation metadata, high-resolution performance
+and animated GIF/WebP regression remain unverified. The software fallback is a
+correctness path, not a claim of GPU performance or Liquid Glass validation.
