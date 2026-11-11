@@ -6,13 +6,16 @@ This is an early compiled prototype, not a release-tested product or an Apple pr
 ## Current scope
 
 - Canonical NextKde Kos.Ui floating liquid panels with same-window image sampling,
-  blur/refraction and opaque fallbacks (source integration, not visually verified).
+  blur/refraction and opaque fallbacks (software visuals reviewed; GPU optics unverified).
 - Neutral selection outline and contrasting resize handles.
 - Rounded tool-button hover/pressed/selected states and visible keyboard focus.
 - Bottom capture controls separated from the screen edge.
 - Existing Spectacle capture, recording, annotations, exports and shortcuts retained.
+- Local English/Chinese OCR results, text selection/copy and UTF-8 saving.
+- Separate-image pinning, conservative overlap composition and explicit vertical stacking.
+- Local video/animation playback with software-frame fallback and failure/retry UI.
 
-This first pass changes presentation only; it does not add compositor blur, replace
+These changes do not add compositor blur, replace
 KWin's capture implementation or claim pixel-identical macOS 27 behavior.
 
 ## Base and compatibility
@@ -60,8 +63,11 @@ See [validation checklist](docs/nkshot-validation.md) for outstanding verificati
 ## Delivery scope
 
 The first release targets screenshot capture and post-capture image editing.
-Recording is retained for later runtime validation; OCR is inherited but untested;
-translation is not implemented. See [delivery plan](docs/roadmap.md).
+Desktop recording still needs real KWin/PipeWire acceptance. Actual local H.264,
+GIF and WebP playback and local English/Chinese OCR have passed synthetic-fixture
+interaction tests; this does not certify desktop capture, audio, general OCR
+accuracy or GPU presentation. Translation is not implemented. See the
+[iteration log](docs/iterations.md) and [recording boundaries](docs/recording-verification.md).
 
 See [liquid-material integration](docs/liquid-ui.md) for provenance, limits and
 required visual checks.

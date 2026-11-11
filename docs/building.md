@@ -81,3 +81,13 @@ Chinese OCR regression coverage additionally uses Tesseract `chi_sim` trained
 data and a CJK-capable font, preferably Noto Sans CJK SC (`fonts-noto-cjk`).
 The Chinese case explicitly skips if either dependency is missing; inspect
 individual QtTest results rather than treating an aggregate pass as proof it ran.
+
+## Runtime image plugins
+
+Animated WebP review needs Qt's WebP image-format plugin, not merely libwebp.
+On the verified Debian environment this is `qt6-image-formats-plugins` with its
+runtime dependencies; GIF support is supplied by the Qt GIF plugin. Include the
+corresponding official Qt image plugins in distribution packaging. A missing
+plugin produces a visible playback failure, not a claim that a file was decoded.
+The isolated 049 environment added image-formats/libmng/libwebpdemux from signed
+Debian metadata, without upgrading host packages.

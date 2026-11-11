@@ -181,3 +181,11 @@ file bytes did not change. Run DARK and UI_SIZE=640x420 variants. For a corrupt
 MP4, add `NKSHOT_TEST_PLAYBACK_ERROR=1` to check its visible retry flow. This does
 not exercise desktop recording, audio, GPU rendering or performance. The screenshot
 shows actual decoded test-pattern frames, not a composited stand-in.
+
+For GIF/WebP, generate local fixtures using
+`python3 tests/ui/make_animation_fixture.py /path/to/animation` (Pillow with WebP
+support). Pass either output to TEST_PLAYBACK plus `NKSHOT_TEST_ANIMATION=1`.
+Tests verify actual frame progression, mouse pause/resume and stable paused frame,
+hidden seek, empty MediaPlayer source and unchanged input bytes. Run both themes.
+Qt's WebP image plugin must be installed; libwebp alone is not enough. Corrupt
+animation files use PLAYBACK_ERROR as above. These are not desktop recordings.

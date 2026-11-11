@@ -947,3 +947,27 @@ This validates local playback, NOT desktop recording. Real KWin/PipeWire capture
 GPU video presentation, audio, HDR/rotation metadata, high-resolution performance
 and animated GIF/WebP regression remain unverified. The software fallback is a
 correctness path, not a claim of GPU performance or Liquid Glass validation.
+
+## 049 — GIF/WebP playback isolation and regression coverage
+
+Choose the animation decoder from the file format, not from a Ready status that
+only becomes true after loading. This prevents MediaPlayer from also trying to
+open GIF/WebP during animation loading/retry. Keep actual AnimatedImage playback,
+hide the video seek control for animations and center the compact Play/Pause bar.
+
+The first real WebP test correctly failed: the isolated environment had libwebp
+but no Qt WebP image plugin. Added official qt6-image-formats-plugins and runtime
+dependencies to the isolated toolchain, recorded hashes and documented packaging
+requirements. No host upgrade or permission changes occurred. After that, actual
+GIF/WebP frame progression, mouse pause/resume, stable paused frames, hidden seek,
+empty duplicate MediaPlayer source and unchanged file bytes pass in light/dark.
+Corrupt GIF/WebP Retry flows also pass; the real H.264 play/pause/seek/software-frame
+regression remains green. Build, CTest 5/5 and static checks 16/16 pass.
+
+Reviewed [GIF](screenshots/049-animation-gif.png),
+[dark WebP](screenshots/049-animation-webp-dark.png) and
+[invalid WebP](screenshots/049-animation-webp-error.png). Added a reproducible
+non-personal animation fixture generator. Updated stale README claims that OCR
+and all playback were untested, while retaining the true desktop/GPU/audio limits.
+These are local synthetic-media tests, not real recording acceptance, broad codec
+coverage, mixed-format source-switch testing or a performance benchmark.

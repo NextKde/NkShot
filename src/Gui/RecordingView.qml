@@ -17,17 +17,20 @@ FocusScope {
     objectName: "nkshotRecordingView"
     // A reusable local playback view; capture remains owned by SpectacleCore.
     property url sourceUrl: SpectacleCore.currentVideo
+    readonly property bool usesAnimatedImage: {
+        const format = SpectacleCore.videoPlatform.formatForPath(sourceUrl.toString())
+        return format === VideoPlatform.WebP || format === VideoPlatform.Gif
+    }
     readonly property bool playbackFailed: (animatedImage.source.toString().length > 0 && animatedImage.status === Image.Error)
-        || (!hasAnimatedImage && mediaPlayer.error !== MediaPlayer.NoError)
+        || (!usesAnimatedImage && mediaPlayer.error !== MediaPlayer.NoError)
     function reloadMedia() {
         mediaPlayer.source = ""
         animatedImage.source = ""
         Qt.callLater(function() {
             animatedImage.source = Qt.binding(function() {
-                const format = SpectacleCore.videoPlatform.formatForPath(root.sourceUrl.toString())
-                return (format === VideoPlatform.WebP || format === VideoPlatform.Gif) ? root.sourceUrl : ""
+                return root.usesAnimatedImage ? root.sourceUrl : ""
             })
-            mediaPlayer.source = Qt.binding(function() { return root.hasAnimatedImage ? "" : root.sourceUrl })
+            mediaPlayer.source = Qt.binding(function() { return root.usesAnimatedImage ? "" : root.sourceUrl })
         })
     }
     readonly property bool hasAnimatedImage: animatedImage.status === Image.Ready
@@ -66,14 +69,9 @@ FocusScope {
     // image formats such as WebP.
     AnimatedImage {
         id: animatedImage
+        objectName: "nkshotAnimatedImage"
         anchors.fill: parent
-        source: {
-            const format = SpectacleCore.videoPlatform.formatForPath(root.sourceUrl.toString())
-            if (format === VideoPlatform.WebP || format === VideoPlatform.Gif) {
-                return root.sourceUrl
-            }
-            return ""
-        }
+        source: root.usesAnimatedImage ? root.sourceUrl : ""
         visible: status === Image.Ready
         fillMode: Image.PreserveAspectFit
     }
@@ -100,7 +98,7 @@ FocusScope {
     MediaPlayer {
         id: mediaPlayer
         objectName: "nkshotMediaPlayer"
-        source: root.hasAnimatedImage ? "" : root.sourceUrl
+        source: root.usesAnimatedImage ? "" : root.sourceUrl
         videoOutput: videoOutput
         audioOutput: audioOutput
         onHasVideoChanged: if (hasVideo) {
@@ -177,7 +175,7 @@ FocusScope {
     FloatingToolBar {
         id: toolBar
         objectName: "nkshotPlaybackControls"
-        anchors.left: parent.left
+        anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.margins: padding * 2
         width: root.hasAnimatedImage ? implicitWidth : parent.width - anchors.margins * 2

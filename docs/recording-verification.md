@@ -43,3 +43,17 @@ pretend it is a desktop. Full acceptance needs an authorized Plasma/KWin session
 
 Do not label these items passed based on synthetic editor screenshots, codec
 initialization, or the separate Vulkan material probe.
+
+## Local file playback checks (048–049)
+
+The real QtMultimedia backend decodes a silent synthetic four-second H.264 MP4.
+Mouse Play/Pause/seek and software presentation of actual decoded frames pass.
+Actual GIF and animated WebP frame progression, pause stability and resume pass
+through Qt AnimatedImage, with seek hidden and no duplicate MediaPlayer source.
+The WebP image-format plugin is required. Corrupt GIF/WebP/MP4 files display an
+error and tolerate Retry without altering input bytes. Light/dark and compact
+software UI screenshots are recorded in the iteration log.
+
+These are generated local media fixtures, not files captured from a real desktop.
+They do not change any full recording acceptance item above. Audio, GPU output,
+rotation/HDR, high-resolution throughput and native desktop capture remain open.

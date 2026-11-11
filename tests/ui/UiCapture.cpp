@@ -248,6 +248,34 @@ void installUiCaptureHook(QApplication &application)
                     if (!QTest::qWaitFor([&] { return recording->property("playbackFailed").toBool(); }, 5000)) {
                         application.exit(115); return;
                     }
+                } else if (qEnvironmentVariableIsSet("NKSHOT_TEST_ANIMATION")) {
+                    auto animated = visualItem(viewer->contentItem(), QStringLiteral("nkshotAnimatedImage"));
+                    auto toggle = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackToggle"));
+                    auto seek = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackSeek"));
+                    auto player = recording->findChild<QObject *>(QStringLiteral("nkshotMediaPlayer"));
+                    if (!animated || !toggle || !seek || !player || seek->isVisible()
+                        || !recording->property("hasAnimatedImage").toBool()
+                        || !player->property("source").toUrl().isEmpty()) { application.exit(122); return; }
+                    if (recording->property("playing").toBool()) {
+                        QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                            recording->mapToScene(QPointF(recording->width()/2, recording->height()/2)).toPoint());
+                    }
+                    if (!QTest::qWaitFor([&] { return !recording->property("playing").toBool() && toggle->isVisible(); }, 2000)) {
+                        application.exit(123); return;
+                    }
+                    QTest::qWait(300);
+                    const auto startFrame = animated->property("currentFrame").toInt();
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        toggle->mapToScene(QPointF(toggle->width()/2, toggle->height()/2)).toPoint());
+                    if (!QTest::qWaitFor([&] { return recording->property("playing").toBool()
+                        && animated->property("currentFrame").toInt() != startFrame; }, 3000)) { application.exit(124); return; }
+                    QTest::mouseClick(viewer, Qt::LeftButton, Qt::NoModifier,
+                        toggle->mapToScene(QPointF(toggle->width()/2, toggle->height()/2)).toPoint());
+                    if (!QTest::qWaitFor([&] { return !recording->property("playing").toBool(); }, 1000)) { application.exit(125); return; }
+                    const auto pausedFrame = animated->property("currentFrame").toInt();
+                    QTest::qWait(400);
+                    if (animated->property("currentFrame").toInt() != pausedFrame) { application.exit(126); return; }
+                    qInfo() << "NkShot real animated-image frames, pause/resume and separate decoder routing passed";
                 } else {
                     auto toggle = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackToggle"));
                     auto controls = visualItem(viewer->contentItem(), QStringLiteral("nkshotPlaybackControls"));
