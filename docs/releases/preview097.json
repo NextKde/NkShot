@@ -1,0 +1,37 @@
+{
+  "package": "nkshot",
+  "version": "0.1.0~preview097",
+  "architecture": "amd64",
+  "source_commit": "3eb3773d876f4d607eaad488bc534dd74ced639d",
+  "source_tree": "39972c20fe1a53d6fe12cdf7a4d267efcfe49aca",
+  "published_source_blobs_verified": 921,
+  "artifact": "nkshot_0.1.0~preview097_amd64.deb",
+  "bytes": 2790704,
+  "sha256": "713c3d2b3cdb9ae95e59621e1aec954db74a4f4a8ce52ae203eed394df714edd",
+  "build_type": "Release",
+  "BUILD_TESTING": false,
+  "NKSHOT_ENABLE_UI_CAPTURE": false,
+  "baseline": "Debian sid amd64, Qt 6.11.2, KF 6.30, Plasma 6.8 development libraries",
+  "checks_passed": [
+    "published source hashes before/after build",
+    "full extracted ELF dependency closure",
+    "explicit ffmpeg CLI dependency",
+    "independent application registrations; no Spectacle-owned registration paths",
+    "private dependency patch/source hashes and executable code identity",
+    "strong timeline pause export/reference and packaged-library probe",
+    "production launcher --version and --help",
+    "production offscreen launch-only and synthetic-image open: alive, D-Bus responsive, no QML import/type errors",
+    "production-source timeline fixture with extracted private library prefix:10 passed,0 failed,0 skipped"
+  ],
+  "not_verified": [
+    "apt install/uninstall transaction",
+    "user computer installation",
+    "native KDE windows or real capture",
+    "PipeWire devices, live audio/video synchronization",
+    "GPU encoding/playback",
+    "stable release or older distribution compatibility"
+  ],
+  "fixture_scope": "Standalone fixture compiles production producer/encoder code, not full packaged-app recording. Packaged record library separately checked by capability probe.",
+  "application_reported_version": "6.8.3",
+  "remote_ci_status": "No status checks reported at source commit; no CI success claim"
+}

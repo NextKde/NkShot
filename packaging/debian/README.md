@@ -1,8 +1,10 @@
 # Debian sid amd64 preview packaging
 
 This is a narrowly targeted preview, **not** a distribution-independent package.
-The 080 artifact uses published commit
-`3b28ce4d13634764d7b25e6d857e4cd3506a4d4b`, not the unpublished translation work.
+The current 097 artifact uses published commit
+`3eb3773d876f4d607eaad488bc534dd74ced639d`. It contains the features through
+097, including recent files, reusable copy editing, video reframing and fixed
+privacy-cover export. Offline translation development remains paused.
 
 ## Supported build baseline
 
@@ -53,7 +55,7 @@ package database. Build from the exact published source, not an uncommitted tree
    For the exact 080 source above, use `0.1.0~preview080`. For a later verified
    source revision, choose its own release version and record the actual commit;
    do not reuse `preview080`. Epochs and path/control characters are rejected.
-   The verified 084 and 085 previews are documented below; no 086 package is claimed.
+   Historical 084/085 and the current 097 previews are documented below.
 
 Packaging stages CMake install manifests afresh. It does **not** copy the entire
 live prefix, a Python virtual environment, translator models, or UI test harness.
@@ -74,11 +76,11 @@ official .deb archives. This is not a substitute for validating package origins.
 
 ## Install / remove
 
-For the current **085** preview artifact, on the matching test system:
+For the current **097** preview artifact, on the matching test system:
 
 ```
 sha256sum -c SHA256SUMS
-sudo apt install ./nkshot_0.1.0~preview085_amd64.deb
+sudo apt install ./nkshot_0.1.0~preview097_amd64.deb
 nkshot
 # Removal leaves user captures/settings untouched:
 sudo apt remove nkshot
@@ -183,3 +185,44 @@ recording, GPU acceptance, or interactive local-file Open flow through this
 production package was verified. Source-level UI tests do not establish package
 end-to-end acceptance. The 084 native pause/resume limitations above still apply.
 This remains a Debian sid amd64 preview; no 086 package is claimed.
+
+
+## Verified 097 packaging preview (delivery checkpoint 098)
+
+Source commit: `3eb3773d876f4d607eaad488bc534dd74ced639d`.
+Package: `nkshot_0.1.0~preview097_amd64.deb` (2,790,704 bytes).
+SHA256: `713c3d2b3cdb9ae95e59621e1aec954db74a4f4a8ce52ae203eed394df714edd`.
+The matching package and `SHA256SUMS` are supplied as preview artifacts; building
+from this exact commit reproduces the source baseline, not necessarily byte-for-byte
+archive timestamps. [Machine-readable verification](../../docs/releases/preview097.json).
+
+All **921 published source blobs** matched before and after a clean Release build.
+`BUILD_TESTING=OFF` and `NKSHOT_ENABLE_UI_CAPTURE=OFF` were enforced. This is a
+production application binary, not the development screenshot/test harness.
+The extracted package's entire ELF dependency closure matched the pre-packaging
+list. Explicit FFmpeg/ffprobe dependency, application-owned registrations, private
+libraries, strong pause capability export/reference and actual packaged-library
+probe passed. `--version` reports the inherited application version `6.8.3`;
+the distinct Debian package version is `0.1.0~preview097`. `--help` also passed.
+
+Unlike the earlier packaging checks, this extracted production application was
+started on a private test bus with the offscreen/software Qt backend, both at the
+launch-only page and opening a synthetic image. Each stayed alive, exposed the
+correct D-Bus interface and responded to Peer.Ping, without QML import/type errors.
+The expected missing desktop global-shortcut service warning remains. These checks
+verify startup/responsiveness, not screenshot pixels or a real window on KDE.
+The reviewed UI images for 097 come from its separate source-level UI tests.
+
+The pinned dependency patch/source checks and main library build IDs/code sections
+matched the previously verified dependency baseline. The standalone production-source
+encoder/muxer fixture was rebuilt from the frozen 097 tests and run with the
+extracted package's private library prefix: **10 passed, 0 failed, 0 skipped**.
+That fixture compiles producer/encoder code itself; it is not end-to-end capture
+through the packaged application's recorder. The packaged recording library is
+separately covered by the strong capability probe.
+
+No apt install/uninstall transaction, user-computer installation, native KDE startup,
+real compositor capture, PipeWire-device recording or GPU acceptance was performed.
+Do not force-install this preview on an incompatible distribution. The real desktop
+acceptance gates above remain mandatory; the source-level 27/27 CTest and 23/23
+static checks plus actual Qt UI workflows do not replace those gates.
