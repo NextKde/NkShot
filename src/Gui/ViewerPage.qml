@@ -146,11 +146,12 @@ EmptyPage {
             }
             ViewerButton {
                 id: moreButton
+                objectName: "nkshotViewerMore"
                 text: i18nc("@action", "More")
                 icon.name: "view-more-symbolic"
                 display: QQC.AbstractButton.IconOnly
                 Accessible.role: Accessible.ButtonMenu
-                onClicked: moreMenu.popup()
+                onClicked: moreMenu.popup(moreButton, moreButton.width - moreMenu.width, moreButton.height + 6)
                 QQC.Menu {
                     id: moreMenu
                     objectName: "nkshotMoreMenu"
@@ -178,6 +179,13 @@ EmptyPage {
                         icon.name: "document-open"
                         enabled: contextWindow.canOpenMedia
                         onTriggered: contextWindow.openMedia()
+                    }
+                    QQC.MenuItem {
+                        objectName: "nkshotClipboardImageAction"
+                        text: i18nc("@action", "Edit clipboard image…")
+                        icon.name: "edit-paste"
+                        enabled: contextWindow.canOpenMedia
+                        onTriggered: contextWindow.editClipboardImage()
                     }
                     TaskMenu {
                         id: sharingMenu

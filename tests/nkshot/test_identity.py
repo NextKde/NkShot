@@ -97,6 +97,18 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('hasUnsavedChanges()', implementation)
         self.assertIn('StandardKey.Save', editor)
 
+    def test_clipboard_import_is_explicit_and_isolated(self):
+        impl = read('src/Gui/ViewerWindow.cpp')
+        body = impl.split('QQuickWindow *ViewerWindow::editClipboardImage()')[1].split('void ViewerWindow::finishOpeningMedia()')[0]
+        self.assertIn('if(!canOpenMedia())return nullptr', body)
+        self.assertIn('mime->hasImage()', body)
+        self.assertIn('new ImageCopyEditor(image,engine())', body)
+        self.assertNotIn('setBaseImage', body)
+        self.assertNotIn('setImage(', body)
+        self.assertNotIn('dataChanged', impl)
+        for page in ('ViewerPage.qml', 'DialogPage.qml'):
+            self.assertIn('contextWindow.editClipboardImage()', read('src/Gui/' + page))
+
     def test_capture_actions_still_present(self):
         overlay = read('src/Gui/CaptureOverlay.qml')
         for action in ['AcceptAction', 'CancelAction', 'SaveAction', 'SaveAsAction',

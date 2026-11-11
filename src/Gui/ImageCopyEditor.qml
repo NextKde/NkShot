@@ -114,7 +114,7 @@ QQC.Pane {
             Layout.maximumWidth: root.availableWidth
         }
     }
-    Shortcut { sequence: StandardKey.Save; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { sequence: StandardKey.SaveAs; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
-    Shortcut { sequence: StandardKey.Copy; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
+    Shortcut { sequences: [StandardKey.Save]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { sequences: [StandardKey.SaveAs]; onActivated: {root.commitOptions(); copyEditor.saveAs()} }
+    Shortcut { sequences: [StandardKey.Copy]; onActivated: {root.commitOptions(); copyEditor.copyImage()} }
 }

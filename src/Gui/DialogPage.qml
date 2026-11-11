@@ -74,6 +74,13 @@ EmptyPage {
                     onTriggered: contextWindow.openMedia()
                 }
                 QQC.MenuItem {
+                    objectName: "nkshotClipboardImageAction"
+                    text: i18nc("@action", "Edit clipboard image…")
+                    icon.name: "edit-paste"
+                    enabled: contextWindow.canOpenMedia
+                    onTriggered: contextWindow.editClipboardImage()
+                }
+                QQC.MenuItem {
                     objectName: "nkshotStartupColorAction"
                     text: i18nc("@action", "Pick a color…")
                     icon.name: "color-picker"

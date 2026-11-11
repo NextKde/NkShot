@@ -47,6 +47,7 @@ public:
     static ViewerWindow *instance();
 
     Q_INVOKABLE void openMedia();
+    Q_INVOKABLE QQuickWindow *editClipboardImage();
     bool openingMedia() const { return m_openingMedia; }
     bool canOpenMedia() const;
     Q_INVOKABLE QQuickWindow *openScrollPreview();

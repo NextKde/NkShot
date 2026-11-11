@@ -14,6 +14,7 @@
 #include <QVideoFrame>
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
+#include "ImageCopyEditor.h"
 #include "QuickNoteWindow.h"
 #include "ColorPickerWindow.h"
 #include "OcrTextWindow.h"
@@ -42,6 +43,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QMimeData>
 #include <QDrag>
 #include <QFile>
 #include <QMimeData>
@@ -77,6 +79,7 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
     connect(m_clipJob, &VideoClipJob::changed, this, &ViewerWindow::openingMediaChanged);
     connect(this, &ViewerWindow::choosingClipOutputChanged, this, &ViewerWindow::openingMediaChanged);
     new QShortcut(QKeySequence::Open, this, this, &ViewerWindow::openMedia);
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this, this, [this] { editClipboardImage(); });
     connect(SpectacleCore::instance(), &SpectacleCore::currentVideoChanged, this, &ViewerWindow::cancelClipExport);
     connect(SpectacleCore::instance(), &SpectacleCore::videoModeChanged, this, &ViewerWindow::cancelClipExport);
     connect(SpectacleCore::instance()->videoPlatform(), &VideoPlatform::recordingStateChanged, this, [this] {
@@ -336,6 +339,35 @@ bool ViewerWindow::canOpenMedia() const
     return !m_openingMedia && SpectacleCore::instance()->canOpenMedia()
         && !m_clipJob->busy() && !choosingClipOutput()
         && !m_combiningImages && !m_resizingImage;
+}
+
+QQuickWindow *ViewerWindow::editClipboardImage()
+{
+    // Read only on this explicit action. Never monitor clipboard changes, follow
+    // clipboard URLs, or replace the active screenshot/recording document.
+    if(!canOpenMedia())return nullptr;
+    const auto clipboard=QApplication::clipboard();
+    const auto mime=clipboard->mimeData(QClipboard::Clipboard);
+    if(!mime||!mime->hasImage()){
+        InlineMessageModel::instance()->push(InlineMessageModel::InformationalType,
+            i18nc("@info","Copy an image first, then choose Edit clipboard image. Text and file links are not imported."));
+        return nullptr;
+    }
+    const auto image=clipboard->image(QClipboard::Clipboard);
+    if(image.isNull()||image.width()>8192||image.height()>32000||qint64(image.width())*image.height()>40'000'000){
+        InlineMessageModel::instance()->push(InlineMessageModel::Warning,
+            i18nc("@info","The clipboard image could not be opened. Use an image up to 40 megapixels, 8192 pixels wide and 32000 pixels tall."));
+        return nullptr;
+    }
+    auto editor=new ImageCopyEditor(image,engine());
+    if(editor->status()!=QQuickView::Ready){
+        delete editor;
+        InlineMessageModel::instance()->push(InlineMessageModel::Error,
+            i18nc("@info","The image editor could not be opened. Your clipboard and current document are unchanged."));
+        return nullptr;
+    }
+    editor->setTitle(i18nc("@title:window","Edit clipboard image — NkShot"));
+    editor->setScreen(screen());editor->show();editor->requestActivate();return editor;
 }
 
 void ViewerWindow::finishOpeningMedia()

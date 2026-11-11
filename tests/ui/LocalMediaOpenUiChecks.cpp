@@ -18,6 +18,7 @@
 #include <KQuickImageEditor/AnnotationTool>
 #include <QApplication>
 #include <QClipboard>
+#include <QMimeData>
 #include <QColorSpace>
 #include <cstring>
 #include <QDialogButtonBox>
@@ -700,6 +701,91 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
             ||!job->property("includeAudio").toBool()||!click(QStringLiteral("nkshotClipCancel")))
             return fail(QStringLiteral("New export retained an old silent choice"));
+    }
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_CLIPBOARD_EDITOR")) {
+        auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+        if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))
+            return fail(QStringLiteral("Clipboard test could not dismiss clip panel"));
+        const auto prior=core->annotationDocument()->renderToImage();
+        const auto depth=core->annotationDocument()->undoStackDepth();
+        auto clip=application.clipboard();
+        clip->setText(QStringLiteral("plain text is not an image"));
+        if(viewer()->editClipboardImage()||clip->text()!=QStringLiteral("plain text is not an image"))
+            return fail(QStringLiteral("Text clipboard was imported or changed"));
+        auto urls=new QMimeData;urls->setUrls({QUrl(QStringLiteral("https://example.invalid/not-an-image.png"))});clip->setMimeData(urls);
+        if(viewer()->editClipboardImage()||clip->mimeData()->urls().size()!=1)
+            return fail(QStringLiteral("Clipboard URL was followed or replaced"));
+        QImage wide(8193,1,QImage::Format_ARGB32);wide.fill(Qt::transparent);clip->setImage(wide);
+        if(viewer()->editClipboardImage())return fail(QStringLiteral("Overwide clipboard image accepted"));
+        QImage sample(640,400,QImage::Format_ARGB32_Premultiplied);sample.fill(QColor("#f1f0fb"));
+        {QPainter p(&sample);p.setRenderHint(QPainter::Antialiasing);p.setPen(Qt::NoPen);p.setBrush(QColor("#dedcf7"));p.drawEllipse(QRectF(440,-70,280,280));
+            p.setPen(QColor("#6555cc"));QFont f=p.font();f.setPixelSize(17);f.setBold(true);p.setFont(f);p.drawText(48,68,QStringLiteral("A MOMENT WORTH KEEPING"));
+            f.setPixelSize(38);p.setFont(f);p.setPen(QColor("#252237"));p.drawText(48,150,QStringLiteral("Make your point."));
+            f.setPixelSize(20);f.setBold(false);p.setFont(f);p.setPen(QColor("#686277"));p.drawText(48,201,QStringLiteral("Annotate a copy. Keep the original."));
+            p.setBrush(QColor("#6555cc"));p.setPen(Qt::NoPen);p.drawRoundedRect(QRectF(48,264,235,66),16,16);
+            p.setPen(Qt::white);p.drawText(QRectF(48,264,235,66),Qt::AlignCenter,QStringLiteral("Local test image"));}
+        sample.setColorSpace(QColorSpace::SRgb);sample.setDevicePixelRatio(1);
+        clip->setImage(sample);InlineMessageModel::instance()->clear();
+        if(!click(QStringLiteral("nkshotViewerMore")))return fail(QStringLiteral("More entry unavailable for clipboard edit"));
+        QTest::qWait(120);
+        const auto clipboardEntry=visual(viewer()->contentItem(),QStringLiteral("nkshotClipboardImageAction"));
+        if(!clipboardEntry||clipboardEntry->mapToScene(QPointF()).x()<viewer()->width()-270)
+            return fail(QStringLiteral("More menu detached from its upper-right trigger"));
+        if(!viewer()->grabWindow().save(screenshot+QStringLiteral(".clipboard-menu.png"))||!click(QStringLiteral("nkshotClipboardImageAction")))
+            return fail(QStringLiteral("Actual clipboard menu entry unavailable"));
+        QPointer<ImageCopyEditor> first;
+        if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows())if(auto e=qobject_cast<ImageCopyEditor *>(w))first=e;return first&&first->isVisible();},1500)
+            ||!samePixels(first->document()->renderToImage(),sample)||!samePixels(clip->image(),sample))
+            return fail(QStringLiteral("Clipboard snapshot failed or clipboard changed"));
+        first->resize(qEnvironmentVariableIsSet("NKSHOT_TEST_COMPACT")?QSize(420,520):QSize(900,640));
+        auto clipboardCanvas=visual(first->contentItem(),QStringLiteral("nkshotAnnotationViewport"));
+        QList<QPoint> ink;
+        for(int y=0;y<sample.height();++y)for(int x=0;x<sample.width();++x){
+            const auto c=sample.pixelColor(x,y);if(c.red()<70&&c.green()<70&&c.blue()<90)ink.append({x,y});
+        }
+        QImage clipboardShot;
+        const auto clipboardPainted=[&]{
+            if(!clipboardCanvas||ink.size()<12||first->rootObject()->width()!=first->width()
+                ||qAbs(clipboardCanvas->mapToScene(QPointF(clipboardCanvas->width()/2,clipboardCanvas->height()/2)).x()-first->width()/2.)>2)return false;
+            first->update();clipboardShot=first->grabWindow();int matched=0;
+            for(int i=0;i<12;++i){
+                const auto p=clipboardCanvas->mapToScene(ink.at((ink.size()-1)*i/11)).toPoint();bool found=false;
+                for(int y=p.y()-1;y<=p.y()+1;++y)for(int x=p.x()-1;x<=p.x()+1;++x){
+                    if(!clipboardShot.rect().contains(x,y))continue;
+                    const auto c=clipboardShot.pixelColor(x,y);
+                    if(c.red()<100&&c.green()<100&&c.blue()<120)found=true;
+                }
+                matched+=found;
+            }
+            return matched>=10;
+        };
+        if(!QTest::qWaitFor(clipboardPainted,2000)||!clipboardShot.save(screenshot+QStringLiteral(".clipboard-editor.png")))
+            return fail(QStringLiteral("Clipboard image content was not visibly painted"));
+        QSignalSpy clipboardSaved(first,&ImageCopyEditor::saveFinished);
+        first->saveAs();
+        if(!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotCopySaveDialog"));},1500))
+            return fail(QStringLiteral("Clipboard copy Save dialog unavailable"));
+        const auto clipboardPng=screenshot+QStringLiteral(".clipboard-%1.png").arg(QDateTime::currentMSecsSinceEpoch());
+        QTest::qWait(200);
+        if(!choose(fileDialog(QStringLiteral("nkshotCopySaveDialog")),clipboardPng)
+            ||!QTest::qWaitFor([&]{return !clipboardSaved.isEmpty();},1500)||!clipboardSaved.last().at(1).toBool()
+            ||!samePixels(QImage(clipboardPng),sample)||!samePixels(clip->image(),sample))
+            return fail(QStringLiteral("Clipboard PNG save changed pixels or clipboard"));
+        QImage replacement(80,60,QImage::Format_ARGB32_Premultiplied);replacement.fill(QColor(10,70,120,90));clip->setImage(replacement);
+        if(!samePixels(first->document()->renderToImage(),sample))return fail(QStringLiteral("Later clipboard mutation changed open editor"));
+        viewer()->requestActivate();
+        if(!QTest::qWaitFor([&]{return QGuiApplication::focusWindow()==viewer();},1000))return fail(QStringLiteral("Clipboard shortcut focus unavailable"));
+        QTest::keyClick(viewer(),Qt::Key_V,Qt::ControlModifier|Qt::ShiftModifier);
+        QPointer<ImageCopyEditor> second;
+        if(!QTest::qWaitFor([&]{for(auto w:QGuiApplication::allWindows())if(auto e=qobject_cast<ImageCopyEditor *>(w);e&&e!=first)second=e;return second&&second->isVisible();},1500)
+            ||!samePixels(second->document()->renderToImage(),replacement)||second->document()==first->document())
+            return fail(QStringLiteral("Clipboard shortcut did not create independent second snapshot"));
+        first->close();second->close();
+        if(!QTest::qWaitFor([&]{return first.isNull()&&second.isNull();},1000)
+            ||core->annotationDocument()->renderToImage()!=prior||core->annotationDocument()->undoStackDepth()!=depth
+            ||core->currentVideo()!=QUrl::fromLocalFile(movie)||bytes(movie)!=movieBytes)
+            return fail(QStringLiteral("Clipboard workflow changed active media/history"));
+        clip->setText(clipboard);
     }
     if(!capture(QString()))return fail(QStringLiteral("Final imported media screenshot failed"));
     qInfo()<<"085 actual dialogs: PNG/JPEG/static WebP, edit replacement cancel/failure, new-copy Save, missing ffprobe recovery, real MP4 Qt playback and clip export passed";
