@@ -1367,6 +1367,8 @@ Reviewed [light settings](screenshots/062-playback-light.png.settings.png),
 All images are actual software-rendered windows using synthetic media. The cloud
 reports no audio output device, so metadata and output-property tests do not prove
 audible playback or A/V synchronization. Real KWin capture, microphone/system
-recording and capture pause/resume remain unaccepted. The inspected KPipeWire
-recording interface does not provide a ready-made seamless pause operation; no
-stop/restart workaround is presented as native pause/resume.
+recording and capture pause/resume remain unaccepted. A follow-up inspection of the KPipeWire base class found pause()/resume() APIs.
+Their local implementation toggles the video source stream without coordinating
+audio capture or removing paused time from the media timeline. They are not yet
+integrated into NkShot or accepted as seamless recording pause/resume. The earlier
+derived-interface-only conclusion that no pause API exists was incomplete.

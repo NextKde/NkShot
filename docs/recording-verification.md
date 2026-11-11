@@ -74,3 +74,22 @@ quality and A/V synchronization are **not** certified. The displayed test patter
 and tone are synthetic fixtures, not a desktop recording. MP4 without audio,
 GIF/WebP and corrupt-file retry are regression-tested. Native recording, live
 microphone/system capture and capture pause/resume remain separate open items.
+
+
+## Capture pause API audit
+
+`PipeWireRecord` inherits `PipeWireBaseEncodedStream::pause()` and `resume()`
+in the locally built dependency. Inspecting only the derived header misses these
+methods. The local implementation queues `PipeWireProduce::setStreamActive()`,
+which toggles the video source and updates the encoded-stream state to Paused or
+Recording. This code path does not stop the separate audio stream, nor does it
+remove paused time from video timestamps. The API's presence therefore does not
+establish seamless, synchronized capture pause/resume. NkShot has not integrated
+these methods, and its current recording timer would also require pause-aware
+accounting. Native A/V acceptance is required before exposing this as a feature.
+
+Source inspection additionally identified recording-start failure isolation as
+a next audit target: output-path setup currently follows source-stream creation,
+and recorder state connections are installed in each start request. These are
+risks to investigate with injected failures or a real KDE session, not bugs claimed
+reproduced here. No unvalidated native-backend lifecycle rewrite was shipped.
