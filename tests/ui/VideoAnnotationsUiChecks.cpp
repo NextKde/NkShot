@@ -24,9 +24,19 @@ bool click(QQuickWindow *window,const QString &name) {
     if(!item||!item->isVisible()||!item->isEnabled())return false;
     const auto p=item->mapToScene(QPointF(item->width()/2,item->height()/2));
     if(!QRectF(QPointF(),window->size()).contains(p))return false;
-    QTest::mouseMove(window, p.toPoint());
-    QTest::qWait(100);
-    QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint(), 50);return true;
+    // Wheel/scrollbar gestures may still be decelerating. A press while a
+    // Flickable is moving intentionally stops scrolling instead of clicking.
+    for(auto parent=item->parentItem();parent;parent=parent->parentItem()) {
+        if(parent->property("moving").isValid()
+            &&!QTest::qWaitFor([&]{return !parent->property("moving").toBool();},4000))return false;
+    }
+    window->requestActivate();
+    if(!QTest::qWaitFor([&]{return QGuiApplication::focusWindow()==window;},1000))return false;
+    QSignalSpy activated(item,SIGNAL(clicked()));
+    const auto target=item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint();
+    QTest::mouseMove(window,target);QTest::qWait(100);
+    QTest::mouseClick(window,Qt::LeftButton,Qt::NoModifier,target,50);
+    return QTest::qWaitFor([&]{return !activated.isEmpty();},500);
 }
 bool detailAction(ViewerWindow *viewer,const QString &name) {
     viewer->requestActivate();QTest::qWait(80);

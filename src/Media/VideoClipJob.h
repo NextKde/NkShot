@@ -24,6 +24,8 @@ class VideoClipJob : public QObject {
     Q_PROPERTY(QString cropAspect READ cropAspect WRITE setCropAspect NOTIFY changed)
     Q_PROPERTY(QSize sourceSize READ sourceSize NOTIFY changed)
     Q_PROPERTY(QRect cropRect READ cropRect NOTIFY changed)
+    Q_PROPERTY(QString outputResolution READ outputResolution WRITE setOutputResolution NOTIFY changed)
+    Q_PROPERTY(QSize outputSize READ outputSize NOTIFY changed)
     Q_PROPERTY(QString outputFormat READ outputFormat WRITE setOutputFormat NOTIFY changed)
     Q_PROPERTY(QUrl sourceUrl READ sourceUrl NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
@@ -56,6 +58,9 @@ public:
     bool cropCentered() const;
     Q_INVOKABLE void setCropPosition(int x, int y);
     Q_INVOKABLE void resetCropPosition();
+    QString outputResolution() const { return m_outputResolution; }
+    Q_INVOKABLE void setOutputResolution(const QString &resolution);
+    QSize outputSize() const;
     QString outputFormat() const { return m_format; }
     Q_INVOKABLE void setOutputFormat(const QString &format);
     QUrl sourceUrl() const { return m_source; }
@@ -79,6 +84,7 @@ private:
     void launch(const QString &program, const QStringList &args, Stage stage, int timeoutMs);
     void completed(Stage stage);
     void launchGifPass(bool palette);
+    QString mp4ScaleFilter() const;
     QString gifFilter() const;
     QString annotatedFilter(const QString &time, const QString &tail) const;
     void appendAnnotationInput(QStringList &args) const;
@@ -101,6 +107,7 @@ private:
     QRect m_privacyRect;
     QPoint m_cropPosition = QPoint(-1, -1);
     QString m_cropAspect = QStringLiteral("original");
+    QString m_outputResolution = QStringLiteral("original");
     QString m_format = QStringLiteral("mp4");
     QByteArray m_stdout, m_stderr, m_progressBuffer;
     QPointer<QProcess> m_process;

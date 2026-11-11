@@ -195,6 +195,75 @@ private Q_SLOTS:
         job.setCropPosition(0,60);job.resetCropPosition();QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());
         job.setCropAspect(QStringLiteral("wide"));QVERIFY(job.cropCentered());QCOMPARE(job.cropRect(),QRect(0,30,320,180));
     }
+    void shareResolutionDimensionEdges() {
+        VideoClipJob job;job.setOutputResolution(QStringLiteral("720p"));QCOMPARE(job.outputResolution(),QStringLiteral("original"));QVERIFY(job.outputSize().isEmpty());
+        for(const QSize size:{QSize(2,2),QSize(1920,1080),QSize(1280,720),QSize(4096,2)}) {
+            const auto input=folder.filePath(QStringLiteral("share-edge-%1-%2.mp4").arg(size.width()).arg(size.height()));
+            execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),QStringLiteral("color=s=%1x%2:r=10:d=0.3").arg(size.width()).arg(size.height()),QStringLiteral("-c:v"),QStringLiteral("libx264"),QStringLiteral("-preset"),QStringLiteral("ultrafast"),QStringLiteral("-threads"),QStringLiteral("2"),input});
+            QVERIFY2(ready(job,input),qPrintable(job.error()));QCOMPARE(job.outputSize(),size);
+            for(const auto &preset:{QStringLiteral("1080p"),QStringLiteral("720p")}) {
+                const int limit=preset==QStringLiteral("1080p")?1920:1280;job.setOutputResolution(preset);const auto output=job.outputSize();
+                if(size.width()==4096) {
+                    QVERIFY(output.isEmpty());const auto before=hash(input);
+                    const auto rejected=folder.filePath(QStringLiteral("share-edge-rejected-%1.mp4").arg(preset));
+                    job.exportClip(QUrl::fromLocalFile(rejected),0,200);
+                    QVERIFY(!job.busy());QVERIFY(job.ready());QVERIFY(job.error().contains(QStringLiteral("Choose Original")));
+                    QVERIFY(!QFile::exists(rejected));QCOMPARE(hash(input),before);
+                } else {
+                    QVERIFY(output.width()<=size.width());QVERIFY(output.height()<=size.height());QVERIFY(output.width()%2==0&&output.height()%2==0);
+                    QVERIFY(qMax(output.width(),output.height())<=limit);if(size.width()<=limit)QCOMPARE(output,size);
+                }
+            }
+            job.setOutputResolution(QStringLiteral("original"));QCOMPARE(job.outputSize(),size);QVERIFY(job.error().isEmpty());
+            if(size.width()==4096) {
+                const auto target=folder.filePath(QStringLiteral("share-edge-original.mp4"));job.exportClip(QUrl::fromLocalFile(target),0,200);
+                QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+                QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
+            }
+        }
+    }
+    void shareResolution_data() {
+        QTest::addColumn<bool>("webm");QTest::addColumn<bool>("portrait");
+        for(bool webm:{false,true})for(bool portrait:{false,true})
+            QTest::newRow(qPrintable(QStringLiteral("share-%1-%2").arg(webm).arg(portrait)))<<webm<<portrait;
+    }
+    void shareResolution() {
+        QFETCH(bool,webm);QFETCH(bool,portrait);
+        const auto input=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+(webm?QStringLiteral(".webm"):QStringLiteral(".mp4")));
+        QStringList args{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-y"),QStringLiteral("-f"),QStringLiteral("lavfi"),QStringLiteral("-i"),QStringLiteral("color=c=gray:s=2048x2048:r=10:d=0.6")};
+        if(!portrait)args<<QStringLiteral("-f")<<QStringLiteral("lavfi")<<QStringLiteral("-i")<<QStringLiteral("sine=frequency=440:sample_rate=48000:duration=0.6");
+        args<<QStringLiteral("-c:v")<<(webm?QStringLiteral("libvpx-vp9"):QStringLiteral("libx264"))<<QStringLiteral("-threads")<<QStringLiteral("2");
+        if(webm)args<<QStringLiteral("-deadline")<<QStringLiteral("realtime")<<QStringLiteral("-cpu-used")<<QStringLiteral("8");
+        else args<<QStringLiteral("-preset")<<QStringLiteral("ultrafast");
+        if(!portrait)args<<QStringLiteral("-c:a")<<(webm?QStringLiteral("libopus"):QStringLiteral("aac"));
+        args<<input;execute(ffmpeg,args);QVERIFY(QFileInfo(input).size()>0);const auto original=hash(input);
+        VideoClipJob job;QVERIFY2(ready(job,input),qPrintable(job.error()));QCOMPARE(job.outputResolution(),QStringLiteral("original"));
+        job.setCropAspect(portrait?QStringLiteral("portrait"):QStringLiteral("wide"));const auto crop=job.cropRect();
+        QImage overlay(job.sourceSize(),QImage::Format_ARGB32);overlay.fill(Qt::transparent);
+        for(int y=600;y<900;++y)for(int x=600;x<900;++x)overlay.setPixelColor(x,y,Qt::white);
+        for(int y=1200;y<1400;++y)for(int x=1200;x<1400;++x)overlay.setPixelColor(x,y,QColor(255,255,255,128));
+        QVERIFY(job.setAnnotationOverlay(overlay));job.setPrivacyEnabled(true);job.setPrivacyRect(900,900,248,248);
+        for(const auto &preset:{QStringLiteral("1080p"),QStringLiteral("720p")}) {
+            job.setOutputResolution(preset);const int limit=preset==QStringLiteral("1080p")?1920:1280;
+            const QSize expected=portrait?QSize(limit*9/16,limit):QSize(limit,limit*9/16);QCOMPARE(job.outputSize(),expected);
+            const auto target=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+preset+QStringLiteral(".mp4"));
+            job.exportClip(QUrl::fromLocalFile(target),0,400);QVERIFY(job.busy());job.setOutputResolution(QStringLiteral("original"));QCOMPARE(job.outputResolution(),preset);
+            QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));QCOMPARE(hash(input),original);
+            const auto decoded=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),target,QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-pix_fmt"),QStringLiteral("gray"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+            QCOMPARE(decoded.size(),expected.width()*expected.height());
+            const auto value=[&](int x,int y){const int ox=(x-crop.x())*expected.width()/crop.width(),oy=(y-crop.y())*expected.height()/crop.height();return int(uchar(decoded.at(oy*expected.width()+ox)));};
+            QVERIFY(value(750,750)>245);QVERIFY(value(1024,1024)<8);QVERIFY(qAbs(value(1300,1300)-192)<10);QVERIFY(qAbs(value(1500,1500)-128)<10);
+            QSignalSpy unchanged(&job,&VideoClipJob::changed);job.setOutputResolution(preset);job.setOutputResolution(QStringLiteral("bad"));QCOMPARE(unchanged.size(),0);QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
+        }
+        job.setOutputFormat(QStringLiteral("gif"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QCOMPARE(job.outputResolution(),QStringLiteral("720p"));
+        QCOMPARE(job.outputSize(),portrait?QSize(360,640):QSize(640,360));
+        const auto gif=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+QStringLiteral("-share.gif"));job.exportClip(QUrl::fromLocalFile(gif),0,400);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        job.setOutputFormat(QStringLiteral("mp4"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QCOMPARE(job.outputResolution(),QStringLiteral("720p"));
+        const auto cancelled=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+QStringLiteral("-cancel.mp4"));job.exportClip(QUrl::fromLocalFile(cancelled),0,400);job.cancel();QVERIFY(!QFile::exists(cancelled));
+        job.inspect(QUrl::fromLocalFile(cropMp4));QCOMPARE(job.outputResolution(),QStringLiteral("original"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());
+        job.setOutputResolution(QStringLiteral("1080p"));QCOMPARE(job.outputSize(),QSize(320,240));job.setOutputResolution(QStringLiteral("720p"));QCOMPARE(job.outputSize(),QSize(320,240));QCOMPARE(hash(input),original);
+    }
     void annotationOverlay_data() {
         QTest::addColumn<bool>("webm");QTest::addColumn<bool>("cropped");
         for(bool webm:{false,true})for(bool cropped:{false,true})

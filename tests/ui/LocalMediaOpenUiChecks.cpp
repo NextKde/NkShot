@@ -413,6 +413,27 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     const auto click=[&](const QString &name) {
         QQuickItem *item=nullptr;
         if(!QTest::qWaitFor([&]{item=visual(viewer()->contentItem(),name);return item&&item->isVisible()&&item->isEnabled();},1500))return false;
+        auto scroll=visual(viewer()->contentItem(),QStringLiteral("nkshotClipDetailScroll"));
+        bool inside=false;for(auto parent=item->parentItem();parent;parent=parent->parentItem())if(parent==scroll)inside=true;
+        if(scroll&&inside) {
+            const QRectF bounds(scroll->mapToScene(QPointF()),scroll->size());
+            const QRectF target(item->mapToScene(QPointF()),item->size());
+            if(!bounds.adjusted(-0.5,-0.5,0.5,0.5).contains(target)) {
+                auto bar=visual(viewer()->contentItem(),QStringLiteral("nkshotClipDetailScrollbar"));
+                if(!bar||!bar->isVisible())return false;
+                const qreal pos=bar->property("position").toReal(), size=bar->property("size").toReal();
+                const qreal content=scroll->property("contentHeight").toReal();
+                if(content<=0)return false;
+                const qreal desired=qBound(0.,pos+(target.top()-bounds.top()-2)/content,qMax(0.,1.-size));
+                const auto from=bar->mapToScene(QPointF(bar->width()/2,(pos+size/2)*bar->height())).toPoint();
+                const auto to=bar->mapToScene(QPointF(bar->width()/2,(desired+size/2)*bar->height())).toPoint();
+                QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,from);
+                QTest::mouseMove(viewer(),to,100);QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,to);QTest::qWait(150);
+                if(!bounds.adjusted(-0.5,-0.5,0.5,0.5).contains(QRectF(item->mapToScene(QPointF()),item->size())))return false;
+            }
+        }
+        for(auto parent=item->parentItem();parent;parent=parent->parentItem())
+            if(parent->property("moving").isValid()&&!QTest::qWaitFor([&]{return !parent->property("moving").toBool();},4000))return false;
         QTest::mouseClick(viewer(),Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());return true;
     };
     // The production playback toolbar reveals itself on actual pointer hover.
@@ -629,6 +650,7 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::keyClick(viewer(),Qt::Key_Tab);
         return QTest::qWaitFor([&]{return spin->property("value").toInt()==expected;},500);
     };
+    const bool resolutionExport=qEnvironmentVariableIsSet("NKSHOT_TEST_RESOLUTION_CLIP");
     const bool silentExport=qEnvironmentVariableIsSet("NKSHOT_TEST_SILENT_CLIP");
     const bool cropExport=qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
     const bool privacyExport=qEnvironmentVariableIsSet("NKSHOT_TEST_PRIVACY_CLIP");
@@ -637,6 +659,14 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     QRect expectedCrop;
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
         return fail(QStringLiteral("Export details could not be opened"));
+    if(resolutionExport) {
+        if(job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipResolution")))return fail(QStringLiteral("Resolution default/control unavailable"));
+        QTest::keyClick(viewer(),Qt::Key_Home);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Return);
+        if(!QTest::qWaitFor([&]{return job->property("outputResolution").toString()==QStringLiteral("720p");},1000))return fail(QStringLiteral("Resolution selection did not reach job"));
+        const auto output=job->property("outputSize").toSize(),source=job->property("sourceSize").toSize();
+        if(output.isEmpty()||output.width()>source.width()||output.height()>source.height()||qMax(output.width(),output.height())>1280
+            ||!capture(QStringLiteral(".resolution-options.png")))return fail(QStringLiteral("Resolution dimensions/preview invalid"));
+    }
     if(silentExport) {
         if(!job->property("includeAudio").toBool()||!click(QStringLiteral("nkshotClipIncludeAudio"))
             ||job->property("includeAudio").toBool()||!capture(QStringLiteral(".silent-options.png")))
@@ -804,6 +834,16 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
             return fail(QStringLiteral("Crop export did not recover after stale dialog"));
     }
+    if(resolutionExport) {
+        job->setProperty("outputResolution",QStringLiteral("original"));
+        const auto stale=fixtures.filePath(QStringLiteral("stale-resolution.mp4"));
+        if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
+            ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500)
+            ||QFileInfo::exists(stale)||job->property("busy").toBool())return fail(QStringLiteral("Stale resolution Save accepted"));
+        job->setProperty("outputResolution",QStringLiteral("720p"));
+        if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))return fail(QStringLiteral("Resolution save did not recover"));
+    }
+    const QSize expectedOutput=job->property("outputSize").toSize();
     const auto clip=fixtures.filePath(QStringLiteral("imported ' clip.mp4"));
     if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),clip)
         ||!QTest::qWaitFor([&]{return !job->property("busy").toBool()&&job->property("outputUrl").toUrl()==QUrl::fromLocalFile(clip);},30000)
@@ -816,11 +856,11 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!probe.waitForFinished(10000)||probe.exitCode()!=0||!probe.readAllStandardOutput().trimmed().isEmpty())
             return fail(QStringLiteral("Actual UI silent MP4 still has an audio track"));
     }
-    if(cropExport) {
+    if(cropExport||resolutionExport) {
         QProcess probe;probe.start(QStringLiteral("ffprobe"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-select_streams"),QStringLiteral("v:0"),
             QStringLiteral("-show_entries"),QStringLiteral("stream=width,height"),QStringLiteral("-of"),QStringLiteral("csv=p=0"),clip});
-        if(!probe.waitForFinished(10000)||probe.exitCode()!=0||QString::fromUtf8(probe.readAllStandardOutput()).trimmed()!=QStringLiteral("%1,%2").arg(expectedCrop.width()).arg(expectedCrop.height()))
-            return fail(QStringLiteral("Actual cropped MP4 dimensions do not match preview"));
+        if(!probe.waitForFinished(10000)||probe.exitCode()!=0||QString::fromUtf8(probe.readAllStandardOutput()).trimmed()!=QStringLiteral("%1,%2").arg(expectedOutput.width()).arg(expectedOutput.height()))
+            return fail(QStringLiteral("Actual MP4 dimensions do not match output preview"));
     }
     if(privacyExport) {
         const auto decoded=fixtures.filePath(QStringLiteral("privacy-decoded.png"));
@@ -989,15 +1029,16 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             return fail(QStringLiteral("Clipboard workflow changed active media/history"));
         clip->setText(clipboard);
     }
-    if(privacyExport) {
+    if(privacyExport||resolutionExport) {
         auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
         if(popup&&popup->property("opened").toBool()&&!click(QStringLiteral("nkshotClipCancel")))return fail(QStringLiteral("Privacy panel close failed"));
         QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
         if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip"))
             ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
-            ||job->property("privacyEnabled").toBool()||!click(QStringLiteral("nkshotClipCancel")))
+            ||job->property("privacyEnabled").toBool()||job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipCancel")))
             return fail(QStringLiteral("New export retained an old privacy cover"));
-        qInfo()<<"097 actual privacy toggle, drag, corner resize, keyboard, save-race, decoded output and fresh-session reset passed";
+        if(privacyExport)qInfo()<<"097 actual privacy toggle, drag, corner resize, keyboard, save-race, decoded output and fresh-session reset passed";
+        if(resolutionExport)qInfo()<<"102 actual resolution control, output dimensions, stale Save rejection and fresh-session reset passed";
     }
     if(qEnvironmentVariableIsSet("NKSHOT_TEST_RECENT_MEDIA")) {
         auto popup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));

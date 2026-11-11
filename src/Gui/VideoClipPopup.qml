@@ -21,7 +21,8 @@ QQC.Popup {
     readonly property int startMs: startTime.value * 10
     readonly property int endMs: endTime.value * 10
     readonly property bool gif: job.outputFormat === "gif"
-    readonly property bool validRange: job.ready && startMs >= 0 && endMs <= job.durationMs
+    readonly property bool resolutionValid: gif || (job.outputSize.width > 0 && job.outputSize.height > 0)
+    readonly property bool validRange: job.ready && resolutionValid && startMs >= 0 && endMs <= job.durationMs
         && endMs - startMs >= (gif ? 200 : 100) && (!gif || endMs - startMs <= 15000)
     readonly property bool locked: job.busy || contextWindow.choosingClipOutput
     function stopPreview() { previewing = false; player.pause() }
@@ -261,11 +262,13 @@ QQC.Popup {
                 Layout.fillWidth: true
                 font: root.font
                 color: Kos.AppTheme.mutedText
-                text: (root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
+                objectName: "nkshotClipSummary"
+                text: (root.job.ready && !root.resolutionValid ? i18nc("@info", "Choose Original size or change the crop.") : root.validRange ? i18nc("@info", "%1 s · %2", ((root.endMs - root.startMs) / 1000).toFixed(2), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
                     : root.gif ? i18nc("@info", "Select 0.20–15 seconds for GIF.") : i18nc("@info", "Select at least 0.10 seconds."))
                     + (root.job.hasAnnotationOverlay ? i18nc("@info", " · Annotations") : "")
                     + (root.job.privacyEnabled ? i18nc("@info", " · Privacy cover") : "")
                     + (root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", " · Crop %1 × %2", root.job.cropRect.width, root.job.cropRect.height) : "")
+                    + (root.job.ready && !root.gif && root.job.outputResolution !== "original" ? (root.resolutionValid ? i18nc("@info", " · Output %1 × %2", root.job.outputSize.width, root.job.outputSize.height) : "") : "")
                 wrapMode: Text.Wrap
             }
             SolidButton {
@@ -287,12 +290,54 @@ QQC.Popup {
             contentWidth: availableWidth
             contentHeight: detailContents.implicitHeight
             QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
-            QQC.ScrollBar.vertical.objectName: "nkshotClipDetailScrollbar"
-            QQC.ScrollBar.vertical.policy: detailContents.implicitHeight > height ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
+            // Keep the scrollbar out of action hit areas, including Clear.
+            rightPadding: !mirrored && detailBar.visible ? detailBar.width + 4 : 0
+            leftPadding: mirrored && detailBar.visible ? detailBar.width + 4 : 0
+            QQC.ScrollBar.vertical: QQC.ScrollBar {
+                id: detailBar
+                parent: detailScroll
+                x: detailScroll.mirrored ? 0 : detailScroll.width - width
+                y: detailScroll.topPadding
+                height: detailScroll.availableHeight
+                objectName: "nkshotClipDetailScrollbar"
+                policy: detailContents.implicitHeight > detailScroll.height ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
+            }
             ColumnLayout {
                 id: detailContents
                 width: detailScroll.availableWidth
                 spacing: 10
+        RowLayout {
+            Layout.fillWidth: true
+            visible: !root.gif
+            spacing: 10
+            QQC.Label {text: i18nc("@label", "Output size"); font: root.font; color: Kos.AppTheme.paletteText}
+            QQC.ComboBox {
+                id: resolutionChoice
+                objectName: "nkshotClipResolution"
+                Layout.fillWidth: true
+                model: [i18nc("@item", "Original"), i18nc("@item", "Max 1920 px"), i18nc("@item", "Max 1280 px")]
+                readonly property var values: ["original", "1080p", "720p"]
+                currentIndex: Math.max(0, values.indexOf(root.job.outputResolution))
+                enabled: root.job.ready && !root.locked
+                implicitHeight: 32
+                font: root.font
+                palette.text: Kos.AppTheme.paletteText
+                palette.buttonText: Kos.AppTheme.paletteText
+                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
+                Accessible.name: i18nc("@label", "MP4 export maximum edge size")
+                onActivated: {root.stopPreview(); root.job.outputResolution = values[currentIndex]}
+            }
+        }
+        QQC.Label {
+            objectName: "nkshotClipResolutionHint"
+            Layout.fillWidth: true
+            visible: !root.gif && root.job.ready
+            text: root.resolutionValid ? i18nc("@info", "%1 × %2 px after cropping. Fits the longest edge; never enlarges the image.", root.job.outputSize.width, root.job.outputSize.height)
+                : i18nc("@info", "This frame is too thin for the selected size without distortion. Choose Original size or change the crop.")
+            wrapMode: Text.Wrap
+            font: root.font
+            color: Kos.AppTheme.mutedText
+        }
         RowLayout {
             Layout.fillWidth: true
             visible: root.detailsVisible

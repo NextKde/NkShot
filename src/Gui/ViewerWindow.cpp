@@ -796,6 +796,7 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
     const QUrl source = m_clipJob->sourceUrl();
     const QString format = m_clipJob->outputFormat();
+    const QString resolution = m_clipJob->outputResolution();
     const bool gif = format == QStringLiteral("gif");
     const bool includeAudio = m_clipJob->includeAudio();
     const QString cropAspect = m_clipJob->cropAspect();
@@ -826,8 +827,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         m_clipSaveDialog = nullptr;
         Q_EMIT choosingClipOutputChanged();
     });
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, includeAudio, cropAspect, cropRect, privacyEnabled, privacyRect, annotationRevision, startMs, endMs] {
-        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->privacyEnabled() != privacyEnabled || m_clipJob->privacyRect() != privacyRect || m_clipJob->annotationRevision() != annotationRevision || m_clipJob->busy()
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, resolution, includeAudio, cropAspect, cropRect, privacyEnabled, privacyRect, annotationRevision, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->outputResolution() != resolution || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->privacyEnabled() != privacyEnabled || m_clipJob->privacyRect() != privacyRect || m_clipJob->annotationRevision() != annotationRevision || m_clipJob->busy()
             || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
         const auto files = dialog->selectedFiles();
         if (files.size() != 1) return;

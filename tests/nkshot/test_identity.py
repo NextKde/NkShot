@@ -16,6 +16,20 @@ def read(path):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_mp4_share_resolution_is_export_scoped(self):
+        job = read('src/Media/VideoClipJob.h')
+        popup = read('src/Gui/VideoClipPopup.qml')
+        viewer = read('src/Gui/ViewerWindow.cpp')
+        self.assertIn('outputResolution', job)
+        self.assertIn('outputSize', job)
+        self.assertIn('nkshotClipResolution', popup)
+        self.assertIn('Max 1920 px', popup)
+        self.assertIn('Max 1280 px', popup)
+        self.assertIn('resolutionValid', popup)
+        self.assertIn('parent: detailScroll', popup)
+        self.assertIn('height: detailScroll.availableHeight', popup)
+        self.assertIn('outputResolution', viewer)
+
     def test_horizontal_composition_has_one_contextual_entry(self):
         page = read('src/Gui/ViewerPage.qml')
         popup = read('src/Gui/ImageCombinePopup.qml')

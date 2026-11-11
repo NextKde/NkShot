@@ -623,3 +623,14 @@ alongside `NKSHOT_TEST_RECORDING_ADAPTER=1`, `NKSHOT_TEST_STARTUP=1` and
 `--launchonly` to forward that warning through the production Core/InlineMessage
 route and capture the real warning layout. This bridge is test-only, with no
 capability override and no native-recording claim.
+
+## MP4 sharing dimensions (102)
+
+Add `NKSHOT_TEST_RESOLUTION_CLIP=1` to `NKSHOT_TEST_LOCAL_MEDIA_OPEN=1`.
+The actual Details combo selects Max 1280 px, checks no enlargement and exact
+final width/height, rejects a Save dialog after its setting changes, exports a
+real MP4 and probes its dimensions, then checks fresh-session Original reset.
+Use a landscape 1600×900 MP4 for a real 1280×720 reduction; a 640×360 WebM checks
+no enlargement and the unchanged GIF path. DARK/COMPACT and existing crop/privacy/
+annotation/audio flags apply. Test pointer clicks wait for Flickable movement to
+finish so they activate controls instead of merely stopping kinetic scrolling.
