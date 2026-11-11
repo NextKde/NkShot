@@ -69,6 +69,7 @@ QtObject {
  property bool videoRecordMicrophone: true
  property int captureMode: 0
  property int lastUsedRecordingMode: 1
+ property int recordingStartDelay: 0
 })QML",QUrl());settings.reset(config.create());QVERIFY2(settings,qPrintable(config.errorString()));
         view->setResizeMode(QQuickView::SizeRootObjectToView);
         view->setInitialProperties({{QStringLiteral("settings"),QVariant::fromValue(settings.get())},{QStringLiteral("captureModes"),captures()},{QStringLiteral("recordingModes"),recordings()},{QStringLiteral("recordingAvailable"),true},{QStringLiteral("transientSupported"),true},{QStringLiteral("clickSupported"),true},{QStringLiteral("audioSupported"),true}});
@@ -83,6 +84,20 @@ QtObject {
         click("nkshotSetupRecordingTab");QCOMPARE(root()->property("modeIndex").toInt(),1);
         const QList<int> modes{1,2,4};for(int i=0;i<3;++i){select("nkshotRecordingTarget",i);click("nkshotSetupPrimary");QCOMPARE(record.size(),i+1);QCOMPARE(record.last().at(0).toInt(),modes.at(i));}
         QCOMPARE(capture.size(),8);
+    }
+    void recordingStartDelayPreferences() {
+        QCOMPARE(settings->property("recordingStartDelay").toInt(), 0);
+        click("nkshotSetupRecordingTab");
+        const QList<int> delays{0,3,5,10};
+        for (int index = 0; index < delays.size(); ++index) {
+            select("nkshotRecordingStartDelay", index);
+            QCOMPARE(settings->property("recordingStartDelay").toInt(), delays.at(index));
+            click("nkshotSetupScreenshotTab");
+            click("nkshotSetupRecordingTab");
+            QCOMPARE(item("nkshotRecordingStartDelay")->property("currentValue").toInt(), delays.at(index));
+        }
+        settings->setProperty("recordingStartDelay",3);
+        QTRY_COMPARE(item("nkshotRecordingStartDelay")->property("currentValue").toInt(),3);
     }
     void dynamicAndMissingCapabilities() {
         QSignalSpy capture(root(),SIGNAL(captureRequested(int)));

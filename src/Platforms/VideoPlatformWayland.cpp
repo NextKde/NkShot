@@ -21,8 +21,11 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusReply>
+#include <QDBusServiceWatcher>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QUrl>
 
 using namespace Qt::StringLiterals;
@@ -114,10 +117,52 @@ static void minimizeIfWindowsIntersect(const QRectF &rect) {
 }
 
 VideoPlatformWayland::VideoPlatformWayland(QObject *parent)
-    : VideoPlatform(parent)
-    , m_screencasting(new Screencasting(this))
+    : VideoPlatformWayland(NkShot::makeNativeRecordingScreencast(), NkShot::makeNativeRecordingRecorder, parent)
 {
+}
+
+VideoPlatformWayland::VideoPlatformWayland(NkShot::RecordingScreencast *screencast,
+    std::function<std::unique_ptr<NkShot::RecordingRecorder>()> recorderFactory, QObject *parent, int startTimeoutMs)
+    : VideoPlatform(parent), m_screencasting(screencast), m_recorderFactory(std::move(recorderFactory))
+{
+    m_screencasting->setParent(this);
+    const auto capabilitiesChanged=[this] {
+        Q_EMIT supportedRecordingModesChanged();
+        Q_EMIT supportedFormatsChanged();
+        if (!m_screencasting->isAvailable() && preparation()->phase()!=NkShot::RecordingPreparation::Idle
+            && preparation()->phase()!=NkShot::RecordingPreparation::Recording)
+            failRecording(i18nc("@info", "The recording service is no longer available."));
+    };
+    connect(m_screencasting,&NkShot::RecordingScreencast::initialized,this,capabilitiesChanged);
+    connect(m_screencasting,&NkShot::RecordingScreencast::removed,this,capabilitiesChanged);
+    connect(m_screencasting,&NkShot::RecordingScreencast::sourcesChanged,this,capabilitiesChanged);
     QMetaObject::invokeMethod(this, &VideoPlatformWayland::initialize, Qt::QueuedConnection);
+    m_startWatchdog.setSingleShot(true);
+    connect(&m_startWatchdog,&QTimer::timeout,this,[this] {
+        if (preparation()->phase()==NkShot::RecordingPreparation::Starting)
+            failRecording(i18nc("@info", "Recording did not start in time. Select the target and try again."));
+    });
+    connect(preparation(),&NkShot::RecordingPreparation::readyToStart,this,[this,startTimeoutMs](quint64 token) {
+        // Core observes the preceding phase change and hides the countdown first.
+        QMetaObject::invokeMethod(this,[this,token,startTimeoutMs] {
+            if (!preparation()->isCurrent(token) || preparation()->phase()!=NkShot::RecordingPreparation::Starting) return;
+            m_startWatchdog.start(qMax(1,startTimeoutMs));
+            commitRecording(token);
+        },Qt::QueuedConnection);
+    });
+    const auto finishPreparation=[this] {
+        m_startWatchdog.stop();
+        preparation()->fail(m_requestToken);
+        for(const auto &connection:std::as_const(m_targetConnections)) disconnect(connection);
+        m_targetConnections.clear();
+    };
+    connect(this,&VideoPlatform::recordingFailed,this,finishPreparation);
+    connect(this,&VideoPlatform::recordingCanceled,this,finishPreparation);
+    auto ownerWatcher=new QDBusServiceWatcher(QStringLiteral("org.kde.KWin"),QDBusConnection::sessionBus(),QDBusServiceWatcher::WatchForOwnerChange,this);
+    connect(ownerWatcher,&QDBusServiceWatcher::serviceOwnerChanged,this,[this](const QString &,const QString &,const QString &) {
+        if(preparation()->phase()!=NkShot::RecordingPreparation::Idle)
+            failRecording(i18nc("@info", "The compositor changed. Select the recording target again."));
+    });
 }
 
 VideoPlatformWayland::~VideoPlatformWayland()
@@ -129,14 +174,26 @@ VideoPlatformWayland::~VideoPlatformWayland()
 
 void VideoPlatformWayland::initialize()
 {
-    m_recorder = std::make_unique<PipeWireRecord>();
+    m_recorder = m_recorderFactory();
     // Exactly one state/error subscription per recorder, never one per attempt.
-    connect(m_recorder.get(), &PipeWireRecord::errorFound, this, &VideoPlatformWayland::failRecording);
-    connect(m_recorder.get(), &PipeWireRecord::stateChanged, this, [this] {
+    const auto generation=++m_recorderGeneration;
+    const auto recorder=m_recorder.get();
+    connect(recorder, &NkShot::RecordingRecorder::errorFound, this, [this,generation,recorder](const QString &message) {
+        if(generation==m_recorderGeneration && m_recorder.get()==recorder) failRecording(message);
+    });
+    connect(recorder, &NkShot::RecordingRecorder::stateChanged, this, [this,generation,recorder] {
+        if(generation!=m_recorderGeneration || m_recorder.get()!=recorder) return;
         const auto state = m_recorder->state();
         if (state == PipeWireRecord::Idle) {
+            // Idle retires this producer generation immediately. Queued errors
+            // from it must not cancel a later target-selection/countdown while
+            // the next fresh recorder is waiting for commit.
+            ++m_recorderGeneration;
+            m_startGuard.recorderIdleObserved(m_startGuard.token());
+            if(m_discardPreparedOutput) discardOwnedPreparedOutput();
             m_memoryTimer.stop();m_startPending=false;m_resetRecorder=true;
             m_streamLease.retire();
+            Q_EMIT readyForRecordingChanged();
             if (m_attemptFailed) {
                 setRecordingState(RecordingState::NotRecording);
                 return;
@@ -144,9 +201,13 @@ void VideoPlatformWayland::initialize()
             if (recordingState() == RecordingState::Recording || recordingState() == RecordingState::Rendering) {
                 const auto output=QUrl::fromLocalFile(m_recorder->output());
                 setRecordingState(RecordingState::Finished);
+                preparation()->finish(m_requestToken);
                 Q_EMIT recordingSaved(output);
             }
         } else if (!m_attemptFailed && !m_stopRequested && state == PipeWireRecord::Recording) {
+            m_startGuard.recordingObserved(m_startGuard.token());
+            if (!preparation()->markRecording(m_requestToken)) return;
+            m_startWatchdog.stop();
             m_startPending=false;
             m_memoryTimer.start(5000, Qt::CoarseTimer, this);
             setRecordingMode(m_requestedMode);
@@ -187,234 +248,313 @@ bool VideoPlatformWayland::isRecordingAudio() const
 
 void VideoPlatformWayland::startRecording(const QUrl &fileUrl, RecordingMode recordingMode, const QVariantMap &options, bool includePointer)
 {
-    if (recordingMode == NoRecordingModes) {
-        // We should avoid calling startRecording without a recording mode,
-        // but it shouldn't cause a runtime error if we can handle it gracefully.
-        Q_EMIT recordingCanceled(u"Recording canceled: No recording mode"_s);
+    using Prep = NkShot::RecordingPreparation;
+    if (!m_startGuard.allowsNewAttempt() || preparation()->phase() != Prep::Idle || m_startPending
+        || (m_recorder && m_recorder->state() != PipeWireRecord::Idle)) return;
+    if (recordingMode == NoRecordingModes || !supportedRecordingModes().testFlag(recordingMode)) {
+        Q_EMIT recordingFailed(i18nc("@info", "The requested recording mode is unavailable."));
         return;
     }
-    if (!m_screencasting->isAvailable()) {
-        Q_EMIT recordingFailed(i18nc("@info", "KWin Screencasting is not available."));
+    if (!fileUrl.isEmpty() && !fileUrl.isLocalFile()) {
+        Q_EMIT recordingFailed(i18nc("@info", "Recording requires a local output file."));
         return;
     }
+    const int seconds = options.value(QStringLiteral("startDelay"), 0).toInt();
+    if (seconds != 0 && seconds != 3 && seconds != 5 && seconds != 10) {
+        Q_EMIT recordingFailed(i18nc("@info", "Choose a recording delay of 0, 3, 5 or 10 seconds."));
+        return;
+    }
+    m_ownedPreparedOutput.clear();m_discardPreparedOutput=false;
+    m_requestFile = fileUrl;
+    m_requestedMode = recordingMode;
+    m_requestPointer = includePointer;
+    m_requestFormat = fileUrl.isValid() ? formatForPath(fileUrl.toLocalFile()) : static_cast<Format>(Settings::preferredVideoFormat());
+    m_requestSystemAudio = Settings::videoRecordSystemAudio();
+    m_requestMicrophone = Settings::videoRecordMicrophone();
+    m_filenameTemplate = Settings::videoFilenameTemplate();
+    m_saveLocation = Settings::videoSaveLocation();
+    m_requestOptions.clear();m_requestScreen.clear();
+    m_attemptFailed=false;m_stopRequested=false;
+    if (encoderForFormat(m_requestFormat) == Encoder::NoEncoder) {
+        Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
+        return;
+    }
+    const auto token = preparation()->begin(seconds * 1000);
+    if (!token || !preparation()->isCurrent(token)) return;
+    m_requestToken = token;
+    const QPointer<QScreen> suppliedScreen=options.value(screenKey).value<QScreen *>();
+    const bool hadSuppliedScreen=bool(suppliedScreen);
+    QMetaObject::invokeMethod(this, [this, token, options, suppliedScreen, hadSuppliedScreen] {
+        if (!preparation()->isCurrent(token)) return;
+        if(hadSuppliedScreen && !suppliedScreen) {failRecording(i18nc("@info", "The selected screen is no longer available."));return;}
+        if ((m_requestedMode == Screen && !options.value(screenKey).value<QScreen *>())
+            || (m_requestedMode == Window && options.value(windowIdKey).toString().isEmpty())
+            || (m_requestedMode == Region && options.value(rectKey).toRectF().isEmpty())) {
+            selectAndRecord(token);
+        } else resolveTarget(token, options);
+    }, Qt::QueuedConnection);
+}
 
-    const auto epoch=++m_startEpoch;
-    const QPointer<QScreen> selectedScreen=options.value(screenKey).value<QScreen *>();
-    const bool hadScreen=bool(selectedScreen);
-    auto startRecordingTask = [this, fileUrl, recordingMode, options, includePointer, epoch, selectedScreen, hadScreen]() {
-        if(epoch!=m_startEpoch) return;
-        if (m_startPending || (m_recorder && m_recorder->state() != PipeWireRecord::Idle)) {
-            qWarning() << "Recording request ignored while another attempt is pending or draining.";
-            return;
-        }
-        if (recordingState() == RecordingState::Recording) {
-            qWarning() << "Warning: Tried to start recording while already recording.";
-            return;
-        }
-        if (recordingState() == RecordingState::Rendering) {
-            qWarning() << "Warning: Tried to start recording while already rendering.";
-            return;
-        }
-        if(hadScreen && !selectedScreen) {
-            Q_EMIT recordingFailed(i18nc("@info", "The selected screen is no longer available."));
-            return;
-        }
-        if (!fileUrl.isEmpty() && !fileUrl.isLocalFile()) {
-            Q_EMIT recordingFailed(i18nc("@info:shell", "Failed to record: File URL is not a local file"));
-            return;
-        }
+void VideoPlatformWayland::provideRecordingRegion(const QRectF &rect, quint64 token)
+{
+    if (m_requestedMode != Region || preparation()->phase() != NkShot::RecordingPreparation::Selecting
+        || !preparation()->isCurrent(token) || rect.isEmpty()) return;
+    resolveTarget(token, {{rectKey, rect}});
+}
 
-        if (!m_recorder) {
-            Q_EMIT recordingFailed(i18nc("@info", "The recording backend is still initializing. Try again."));
-            return;
-        }
-        // Selection is not a recording attempt. Resolve it before touching output.
-        if ((recordingMode == Screen && !options.value(screenKey).value<QScreen *>())
-            || (recordingMode == Window && options.value(windowIdKey).toString().isEmpty())
-            || (recordingMode == Region && options.value(rectKey).toRectF().isEmpty())) {
-            selectAndRecord(fileUrl, recordingMode, includePointer);
-            return;
-        }
-        // Start tasks run queued, outside a recorder signal's emission. A fresh
-        // recorder cannot inherit producer-thread cleanup or errors from a prior attempt.
-        if (m_resetRecorder) {
-            m_recorder->disconnect(this);
-            m_recorder.reset();
-            initialize();
-            m_resetRecorder=false;
-        }
-        m_streamLease.retire();
-        m_attemptFailed=false;m_stopRequested=false;
-        // No compositor stream can start against a previous attempt's file.
-        m_recorder->setNodeId(0);
-        m_recorder->setOutput(QString());
-        // Validate and configure output BEFORE requesting a compositor stream.
-        auto format = static_cast<Format>(Settings::preferredVideoFormat());
-        if (!fileUrl.isValid()) {
-            ExportManager::instance()->updateTimestamp();
-            const auto filename = ExportManager::formattedFilename(Settings::videoFilenameTemplate(),
-                                                                   ExportManager::instance()->timestamp(),
-                                                                   options[captionKey].toString(),
-                                                                   Settings::videoSaveLocation());
-            auto tempUrl = ExportManager::instance()->tempVideoUrl(filename);
-            if (!tempUrl.isLocalFile()) {
-                Q_EMIT recordingFailed(
-                    i18nc("@info:shell, %1 is the temporary URL", "Failed to record: Temporary file URL is not a local file (%1)", tempUrl.toString()));
-                return;
-            }
-            const auto encoder = encoderForFormat(format);
-            if (encoder == Encoder::NoEncoder) {
-                Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
-                return;
-            }
-            if (!mkDirPath(tempUrl)) return;
-            m_recorder->setEncoder(encoder);
-            m_recorder->setOutput(tempUrl.toLocalFile());
-        } else {
-            if (!fileUrl.isLocalFile()) {
-                Q_EMIT recordingFailed(
-                    i18nc("@info:shell, %1 is the output file URL", "Failed to record: Output file URL is not a local file (%1)", fileUrl.toString()));
-                return;
-            }
-            const auto localFile = fileUrl.toLocalFile();
-            format = formatForPath(localFile);
-            const auto encoder = encoderForFormat(format);
-            if (encoder == Encoder::NoEncoder) {
-                Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
-                return;
-            }
-            if (!mkDirPath(fileUrl)) return;
-            m_recorder->setEncoder(encoder);
-            m_recorder->setOutput(localFile);
-        }
-        // The stored settings stay enabled when the checkboxes are disabled
-        // for a format without audio support, don't forward them in that case.
-        const bool audioSupported = formatSupportsAudio(format);
-        m_recorder->setRecordSystemAudio(Settings::videoRecordSystemAudio() && audioSupported);
-        m_recorder->setRecordMicrophone(Settings::videoRecordMicrophone() && audioSupported);
+bool VideoPlatformWayland::targetStillValid() const
+{
+    if (!m_screencasting->isAvailable()) return false;
+    if (m_requestedMode == Screen) return m_requestScreen && qGuiApp->screens().contains(m_requestScreen);
+    if (m_requestedMode == Window) return !m_requestOptions.value(windowIdKey).toString().isEmpty();
+    if (m_requestedMode == Region) {
+        const auto rect=m_requestOptions.value(rectKey).toRectF();
+        if (rect.isEmpty()) return false;
+        for (auto screen : qGuiApp->screens()) if (rect.intersects(screen->geometry())) return true;
+    }
+    return false;
+}
 
-        Screencasting::CursorMode mode = includePointer ? Screencasting::CursorMode::Embedded : Screencasting::Hidden;
-        ScreencastingStream *stream = nullptr;
-
-        switch (recordingMode) {
-        case Screen: {
-            auto screen = options.value(screenKey).value<QScreen *>();
-            if (!screen) {
-                selectAndRecord(fileUrl, recordingMode, includePointer);
-                return;
-            }
-            Q_ASSERT(screen != nullptr);
-            minimizeIfWindowsIntersect(screen->geometry());
-            m_frameBytes = frameBytes(screen->size() * screen->devicePixelRatio());
-            stream = m_screencasting->createOutputStream(screen, mode);
-            break;
-        }
-        case Window: {
-            auto windowId = options.value(windowIdKey).toString();
-            if (windowId.isEmpty()) {
-                selectAndRecord(fileUrl, recordingMode, includePointer);
-                return;
-            }
-            Q_ASSERT(!windowId.isEmpty());
-            // HACK: Window geometry from queryWindowInfo is from KWin's
-            // Window::frameGeometry(), which may not be the same as
-            // QWindow::frameGeometry() on Wayland. Hopefully this is good enough most
-            // of the time.
-            const QRectF windowRect{
-                options[xKey].toDouble(),
-                options[yKey].toDouble(),
-                options[widthKey].toDouble(),
-                options[heightKey].toDouble(),
-            };
-            const bool isSpectacle = options[desktopFileKey].toString() == qGuiApp->desktopFileName();
-            if (!windowRect.isEmpty() && !isSpectacle) {
-                minimizeIfWindowsIntersect(windowRect);
-            }
-            auto screen = qGuiApp->screenAt(windowRect.center().toPoint());
-            m_frameBytes = frameBytes(windowRect.size().toSize() * (screen ? screen->devicePixelRatio() : 1));
-            stream = m_screencasting->createWindowStream(windowId, mode);
-            break;
-        }
-        case Region: {
-            auto rect = options.value(rectKey).toRectF();
-            if (rect.isEmpty()) {
-                selectAndRecord(fileUrl, recordingMode, includePointer);
-                return;
-            }
-            qreal scaling = 1;
-            const auto screens = qGuiApp->screens();
-            // Don't make the resolution larger than it needs to be.
-            for (auto screen : screens) {
-                if (rect.intersects(screen->geometry())) {
-                    scaling = std::max(scaling, screen->devicePixelRatio());
-                }
-            }
-            // Round to pixels that fit within the original rect.
-            // We do this to make it easier to keep the selection outline outside of
-            // the recording.
-            int x = std::ceil(rect.x());
-            int y = std::ceil(rect.y());
-            // We calculate size using floor(right) - x and floor(bottom) - y so that
-            // the rect doesn't shift too much. Ensure size is at least 1x1 to keep
-            // the final rect valid.
-            int w = std::max(1.0, std::floor(rect.right()) - x);
-            int h = std::max(1.0, std::floor(rect.bottom()) - y);
-            m_frameBytes = frameBytes(QSize{w, h} * scaling);
-            scaling = m_screencasting->isRegionAutoScaleSupported() ? 0 : scaling;
-            stream = m_screencasting->createRegionStream({x, y, w, h}, scaling, mode);
-            break;
-        }
-        default:
-            break; // This shouldn't happen
-        }
-
-        if (!stream) {
-            m_recorder->setOutput(QString());
-            Q_EMIT recordingFailed(i18nc("@info", "The selected capture source is unavailable."));
-            return;
-        }
-        const auto generation=m_streamLease.adopt(stream);
-        m_startPending=true;m_requestedMode=recordingMode;
-        m_recorder->setMaxPendingFrames(availableFrames(m_frameBytes));
-        m_recorder->setNodeId(0);
-        connect(stream, &ScreencastingStream::created, this, [this, stream, recordingMode, generation] {
-            if (!m_streamLease.accepts(stream,generation) || m_attemptFailed) return;
-            m_startPending=false;
-            m_recorder->setNodeId(stream->nodeId());
-            if (!m_recorder->output().isEmpty()) {
-                m_recorder->start();
-            }
-            setRecordingMode(recordingMode);
-            setRecordingState(VideoPlatform::RecordingState::Recording);
-        });
-        connect(stream, &ScreencastingStream::failed, this, [this,stream,generation](const QString &error) {
-            if(m_streamLease.accepts(stream,generation)) failRecording(error);
-        });
-        connect(stream, &ScreencastingStream::closed, this, [this,stream,generation] {
-            if(m_streamLease.accepts(stream,generation))
-                failRecording(i18nc("@info", "Recording stopped because its capture source became unavailable."));
-        });
-
+void VideoPlatformWayland::resolveTarget(quint64 token, const QVariantMap &options)
+{
+    if (!preparation()->isCurrent(token) || preparation()->phase()!=NkShot::RecordingPreparation::Selecting) return;
+    m_requestOptions=options;
+    m_requestScreen=options.value(screenKey).value<QScreen *>();
+    if (!targetStillValid()) { failRecording(i18nc("@info", "The selected recording target is no longer available."));return; }
+    for (const auto &connection : std::as_const(m_targetConnections)) disconnect(connection);
+    m_targetConnections.clear();
+    // A display topology change invalidates the prepared coordinates instead of
+    // silently recording a different screen or region after the countdown.
+    const auto invalidate=[this,token] {
+        if (preparation()->isCurrent(token) && preparation()->phase()!=NkShot::RecordingPreparation::Recording)
+            failRecording(i18nc("@info", "Display configuration changed. Select the recording target again."));
     };
+    m_targetConnections << connect(qGuiApp,&QGuiApplication::screenRemoved,this,[invalidate](QScreen *) {invalidate();});
+    m_targetConnections << connect(qGuiApp,&QGuiApplication::screenAdded,this,[invalidate](QScreen *) {invalidate();});
+    for(auto screen:qGuiApp->screens()) m_targetConnections << connect(screen,&QScreen::geometryChanged,this,[invalidate](const QRect &) {invalidate();});
+    preparation()->targetReady(token);
+}
 
-    // Avoid deleting/reinitializing a recorder from inside its own signal emission.
-    QMetaObject::invokeMethod(this, startRecordingTask, Qt::QueuedConnection);
+void VideoPlatformWayland::commitRecording(quint64 token)
+{
+    if (!preparation()->isCurrent(token) || preparation()->phase()!=NkShot::RecordingPreparation::Starting) return;
+    if (!targetStillValid()) {failRecording(i18nc("@info", "The selected recording target is no longer available."));return;}
+    const auto fileUrl=m_requestFile;
+    const auto recordingMode=m_requestedMode;
+    const auto options=m_requestOptions;
+    const bool includePointer=m_requestPointer;
+    // Start tasks run queued, outside a recorder signal's emission. A fresh
+    // recorder cannot inherit producer-thread cleanup or errors from a prior attempt.
+    if (m_resetRecorder) {
+        m_recorder->disconnect(this);
+        m_recorder.reset();
+        initialize();
+        m_resetRecorder=false;
+    }
+    m_streamLease.retire();
+    m_attemptFailed=false;m_stopRequested=false;
+    // No compositor stream can start against a previous attempt's file.
+    m_recorder->setNodeId(0);
+    m_recorder->setOutput(QString());
+    // Validate and configure output BEFORE requesting a compositor stream.
+    auto format = m_requestFormat;
+    if (!fileUrl.isValid()) {
+        ExportManager::instance()->updateTimestamp();
+        const auto filename = ExportManager::formattedFilename(m_filenameTemplate,
+                                                               ExportManager::instance()->timestamp(),
+                                                               options[captionKey].toString(),
+                                                               m_saveLocation);
+        auto tempUrl = ExportManager::instance()->tempVideoUrl(filename,extensionForFormat(m_requestFormat),m_saveLocation);
+        if (!tempUrl.isLocalFile()) {
+            Q_EMIT recordingFailed(
+                i18nc("@info:shell, %1 is the temporary URL", "Failed to record: Temporary file URL is not a local file (%1)", tempUrl.toString()));
+            return;
+        }
+        const auto encoder = encoderForFormat(format);
+        if (encoder == Encoder::NoEncoder) {
+            Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
+            return;
+        }
+        const auto privateDirectory=ExportManager::instance()->temporaryDir();
+        const auto privateRoot=privateDirectory ? QFileInfo(privateDirectory->path()).canonicalFilePath() : QString();
+        const auto targetPath=QDir::cleanPath(QFileInfo(tempUrl.toLocalFile()).absoluteFilePath());
+        if (privateRoot.isEmpty() || !targetPath.startsWith(privateRoot+QLatin1Char('/'))) {
+            failRecording(i18nc("@info", "The recording filename must stay inside its temporary folder."));return;
+        }
+        if (!mkDirPath(tempUrl)) { preparation()->fail(token);return; }
+        const auto parentPath=QFileInfo(QFileInfo(targetPath).absolutePath()).canonicalFilePath();
+        if ((parentPath!=privateRoot && !parentPath.startsWith(privateRoot+QLatin1Char('/')))
+            || QFileInfo(targetPath).isSymLink() || QFileInfo::exists(targetPath)) {
+            failRecording(i18nc("@info", "The temporary recording path is not available."));return;
+        }
+        m_recorder->setEncoder(encoder);
+        m_recorder->setOutput(tempUrl.toLocalFile());
+    } else {
+        if (!fileUrl.isLocalFile()) {
+            Q_EMIT recordingFailed(
+                i18nc("@info:shell, %1 is the output file URL", "Failed to record: Output file URL is not a local file (%1)", fileUrl.toString()));
+            return;
+        }
+        const auto localFile = fileUrl.toLocalFile();
+        format = formatForPath(localFile);
+        const auto encoder = encoderForFormat(format);
+        if (encoder == Encoder::NoEncoder) {
+            Q_EMIT recordingFailed(i18nc("@info", "No supported encoder is available for this recording format."));
+            return;
+        }
+        if (!mkDirPath(fileUrl)) { preparation()->fail(token);return; }
+        m_recorder->setEncoder(encoder);
+        m_recorder->setOutput(localFile);
+    }
+    // The stored settings stay enabled when the checkboxes are disabled
+    // for a format without audio support, don't forward them in that case.
+    const bool audioSupported = formatSupportsAudio(format);
+    m_recorder->setRecordSystemAudio(m_requestSystemAudio && audioSupported);
+    m_recorder->setRecordMicrophone(m_requestMicrophone && audioSupported);
+
+    Screencasting::CursorMode mode = includePointer ? Screencasting::CursorMode::Embedded : Screencasting::Hidden;
+    NkShot::RecordingSource *stream = nullptr;
+
+    switch (recordingMode) {
+    case Screen: {
+        auto screen = options.value(screenKey).value<QScreen *>();
+        if (!screen) {
+            failRecording(i18nc("@info", "The selected recording target is no longer available."));
+            return;
+        }
+        Q_ASSERT(screen != nullptr);
+        minimizeIfWindowsIntersect(screen->geometry());
+        m_frameBytes = frameBytes(screen->size() * screen->devicePixelRatio());
+        stream = m_screencasting->createOutputStream(screen, mode);
+        break;
+    }
+    case Window: {
+        auto windowId = options.value(windowIdKey).toString();
+        if (windowId.isEmpty()) {
+            failRecording(i18nc("@info", "The selected recording target is no longer available."));
+            return;
+        }
+        Q_ASSERT(!windowId.isEmpty());
+        // HACK: Window geometry from queryWindowInfo is from KWin's
+        // Window::frameGeometry(), which may not be the same as
+        // QWindow::frameGeometry() on Wayland. Hopefully this is good enough most
+        // of the time.
+        const QRectF windowRect{
+            options[xKey].toDouble(),
+            options[yKey].toDouble(),
+            options[widthKey].toDouble(),
+            options[heightKey].toDouble(),
+        };
+        const bool isSpectacle = options[desktopFileKey].toString() == qGuiApp->desktopFileName();
+        if (!windowRect.isEmpty() && !isSpectacle) {
+            minimizeIfWindowsIntersect(windowRect);
+        }
+        auto screen = qGuiApp->screenAt(windowRect.center().toPoint());
+        m_frameBytes = frameBytes(windowRect.size().toSize() * (screen ? screen->devicePixelRatio() : 1));
+        stream = m_screencasting->createWindowStream(windowId, mode);
+        break;
+    }
+    case Region: {
+        auto rect = options.value(rectKey).toRectF();
+        if (rect.isEmpty()) {
+            failRecording(i18nc("@info", "The selected recording target is no longer available."));
+            return;
+        }
+        qreal scaling = 1;
+        const auto screens = qGuiApp->screens();
+        // Don't make the resolution larger than it needs to be.
+        for (auto screen : screens) {
+            if (rect.intersects(screen->geometry())) {
+                scaling = std::max(scaling, screen->devicePixelRatio());
+            }
+        }
+        // Round to pixels that fit within the original rect.
+        // We do this to make it easier to keep the selection outline outside of
+        // the recording.
+        int x = std::ceil(rect.x());
+        int y = std::ceil(rect.y());
+        // We calculate size using floor(right) - x and floor(bottom) - y so that
+        // the rect doesn't shift too much. Ensure size is at least 1x1 to keep
+        // the final rect valid.
+        int w = std::max(1.0, std::floor(rect.right()) - x);
+        int h = std::max(1.0, std::floor(rect.bottom()) - y);
+        m_frameBytes = frameBytes(QSize{w, h} * scaling);
+        scaling = m_screencasting->isRegionAutoScaleSupported() ? 0 : scaling;
+        stream = m_screencasting->createRegionStream({x, y, w, h}, scaling, mode);
+        break;
+    }
+    default:
+        break; // This shouldn't happen
+    }
+
+    if (!stream) {
+        m_recorder->setOutput(QString());
+        Q_EMIT recordingFailed(i18nc("@info", "The selected capture source is unavailable."));
+        return;
+    }
+    const auto generation=m_streamLease.adopt(stream);
+    m_startPending=true;m_requestedMode=recordingMode;
+    m_recorder->setMaxPendingFrames(availableFrames(m_frameBytes));
+    m_recorder->setNodeId(0);
+    connect(stream, &NkShot::RecordingSource::created, this, [this, stream, generation, token] {
+        if (!m_streamLease.accepts(stream,generation) || m_attemptFailed || !preparation()->isCurrent(token)) return;
+        m_startPending=false;
+        m_recorder->setNodeId(stream->nodeId());
+        if (!m_recorder->output().isEmpty()) {
+            if (!m_startGuard.markStartIssued()) return;
+            m_recorder->start();
+        }
+        // Recording state/timing comes only from the recorder state signal.
+    });
+    connect(stream, &NkShot::RecordingSource::failed, this, [this,stream,generation](const QString &error) {
+        if(m_streamLease.accepts(stream,generation)) failRecording(error);
+    });
+    connect(stream, &NkShot::RecordingSource::closed, this, [this,stream,generation] {
+        if(m_streamLease.accepts(stream,generation))
+            failRecording(i18nc("@info", "Recording stopped because its capture source became unavailable."));
+    });
 }
 
 void VideoPlatformWayland::failRecording(const QString &message)
 {
     if(m_attemptFailed) return;
+    m_discardPreparedOutput=preparation()->phase()==NkShot::RecordingPreparation::Starting;
     m_attemptFailed=true;m_startPending=false;m_stopRequested=true;
-    m_streamLease.quiesce();m_memoryTimer.stop();
+    m_startGuard.cancel(m_startGuard.token());
+    if(m_startGuard.outstanding()) m_streamLease.quiesce(); else m_streamLease.retire();
+    m_memoryTimer.stop();
     setRecordingState(RecordingState::NotRecording);
     if(m_recorder) m_recorder->stop();
+    if(!m_startGuard.outstanding()) discardOwnedPreparedOutput();
     Q_EMIT recordingFailed(message);
+}
+
+void VideoPlatformWayland::cancelPendingRecording()
+{
+    using Prep=NkShot::RecordingPreparation;
+    if(preparation()->phase()!=Prep::Selecting && preparation()->phase()!=Prep::Countdown && preparation()->phase()!=Prep::Starting) return;
+    const bool wasStarting=preparation()->phase()==Prep::Starting;
+    m_discardPreparedOutput=wasStarting;
+    m_attemptFailed=true;m_stopRequested=true;m_startPending=false;
+    m_startWatchdog.stop();m_memoryTimer.stop();
+    preparation()->cancel();
+    m_startGuard.cancel(m_startGuard.token());
+    if(m_startGuard.outstanding()) m_streamLease.quiesce(); else m_streamLease.retire();
+    if(m_recorder && m_startGuard.outstanding()) m_recorder->stop();
+    if(!m_startGuard.outstanding()) discardOwnedPreparedOutput();
+    setRecordingState(RecordingState::NotRecording);
+    Q_EMIT recordingCanceled(wasStarting ? i18nc("@info", "Recording canceled while starting.")
+        : i18nc("@info", "Recording canceled before capture started."));
 }
 
 void VideoPlatformWayland::finishRecording()
 {
     m_stopRequested=true;
-    ++m_startEpoch; // Cancel start work that has not reached the GUI queue yet.
+    if (preparation()->phase()!=NkShot::RecordingPreparation::Recording
+        && preparation()->phase()!=NkShot::RecordingPreparation::Idle) {
+        cancelPendingRecording();
+        return;
+    }
     if (!m_recorder) {
         return;
     }
@@ -448,10 +588,11 @@ bool VideoPlatformWayland::mkDirPath(const QUrl &fileUrl)
     return false;
 }
 
-void VideoPlatformWayland::selectAndRecord(const QUrl &fileUrl, RecordingMode recordingMode, bool includePointer)
+void VideoPlatformWayland::selectAndRecord(quint64 token)
 {
+    const auto recordingMode=m_requestedMode;
     if (recordingMode == Region) {
-        Q_EMIT regionRequested();
+        Q_EMIT regionRequested(token);
         return;
     }
 
@@ -463,11 +604,10 @@ void VideoPlatformWayland::selectAndRecord(const QUrl &fileUrl, RecordingMode re
 
     QDBusPendingReply<QVariantMap> asyncReply = QDBusConnection::sessionBus().asyncCall(message);
     QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(asyncReply, this);
-    const auto selectionEpoch=m_startEpoch;
-    auto onFinished = [this, fileUrl, recordingMode, includePointer, selectionEpoch](QDBusPendingCallWatcher *self) {
+    auto onFinished = [this, recordingMode, token](QDBusPendingCallWatcher *self) {
         QDBusPendingReply<QVariantMap> reply = *self;
         self->deleteLater();
-        if(selectionEpoch!=m_startEpoch) return;
+        if(!preparation()->isCurrent(token) || preparation()->phase()!=NkShot::RecordingPreparation::Selecting) return;
         if (!reply.isValid()) {
             const auto &error = self->error();
             if (error.name() == u"org.kde.KWin.Error.UserCancel"_s) {
@@ -523,9 +663,23 @@ void VideoPlatformWayland::selectAndRecord(const QUrl &fileUrl, RecordingMode re
             }
             options = data;
         }
-        startRecording(fileUrl, recordingMode, options, includePointer);
+        resolveTarget(token, options);
     };
     connect(watcher, &QDBusPendingCallWatcher::finished, this, onFinished);
 }
 
 #include "moc_VideoPlatformWayland.cpp"
+
+bool VideoPlatformWayland::readyForRecording() const
+{
+    return VideoPlatform::readyForRecording() && m_startGuard.allowsNewAttempt()
+        && !m_startPending && m_recorder && m_recorder->state()==PipeWireRecord::Idle;
+}
+
+void VideoPlatformWayland::discardOwnedPreparedOutput()
+{
+    // Do not unlink a path merely because it did not exist before encoding.
+    // Existing later-session private-directory cleanup may reclaim partial files;
+    // it is not immediate or guaranteed. Explicit outputs are never removed.
+    m_ownedPreparedOutput.clear();m_discardPreparedOutput=false;
+}

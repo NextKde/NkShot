@@ -14,6 +14,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <qqmlregistration.h>
+#include "RecordingPreparation.h"
 
 class QScreen;
 
@@ -27,6 +28,7 @@ class VideoPlatform : public QObject
     Q_PROPERTY(Formats supportedFormats READ supportedFormats NOTIFY supportedFormatsChanged)
     Q_PROPERTY(qint64 recordedTime READ recordedTime NOTIFY recordedTimeChanged)
     Q_PROPERTY(bool isRecording READ isRecording NOTIFY recordingStateChanged)
+    Q_PROPERTY(bool readyForRecording READ readyForRecording NOTIFY readyForRecordingChanged)
     Q_PROPERTY(RecordingState recordingState READ recordingState NOTIFY recordingStateChanged)
 
 public:
@@ -134,6 +136,10 @@ public:
     RecordingState recordingState() const;
 
     RecordingMode recordingMode() const;
+    NkShot::RecordingPreparation *preparation() { return &m_preparation; }
+    virtual void provideRecordingRegion(const QRectF &, quint64) {}
+    virtual void cancelPendingRecording();
+    virtual bool readyForRecording() const;
 
 protected:
     void setRecordingState(RecordingState state);
@@ -148,6 +154,7 @@ public Q_SLOTS:
     virtual void finishRecording() = 0;
 
 Q_SIGNALS:
+    void readyForRecordingChanged();
     void supportedRecordingModesChanged();
     void supportedFormatsChanged();
     void recordingSaved(const QUrl &fileUrl);
@@ -157,9 +164,10 @@ Q_SIGNALS:
     void recordingStateChanged(RecordingState state);
 
     /// Request a region from the platform agnostic selection editor
-    void regionRequested();
+    void regionRequested(quint64 token);
 
 private:
+    NkShot::RecordingPreparation m_preparation{this};
     QElapsedTimer m_elapsedTimer;
     QBasicTimer m_basicTimer;
     qint64 m_recordedTime = 0;

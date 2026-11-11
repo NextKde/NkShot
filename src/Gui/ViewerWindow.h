@@ -38,6 +38,7 @@ public:
 
     using UniquePointer = std::unique_ptr<ViewerWindow, void (*)(ViewerWindow *)>;
 
+    Mode mode() const { return m_mode; }
     static UniquePointer makeUnique(Mode mode, QQmlEngine *engine, QWindow *parent = nullptr);
 
     static ViewerWindow *instance();

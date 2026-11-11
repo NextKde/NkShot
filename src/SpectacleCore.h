@@ -27,8 +27,13 @@
 #include <array>
 #include <memory>
 
+class RecordingCountdownWindow;
 class SpectacleCore : public QObject
 {
+#ifdef NKSHOT_ENABLE_UI_CAPTURE
+    friend class RecordingPreparationUiChecks;
+#endif
+
     Q_OBJECT
     QML_ELEMENT
     QML_SINGLETON
@@ -87,8 +92,9 @@ public:
 
     void syncExportImage();
 
-    Q_INVOKABLE void startRecording(VideoPlatform::RecordingMode mode, bool withPointer = Settings::videoIncludePointer());
+    Q_INVOKABLE void startRecording(VideoPlatform::RecordingMode mode, bool withPointer = Settings::videoIncludePointer(), int startDelaySeconds = 0);
     Q_INVOKABLE void finishRecording();
+    Q_INVOKABLE void cancelPendingRecording();
 
     Q_INVOKABLE QString timeFromMilliseconds(qint64 milliseconds) const;
 
@@ -152,6 +158,9 @@ private:
     CaptureModeModel::CaptureMode toCaptureMode(ImagePlatform::GrabMode grabMode) const;
     bool isGuiNull() const;
     QQmlEngine *getQmlEngine();
+    void snapshotRecordingPreparation();
+    bool restoreRecordingPreparation();
+    void updateRecordingPreparationUi();
     void initCaptureWindows(CaptureWindow::Mode mode);
     void initViewerWindow(ViewerWindow::Mode mode);
     void deleteWindows();
@@ -170,6 +179,15 @@ private:
     std::unique_ptr<ImagePlatform> m_imagePlatform;
     std::unique_ptr<VideoPlatform> m_videoPlatform;
     std::unique_ptr<QQmlEngine> m_engine;
+    std::unique_ptr<RecordingCountdownWindow> m_recordingCountdown;
+    QRect m_recordingRestoreGeometry;
+    QWindow::Visibility m_recordingRestoreVisibility = QWindow::Windowed;
+    bool m_recordingRestoreActive = false;
+    bool m_recordingRestoreVideoMode = false;
+    bool m_recordingRestoreGui = false;
+    ViewerWindow::Mode m_recordingRestoreMode = ViewerWindow::Dialog;
+    quint64 m_pendingRegionToken = 0;
+    quint64 m_captureEpoch = 0;
     std::unique_ptr<QTimer> m_annotationSyncTimer;
     std::unique_ptr<QVariantAnimation> m_delayAnimation;
     std::unique_ptr<QEventLoopLocker> m_eventLoopLocker;

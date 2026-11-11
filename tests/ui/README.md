@@ -586,3 +586,24 @@ Normal shutdown is checked both with and without `--new-instance`. The 075
 shutdown fix destroys QML views before their engine and destroys Core before
 QApplication's GUI services. A plain `--launchonly` capture/exit reproduced the
 pre-fix crash independently of the interactive harness.
+
+### Recording preparation (076)
+
+`NKSHOT_TEST_RECORDING_ADAPTER=1` drives the real Wayland adapter with explicit
+constructor-injected providers. Ten scenario groups include the post-selection
+clock, no Countdown output/stream calls, successful state/timing/save dispatch,
+Starting cancellation/drain, stale callbacks, dynamic capabilities, path limits,
+and the native KPipeWire missing-configuration failure bridge. This is not a
+successful native recording test.
+
+`NKSHOT_TEST_RECORDING_PREPARATION=1` requires the real Null video platform. It
+injects only a synthetic confirmed region into the actual Core/selection route,
+then operates the actual countdown QML. Run separately with `--launchonly`,
+`--edit-existing` on a synthetic image, `NKSHOT_TEST_RECORDING_PREPARATION_VIDEO=1`
+(with synthetic `/logs/playback062.mp4`), and `NKSHOT_TEST_DARK=1`. Checks include
+button/Esc/close, original media/history/clipboard, original Viewer size and
+visible content, no unintended screenshot signals, queued old selection results,
+zero-delay no-flash, readiness rejection and cross-workflow cancellation.
+Screenshots identify synthetic selection results; they are not screenshots of a
+native selection or proof of compositor capture. Use an isolated test session
+bus and fresh configuration, never a user's desktop session or private media.

@@ -12,6 +12,7 @@ using namespace Qt::StringLiterals;
 VideoPlatform::VideoPlatform(QObject *parent)
     : QObject(parent)
 {
+    connect(&m_preparation,&NkShot::RecordingPreparation::changed,this,&VideoPlatform::readyForRecordingChanged);
 }
 
 bool VideoPlatform::isRecording() const
@@ -106,6 +107,7 @@ void VideoPlatform::setRecordingState(RecordingState state)
     }
     m_recordingState = state;
     Q_EMIT recordingStateChanged(state);
+    Q_EMIT readyForRecordingChanged();
     Q_EMIT recordedTimeChanged();
 }
 
@@ -118,3 +120,16 @@ void VideoPlatform::setRecordingMode(RecordingMode mode)
 }
 
 #include "moc_VideoPlatform.cpp"
+
+void VideoPlatform::cancelPendingRecording()
+{
+    if (m_preparation.cancel()) {
+        Q_EMIT recordingCanceled(QString());
+    }
+}
+
+bool VideoPlatform::readyForRecording() const
+{
+    return m_preparation.phase()==NkShot::RecordingPreparation::Idle
+        && m_recordingState!=RecordingState::Recording && m_recordingState!=RecordingState::Rendering;
+}

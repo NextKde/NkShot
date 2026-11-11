@@ -7,6 +7,7 @@
  */
 
 #include "SpectacleCore.h"
+#include "Gui/RecordingCountdownWindow.h"
 #include "CaptureModeModel.h"
 #include "CommandLineOptions.h"
 #include "Config.h"
@@ -120,14 +121,18 @@ SpectacleCore::SpectacleCore(QObject *parent)
         }
     };
     auto onFinished = [this]() {
-        m_imagePlatform->doGrab(ImagePlatform::ShutterMode::Immediate, m_lastGrabMode, m_lastIncludePointer, m_lastIncludeDecorations, m_lastIncludeShadow);
+        const auto epoch=m_captureEpoch;
+        QMetaObject::invokeMethod(this,[this,epoch] {
+            if(epoch!=m_captureEpoch) return;
+            m_imagePlatform->doGrab(ImagePlatform::ShutterMode::Immediate,m_lastGrabMode,m_lastIncludePointer,m_lastIncludeDecorations,m_lastIncludeShadow);
+        },Qt::QueuedConnection);
     };
     QObject::connect(delayAnimation, &QVariantAnimation::stateChanged,
                      this, onStateChanged, Qt::QueuedConnection);
     QObject::connect(delayAnimation, &QVariantAnimation::valueChanged,
                      this, onValueChanged, Qt::QueuedConnection);
     QObject::connect(delayAnimation, &QVariantAnimation::finished,
-                     this, onFinished, Qt::QueuedConnection);
+                     this, onFinished);
 
     m_imagePlatform = loadImagePlatform();
     m_videoPlatform = loadVideoPlatform();
@@ -143,8 +148,15 @@ SpectacleCore::SpectacleCore(QObject *parent)
     });
     connect(SelectionEditor::instance(), &SelectionEditor::accepted,
             this, [this](const QRectF &rect, const ExportManager::Actions &actions){
+        const bool acceptedVideo=m_videoMode;
+        const auto acceptedToken=m_pendingRegionToken;
+        const auto acceptedEpoch=m_captureEpoch;
+        QMetaObject::invokeMethod(this,[this,rect,actions,acceptedVideo,acceptedToken,acceptedEpoch] {
+        if(acceptedEpoch!=m_captureEpoch || acceptedVideo!=m_videoMode) return;
+        if(acceptedVideo && (acceptedToken!=m_pendingRegionToken || !m_videoPlatform->preparation()->isCurrent(acceptedToken))) return;
         m_returnToViewer = m_startMode == StartMode::Gui;
         if (m_videoMode) {
+            if (!m_pendingRegionToken || !m_videoPlatform->preparation()->isCurrent(m_pendingRegionToken)) return;
             const auto captureWindows = CaptureWindow::instances();
             SpectacleWindow::setVisibilityForAll(QWindow::Hidden);
             for (auto captureWindow : captureWindows) {
@@ -168,12 +180,8 @@ SpectacleCore::SpectacleCore(QObject *parent)
             SpectacleWindow::setVisibilityForAll(QWindow::FullScreen);
             // deleteWindows();
             // showViewerIfGuiMode(true);
-            bool includePointer = m_cliOptions[CommandLineOptions::Pointer];
-            includePointer |= m_startMode != StartMode::Background && Settings::videoIncludePointer();
-            ExportManager::instance()->updateTimestamp();
-            const auto &output = m_outputUrl.isLocalFile() ? videoOutputUrl() : QUrl();
-            static const auto rectKey = u"rect"_s;
-            m_videoPlatform->startRecording(output, VideoPlatform::Region, {{rectKey, rect}}, includePointer);
+            const auto token=std::exchange(m_pendingRegionToken,0);
+            m_videoPlatform->provideRecordingRegion(rect,token);
         } else {
             SpectacleWindow::setVisibilityForAll(QWindow::Hidden);
             deleteWindows();
@@ -198,7 +206,8 @@ SpectacleCore::SpectacleCore(QObject *parent)
             }
             ExportManager::instance()->exportImage(exportActions, outputUrl());
         }
-    }, Qt::QueuedConnection);
+        },Qt::QueuedConnection);
+    });
 
     connect(imagePlatform, &ImagePlatform::newScreenshotTaken, this, [this](const QImage &image){
         InlineMessageModel::instance()->clear();
@@ -301,8 +310,10 @@ SpectacleCore::SpectacleCore(QObject *parent)
     });
 
     auto videoPlatform = m_videoPlatform.get();
+    connect(videoPlatform->preparation(), &NkShot::RecordingPreparation::changed, this, &SpectacleCore::updateRecordingPreparationUi);
     connect(videoPlatform, &VideoPlatform::recordingStateChanged, this, [this, videoPlatform](VideoPlatform::RecordingState state) {
         if (state == VideoPlatform::RecordingState::Recording) {
+            m_recordingRestoreActive=false;
             static const auto recordingIcon = u":/icons/256-status-media-recording.webp"_s;
             static const auto recordingStartedIcon = u":/icons/256-status-media-recording-started.webp"_s;
             static const auto recordingPulseIcon = u":/icons/256-status-media-recording-pulse.webp"_s;
@@ -441,6 +452,7 @@ SpectacleCore::SpectacleCore(QObject *parent)
     });
     connect(videoPlatform, &VideoPlatform::recordingCanceled, this, [this] {
         m_recordingEventLoopLocker.reset();
+        if (restoreRecordingPreparation()) return;
         if (m_startMode != StartMode::Gui || !m_returnToViewer || isGuiNull()) {
             Q_EMIT allDone();
             return;
@@ -457,10 +469,13 @@ SpectacleCore::SpectacleCore(QObject *parent)
     });
     connect(videoPlatform, &VideoPlatform::recordingFailed, this, [this, onScreenshotOrRecordingFailed](const QString &message){
         m_recordingEventLoopLocker.reset();
+        restoreRecordingPreparation();
         auto uiMessage = i18nc("@info", "An error occurred while attempting to record the screen.");
         onScreenshotOrRecordingFailed(message, uiMessage, &SpectacleCore::dbusRecordingFailed);
     });
-    connect(videoPlatform, &VideoPlatform::regionRequested, this, [this] {
+    connect(videoPlatform, &VideoPlatform::regionRequested, this, [this](quint64 token) {
+        if (!m_videoPlatform->preparation()->isCurrent(token)) return;
+        m_pendingRegionToken=token;
         initCaptureWindows(CaptureWindow::Video);
         SpectacleWindow::setTitleForAll(SpectacleWindow::Unsaved);
         SpectacleWindow::setVisibilityForAll(QWindow::FullScreen);
@@ -815,6 +830,7 @@ SpectacleCore::~SpectacleCore() noexcept
     // the QML views before their shared engine and singleton models disappear.
     // Otherwise a still-live ComboBox can react to model destruction while the
     // engine is already tearing down its delegate model.
+    m_recordingCountdown.reset();
     delete static_cast<QObject *>(m_viewerWindow.release());
     for (auto &window : m_captureWindows) {
         delete static_cast<QObject *>(window.release());
@@ -892,6 +908,10 @@ qreal SpectacleCore::captureProgress() const
 
 void SpectacleCore::activate(const QStringList &arguments, const QString &workingDirectory)
 {
+    if (m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
+        && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) {
+        cancelPendingRecording();
+    }
     if (m_videoPlatform->isRecording()) {
         // BUG: https://bugs.kde.org/show_bug.cgi?id=481471
         // TODO: find a way to support screenshot shortcuts while recording?
@@ -1181,6 +1201,9 @@ void SpectacleCore::activate(const QStringList &arguments, const QString &workin
 
 void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode grabMode, int timeout, bool includePointer, bool includeDecorations, bool includeWindowShadow)
 {
+    if(m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
+        && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) cancelPendingRecording();
+    const auto captureEpoch=++m_captureEpoch;
     QuickNoteWindow::hideDraftsForCapture();
     // Clear when a new screenshot is taken to avoid overwriting
     // the previous file with a completely unrelated image.
@@ -1223,7 +1246,8 @@ void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode grabMode, int time
 
     if (noDelay) {
         SpectacleWindow::setVisibilityForAll(QWindow::Hidden);
-        QTimer::singleShot(timeout, this, [this]() {
+        QTimer::singleShot(timeout, this, [this,captureEpoch]() {
+            if(captureEpoch!=m_captureEpoch) return;
             m_imagePlatform->doGrab(ImagePlatform::ShutterMode::Immediate, m_lastGrabMode, m_lastIncludePointer, m_lastIncludeDecorations, m_lastIncludeShadow);
         });
         return;
@@ -1248,6 +1272,11 @@ void SpectacleCore::takeNewScreenshot(int captureMode, int timeout, bool include
 
 void SpectacleCore::cancelScreenshot()
 {
+    if(m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
+        && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) {
+        cancelPendingRecording();return;
+    }
+    ++m_captureEpoch;
     if (m_startMode != StartMode::Gui || !m_returnToViewer) {
         Q_EMIT allDone();
         return;
@@ -1479,6 +1508,8 @@ bool SpectacleCore::isGuiNull() const
 
 void SpectacleCore::initGuiNoScreenshot()
 {
+    if(m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
+        && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) cancelPendingRecording();
     initViewerWindow(ViewerWindow::Dialog);
     ViewerWindow::instance()->setVisible(true);
 }
@@ -1561,11 +1592,21 @@ void SpectacleCore::unityLauncherUpdate(const QVariantMap &properties) const
     QDBusConnection::sessionBus().send(message);
 }
 
-void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withPointer)
+void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withPointer, int startDelaySeconds)
 {
-    if (m_videoPlatform->isRecording() || mode == VideoPlatform::NoRecordingModes) {
+    if (m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
+        || m_videoPlatform->recordingState()==VideoPlatform::RecordingState::Rendering
+        || m_videoPlatform->isRecording() || mode == VideoPlatform::NoRecordingModes) {
         return;
     }
+    if(!m_videoPlatform->readyForRecording()) {
+        InlineMessageModel::instance()->push(InlineMessageModel::InformationalType,
+            i18nc("@info", "The previous recording is still finishing. Try again in a moment."));
+        return;
+    }
+    ++m_captureEpoch;
+    m_delayAnimation->stop();
+    snapshotRecordingPreparation();
     QuickNoteWindow::hideDraftsForCapture();
     const bool hasCaptureWindows = !CaptureWindow::instances().empty();
     if (hasCaptureWindows && mode != VideoPlatform::Region && !m_recordingEventLoopLocker) {
@@ -1580,12 +1621,13 @@ void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withP
     m_lastRecordingMode = mode;
     setVideoMode(true);
     const auto &output = m_outputUrl.isLocalFile() ? videoOutputUrl() : QUrl();
-    m_videoPlatform->startRecording(output, mode, {}, withPointer);
+    const int delay=m_startMode==StartMode::Gui ? startDelaySeconds : 0;
+    m_videoPlatform->startRecording(output, mode, {{QStringLiteral("startDelay"),delay}}, withPointer);
 }
 
 void SpectacleCore::finishRecording()
 {
-    Q_ASSERT(m_videoPlatform->isRecording());
+    if (!m_videoPlatform->isRecording()) { cancelPendingRecording();return; }
     m_videoPlatform->finishRecording();
 }
 
@@ -1644,6 +1686,10 @@ QString SpectacleCore::timeFromMilliseconds(qint64 milliseconds) const
 void SpectacleCore::activateAction(const QString &actionName, const QVariant &parameter)
 {
     Q_UNUSED(parameter)
+    if (m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
+        && m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Recording) {
+        cancelPendingRecording();
+    }
     m_startMode = StartMode::DBus;
     if (m_videoPlatform->isRecording()) {
         // BUG: https://bugs.kde.org/show_bug.cgi?id=481471
@@ -1671,3 +1717,70 @@ void SpectacleCore::activateAction(const QString &actionName, const QVariant &pa
 }
 
 #include "moc_SpectacleCore.cpp"
+
+void SpectacleCore::snapshotRecordingPreparation()
+{
+    m_recordingRestoreGeometry=m_viewerWindow ? m_viewerWindow->geometry() : QRect();
+    m_recordingRestoreVisibility=m_viewerWindow ? m_viewerWindow->visibility() : QWindow::Windowed;
+    m_recordingRestoreActive=true;
+    m_recordingRestoreVideoMode=m_videoMode;
+    m_recordingRestoreGui=m_startMode==StartMode::Gui;
+    m_recordingRestoreMode=m_viewerWindow ? m_viewerWindow->mode()
+        : (m_annotationDocument->baseImage().isNull() && !m_videoMode ? ViewerWindow::Dialog : ViewerWindow::Viewer);
+}
+
+bool SpectacleCore::restoreRecordingPreparation()
+{
+    if(!m_recordingRestoreActive) return false;
+    m_recordingRestoreActive=false;m_pendingRegionToken=0;
+    if(m_recordingCountdown) m_recordingCountdown->dismiss();
+    // Restoring an interrupted workflow is not a request to capture a new image.
+    // setVideoMode(false) intentionally captures for the live region-mode switch.
+    if (m_videoMode!=m_recordingRestoreVideoMode) {
+        m_videoMode=m_recordingRestoreVideoMode;
+        Q_EMIT videoModeChanged(m_videoMode);
+    }
+    if(!m_recordingRestoreGui) return false;
+    // A confirmed region has become an input-transparent recording outline.
+    // Never show those windows as the cancelled selection interface.
+    if(!m_captureWindows.empty() || !m_viewerWindow || m_viewerWindow->mode()!=m_recordingRestoreMode)
+        initViewerWindow(m_recordingRestoreMode);
+    if (m_recordingRestoreGeometry.isValid())
+        m_viewerWindow->setGeometry(m_recordingRestoreGeometry);
+    if (m_recordingRestoreVisibility==QWindow::Maximized) m_viewerWindow->showMaximized();
+    else if (m_recordingRestoreVisibility==QWindow::FullScreen) m_viewerWindow->showFullScreen();
+    else m_viewerWindow->showNormal();
+    m_viewerWindow->requestActivate();
+    return true;
+}
+
+void SpectacleCore::updateRecordingPreparationUi()
+{
+    using Prep=NkShot::RecordingPreparation;
+    const auto preparation=m_videoPlatform->preparation();
+    if(preparation->phase()==Prep::Countdown && m_recordingRestoreGui
+       && (preparation->remainingMilliseconds()>0 || (m_recordingCountdown && m_recordingCountdown->isVisible()))) {
+        if(!m_recordingCountdown) {
+            m_recordingCountdown=std::make_unique<RecordingCountdownWindow>(getQmlEngine());
+            connect(m_recordingCountdown.get(),&RecordingCountdownWindow::cancelRequested,this,&SpectacleCore::cancelPendingRecording);
+        }
+        if(m_recordingCountdown->status()!=QQuickView::Ready) { cancelPendingRecording();return; }
+        const auto seconds=int((preparation->remainingMilliseconds()+999)/1000);
+        if(!m_recordingCountdown->isVisible()) {
+            if(m_viewerWindow) m_viewerWindow->hide();
+            const QString description=m_lastRecordingMode==VideoPlatform::Region ? i18nc("@info", "Selected region")
+                : m_lastRecordingMode==VideoPlatform::Window ? i18nc("@info", "Selected window") : i18nc("@info", "Selected screen");
+            m_recordingCountdown->showCountdown(seconds,description);
+        } else m_recordingCountdown->updateRemaining(seconds);
+    } else if(m_recordingCountdown) {
+        // This direct notification happens before readyToStart queues any stream
+        // request. Actual compositor/frame timing remains a native acceptance gate.
+        m_recordingCountdown->dismiss();
+    }
+}
+
+void SpectacleCore::cancelPendingRecording()
+{
+    ++m_captureEpoch;
+    m_videoPlatform->cancelPendingRecording();
+}

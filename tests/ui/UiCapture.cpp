@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "UiCapture.h"
+#include "RecordingAdapterChecks.h"
+#include "RecordingPreparationUiChecks.h"
+#include <QJsonDocument>
+#include <QJsonObject>
 #include "Gui/ViewerWindow.h"
 #include "Gui/ScrollCaptureWindow.h"
 #include "Platforms/ScrollFrameKWin.h"
@@ -1218,6 +1222,16 @@ void installUiCaptureHook(QApplication &application)
             if (!viewer) {
                 application.exit(3);
                 return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_ADAPTER")) {
+                QJsonObject report; const bool ok=runRecordingAdapterChecks(&report);
+                qInfo().noquote()<<QJsonDocument(report).toJson(QJsonDocument::Compact);
+                application.exit(ok?0:221); return;
+            }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_RECORDING_PREPARATION")) {
+                QString failure; const bool ok=RecordingPreparationUiChecks::run(application,destination,&failure);
+                qInfo()<<"Recording preparation UI"<<ok<<failure;
+                application.exit(ok?0:222); return;
             }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_STARTUP")) { runStartupChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_COLOR")) { runScreenColorChecks(application, viewer, destination); return; }

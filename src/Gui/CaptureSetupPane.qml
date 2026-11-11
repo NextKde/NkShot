@@ -279,6 +279,24 @@ QQC.Pane {
                 Layout.fillWidth: true
                 visible: root.modeIndex === 1
                 spacing: 4
+                RowLayout {
+                    Layout.fillWidth: true
+                    QQC.Label { text: i18n("Start delay"); Layout.fillWidth: true }
+                    TargetSelect {
+                        objectName: "nkshotRecordingStartDelay"
+                        implicitWidth: 130
+                        model: [
+                            { display: i18n("No delay"), seconds: 0 },
+                            { display: i18n("3 seconds"), seconds: 3 },
+                            { display: i18n("5 seconds"), seconds: 5 },
+                            { display: i18n("10 seconds"), seconds: 10 }
+                        ]
+                        textRole: "display"
+                        valueRole: "seconds"
+                        currentIndex: Math.max(0, [0, 3, 5, 10].indexOf(root.settings.recordingStartDelay))
+                        onActivated: root.settings.recordingStartDelay = currentValue
+                    }
+                }
                 Option {
                     objectName: "nkshotSetupVideoPointer"
                     text: i18n("Include mouse pointer")

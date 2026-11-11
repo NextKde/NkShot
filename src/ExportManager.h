@@ -74,6 +74,7 @@ public:
      * The URL to record a video with before it is exported.
      */
     QUrl tempVideoUrl(const QString &filename);
+    QUrl tempVideoUrl(const QString &filename, const QString &extension, const QUrl &saveLocation);
 
     const QTemporaryDir *temporaryDir();
 

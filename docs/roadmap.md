@@ -18,6 +18,11 @@ The 075 startup redesign separates target selection from capture/recording and
 retains existing settings and cancellation. Its software UI validation is not a
 substitute for the native capture and recording release gates below.
 
+076 adds a post-selection recording countdown and cancellation/retry lifecycle
+gate. Ten adapter groups and five software Core UI scenarios passed; the full
+CTest suite passed on an isolated test bus. This does not close the native recording release gate. See [recording preparation](recording-preparation.md)
+for states, conservative partial-file cleanup and explicit evidence limits.
+
 ## Next substantive workflows
 
 1. **Rolling capture:** verify a fixed-region, manually scrolled capture session

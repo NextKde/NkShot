@@ -1962,3 +1962,74 @@ Reviewed real software-window captures:
 No private desktop/media or reference-app screenshots are included in this stage's
 captures. Real KDE capture/recording, device A/V, native color picking, window
 movement and compositor/GPU visuals remain unaccepted desktop gates.
+
+
+## 076 — Cancellable recording preparation after target selection
+
+The recording page adds one Start delay choice (0/3/5/10 seconds, default 0).
+GUI actions opt in explicitly; CLI and D-Bus calls retain immediate-start default.
+The delay begins only after the target is resolved. Countdown performs no output
+configuration, stream creation or audio start. Cancel/Esc returns to the original
+interactive Dialog/Viewer without changing image pixels, history, current video
+or clipboard. Recording time begins only when the recorder acknowledges Recording.
+
+Selecting, Countdown and Starting are distinct states. A producer already issued
+start must reach Idle before retry; late callbacks and old selection results
+cannot revive canceled attempts. Starting cancellation can leave a partial file
+in the private temporary folder. It never deletes an explicit output. Cleanup is
+not immediate or guaranteed: existing later-session cleanup may reclaim old
+unlocked temporary directories. This is not a promise of zero capture after
+producer startup.
+
+Review caught two concrete issues and added regressions: rebuilding a Viewer at
+its toolbar-only minimum lost the original content area, so restoration now saves
+geometry/visibility and tests actual loaded content; a retired recorder's queued
+error could reach a new Countdown, so Idle immediately retires its generation.
+
+Verified on the final software-rendered build:
+- 20/20 CTest targets on a real isolated test bus; 18/18 static checks and whitespace.
+- Ten real Wayland-adapter scenario groups with constructor-injected providers:
+  post-selection timing/zero early side effects, frozen settings, positive
+  Recording/Rendering/Idle/save-once/timing, cancellation/draining/retry, stale
+  selection and recorder callbacks, target/capability loss, path containment,
+  existing-file preservation, injected watchdog, and native KPipeWire
+  missing-configuration failure/Idle/destruction. These groups overlap concerns,
+  not ten successful native recordings.
+- Five real Core/QML scenarios: launch-only, existing synthetic image, existing
+  synthetic video, dark mode and 1.5× text. Button/Esc/close, zero-delay no-flash, original
+  window size/visible content, no unintended screenshots, readiness rejection,
+  cross-workflow cancellation and queued old-selection races passed.
+- Three actual startup UI scenarios: light, dark and 420×520. The real cloud
+  platform still reports recording unavailable and disables Start; no capability
+  was spoofed to obtain a screenshot.
+
+See [preparation contract](recording-preparation.md),
+[recording acceptance boundaries](recording-verification.md) and
+[reproduction](building.md#recording-preparation-tests-076). Native KWin target
+selection, first recorded frame excluding the countdown, compositor focus/hiding,
+GPU capture and device A/V remain unaccepted.
+
+Reviewed actual stage captures: [recording page](screenshots/076-recording-light.png),
+[dark](screenshots/076-recording-dark.png), [420×520](screenshots/076-recording-compact.png),
+[synthetic-selection countdown](screenshots/076-countdown-light.png),
+[dark countdown](screenshots/076-countdown-dark.png),
+[restored launcher](screenshots/076-restored-launcher.png),
+[restored synthetic image](screenshots/076-restored-image.png), and
+[restored synthetic video](screenshots/076-restored-video.png).
+These contain only generated test media or no media, never a private desktop.
+
+[Large-text countdown](screenshots/076-countdown-large-font.png) also passed the
+full Core cancellation/restoration flow without clipping Cancel.
+
+Independent review also passed 17 existing workbench flows, 18 external Gio
+portal/QML scenarios and 17 QtTest results from a separately built preparation
+probe. The final full CTest run again passed 20/20. One repeated export check
+correctly refused its prior test output; rerunning with a new filename passed,
+without overwriting the earlier artifact. This is test-fixture reuse, not an
+exception to the new-file-only export contract.
+
+Independent decoding of the final new-file MP4 again confirms 70 frames over
+3.5 seconds, source frames 25/94 and synthetic audio pulses at 0.75/1.75/2.75
+seconds; the source hash is unchanged. The final binary hash stayed identical
+through the independent regression runs. This validates local-file clipping,
+not native screen recording or device A/V synchronization.

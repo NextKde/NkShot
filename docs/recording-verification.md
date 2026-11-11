@@ -195,3 +195,29 @@ publication. Playback settings do not change the export.
 
 This is MP4-file-to-GIF creation, **not** native GIF capture, KWin/PipeWire acceptance,
 audio-device synchronization or GPU certification. See [scope](video-clips.md).
+
+## Post-selection preparation gate (076)
+
+[Recording preparation](recording-preparation.md) adds an actual pre-output,
+pre-stream countdown after target selection, not a timer painted over an already
+running recording. Selecting/Countdown/Starting do not count as recorded time;
+only an actual recorder Recording notification does. Cancellation invalidates
+attempt callbacks and retains an already-started producer's source until explicit
+Idle completion. Retry readiness includes that outstanding producer.
+
+The final integration build passed all three focused unit/fixture targets and
+all ten injected real-adapter scenario groups, including the positive
+Recording/Rendering/Idle and saved-once path. Core countdown UI passed five
+software-window scenarios: launch-only, existing image, existing video, dark
+appearance and 1.5× text. The full 20-target CTest suite passed on a dedicated private test bus.
+Restoration additionally checks original Viewer size and visible loaded content;
+old producer error/state signals after Idle are isolated from a new countdown.
+
+The injected adapter test uses the production Wayland orchestration and explicit
+fake providers, including a real three-second post-selection delay and a real
+40 ms injected Starting watchdog. A native-recorder bridge exercises patched
+KPipeWire failed-context/Cancel/Idle/retry/destruction with missing configuration,
+not a real server or device. Native compositor selection, hide/present/frame
+ordering, real recorded media, GPU/audio and A/V synchronization remain open.
+Starting cancellation may retain a private partial temporary file; cleanup is
+neither immediate nor guaranteed, and explicit user output is not deleted.

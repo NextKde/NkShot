@@ -99,6 +99,12 @@
         <label>Whether the mouse cursor is included in the screenshot</label>
         <default>false</default>
     </entry>
+    <entry name="recordingStartDelay" type="Int">
+        <label>Delay after choosing a recording target, in seconds.</label>
+        <default>0</default>
+        <min>0</min>
+        <max>10</max>
+    </entry>
     <entry name="videoIncludePointer" type="Bool">
         <label>Whether the mouse cursor is included in the video</label>
         <default>true</default>

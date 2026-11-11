@@ -45,7 +45,7 @@ RecordingModeMenu::RecordingModeMenu(QWidget *parent)
             }
             action->setShortcuts(globalShortcuts(globalAction));
             auto onTriggered = [mode] {
-                SpectacleCore::instance()->startRecording(mode);
+                SpectacleCore::instance()->startRecording(mode, Settings::videoIncludePointer(), Settings::recordingStartDelay());
             };
             connect(action, &QAction::triggered, action, onTriggered);
         }

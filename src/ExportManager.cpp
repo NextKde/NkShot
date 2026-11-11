@@ -153,9 +153,12 @@ QUrl ExportManager::getAutosaveFilename() const
 
 QUrl ExportManager::tempVideoUrl(const QString &filename)
 {
-    const auto format = static_cast<VideoPlatform::Format>(Settings::preferredVideoFormat());
-    auto extension = VideoPlatform::extensionForFormat(format);
-    QString baseDir = defaultVideoSaveLocation();
+    return tempVideoUrl(filename,VideoPlatform::extensionForFormat(static_cast<VideoPlatform::Format>(Settings::preferredVideoFormat())),Settings::videoSaveLocation());
+}
+
+QUrl ExportManager::tempVideoUrl(const QString &filename, const QString &extension, const QUrl &saveLocation)
+{
+    QString baseDir = saveLocation.isLocalFile() ? saveLocation.toLocalFile() : defaultVideoSaveLocation();
     const QDir baseDirPath(baseDir);
     QString filepath = autoIncrementFilename(baseDirPath.filePath(filename), extension, &ExportManager::isFileExists);
 

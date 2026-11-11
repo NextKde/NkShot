@@ -20,7 +20,7 @@ add_executable(spectacle)
 if(NKSHOT_ENABLE_UI_CAPTURE)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     target_link_libraries(spectacle PRIVATE Qt::Test)
-    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp)
+    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp ../tests/ui/RecordingAdapterChecks.cpp ../tests/ui/RecordingPreparationUiChecks.cpp)
     target_include_directories(spectacle PRIVATE ${PROJECT_SOURCE_DIR}/tests/ui)
     target_compile_definitions(spectacle PRIVATE NKSHOT_ENABLE_UI_CAPTURE=1)
 endif()
@@ -51,6 +51,8 @@ target_sources(spectacle PRIVATE
     Gui/QuickNoteWindow.h
     Platforms/ScreenColorPicker.cpp
     Platforms/ScreenColorPicker.h
+    Gui/RecordingCountdownWindow.cpp
+    Gui/RecordingCountdownWindow.h
     Gui/ColorPickerWindow.cpp
     Gui/ColorPickerWindow.h
     Imaging/ColorSample.cpp
@@ -92,6 +94,11 @@ target_sources(spectacle PRIVATE
     Platforms/PlatformLoader.cpp
     Platforms/PlatformNull.cpp
     Platforms/screencasting.cpp
+    RecordingPreparation.cpp
+    RecordingPreparation.h
+    Platforms/RecordingBackend.cpp
+    Platforms/RecordingBackend.h
+    Platforms/RecordingStartGuard.h
     Platforms/VideoPlatform.cpp
     Platforms/VideoPlatformWayland.cpp
     RecordingModeModel.cpp
@@ -199,6 +206,7 @@ qt_target_qml_sources(spectacle
     Gui/CopyLocationAction.qml
     Gui/DashedOutline.qml
     Gui/DelaySpinBox.qml
+    Gui/RecordingCountdown.qml
     Gui/CaptureSetupPane.qml
     Gui/DialogPage.qml
     Gui/EditAction.qml

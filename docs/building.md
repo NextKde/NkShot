@@ -145,3 +145,43 @@ Iteration 075 adds `startup_setup_test` (Qt Test/Quick plus the existing
 The full development CTest suite now contains 18 tests. The standalone setup
 fixture injects models/settings only; production still uses SpectacleCore and
 the platform models. See [startup UI reproduction](../tests/ui/README.md#startup-workflow-075).
+
+## Recording preparation tests (076)
+
+No new runtime library is introduced. `RecordingPreparation` and
+`RecordingStartGuard` use QtCore; the existing opt-in UI harness links QtTest to
+exercise the real Wayland adapter through explicit dependency injection. Native
+wrappers still use the documented KPipeWire/Screencasting dependencies and patch.
+There is no production environment-based capability override.
+
+```sh
+cmake --build build --target recording_preparation_test recording_start_guard_test startup_setup_test
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  ctest --test-dir build \
+  -R '^(recording_preparation_test|recording_start_guard_test|startup_setup_test)$' \
+  --output-on-failure
+```
+
+With `NKSHOT_ENABLE_UI_CAPTURE` enabled, run the real-adapter checks separately
+from countdown UI checks, each with a fresh test configuration:
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  XDG_CONFIG_HOME="$(mktemp -d)" NKSHOT_TEST_RECORDING_ADAPTER=1 \
+  NKSHOT_TEST_UI_CAPTURE=/tmp/recording-adapter.png \
+  build/bin/nkshot --new-instance --launchonly
+
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  XDG_CONFIG_HOME="$(mktemp -d)" NKSHOT_TEST_RECORDING_PREPARATION=1 \
+  NKSHOT_TEST_UI_CAPTURE=/tmp/recording-preparation.png \
+  build/bin/nkshot --new-instance --launchonly
+```
+
+The adapter emits a JSON pass/failure report; failed assertions are not skips.
+Its missing-config native-recorder case scopes and restores the two PipeWire
+configuration variables and must not use live user devices. Run only one build
+process at a time. The prior 18-test total described under 075 is historical;
+076 adds two CTest targets. The final build passed three focused targets, ten adapter groups and five Core
+UI scenarios (launch-only/image/video/dark/1.5× text). The complete 20-target CTest suite passed with a dedicated private bus.
+ScreenColorPickerTest deliberately refuses to run without NKSHOT_TEST_PRIVATE_BUS
+and a real isolated bus; merely setting the flag is not a substitute for isolation.

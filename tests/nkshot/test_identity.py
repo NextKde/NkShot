@@ -155,12 +155,12 @@ class IdentityTests(unittest.TestCase):
 
     def test_recording_output_precedes_capture_stream(self):
         source = read('src/Platforms/VideoPlatformWayland.cpp')
-        start = source[source.index('auto startRecordingTask ='):source.index('void VideoPlatformWayland::finishRecording()')]
+        start = source[source.index('void VideoPlatformWayland::commitRecording'):source.index('void VideoPlatformWayland::finishRecording()')]
         stream = start.index('m_screencasting->createOutputStream')
         # Structural boundary, not a claim of real compositor execution.
         for marker in ['m_recorder->setOutput(QString())', 'mkDirPath(tempUrl)',
                        'mkDirPath(fileUrl)', 'm_recorder->setOutput(localFile)',
-                       'setRecordMicrophone(Settings::videoRecordMicrophone() && audioSupported)']:
+                       'setRecordMicrophone(m_requestMicrophone && audioSupported)']:
             self.assertLess(start.index(marker), stream)
         self.assertEqual(start.count('encoder == Encoder::NoEncoder'), 2)
         self.assertIn('if (!stream)', start)
@@ -168,18 +168,20 @@ class IdentityTests(unittest.TestCase):
     def test_recording_callbacks_are_scoped_and_connected_once(self):
         source = read('src/Platforms/VideoPlatformWayland.cpp')
         initialize = source[source.index('void VideoPlatformWayland::initialize()'):source.index('VideoPlatform::RecordingModes VideoPlatformWayland::supportedRecordingModes')]
-        start = source[source.index('auto startRecordingTask ='):source.index('void VideoPlatformWayland::failRecording')]
-        self.assertEqual(source.count('&PipeWireRecord::stateChanged'), 1)
-        self.assertEqual(source.count('&PipeWireRecord::errorFound'), 1)
-        self.assertIn('&PipeWireRecord::stateChanged', initialize)
-        self.assertIn('&PipeWireRecord::errorFound', initialize)
+        start = source[source.index('void VideoPlatformWayland::commitRecording'):source.index('void VideoPlatformWayland::failRecording')]
+        self.assertEqual(source.count('&NkShot::RecordingRecorder::stateChanged'), 1)
+        self.assertEqual(source.count('&NkShot::RecordingRecorder::errorFound'), 1)
+        self.assertIn('&NkShot::RecordingRecorder::stateChanged', initialize)
+        self.assertIn('&NkShot::RecordingRecorder::errorFound', initialize)
         self.assertEqual(start.count('m_streamLease.accepts(stream,generation)'), 3)
-        self.assertIn('Qt::QueuedConnection', start)
+        self.assertIn('Qt::QueuedConnection', source)
         self.assertIn('if (m_attemptFailed)', initialize)
-        self.assertIn('m_startPending ||', start)
+        self.assertIn('!m_startGuard.allowsNewAttempt()', source)
         self.assertIn('!m_stopRequested && state == PipeWireRecord::Recording', initialize)
-        self.assertIn('if(epoch!=m_startEpoch) return;', start)
-        self.assertIn('if(selectionEpoch!=m_startEpoch) return;', source)
+        self.assertIn('preparation()->isCurrent(token)', start)
+        selection = source[source.index('void VideoPlatformWayland::selectAndRecord'): ]
+        self.assertIn('preparation()->isCurrent(token)', selection)
+        self.assertIn('m_recorderGeneration', initialize)
 
 
 if __name__ == '__main__':

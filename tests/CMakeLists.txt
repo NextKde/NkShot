@@ -5,6 +5,8 @@ SET(FILENAME_TEST_SRCS
     ../src/ShortcutActions.cpp
     ../src/ExportManager.cpp
     ../src/Platforms/ImagePlatform.cpp
+    ../src/RecordingPreparation.cpp
+    ../src/RecordingPreparation.h
     ../src/Platforms/VideoPlatform.cpp
 )
 
@@ -139,3 +141,9 @@ target_compile_definitions(startup_setup_test PRIVATE
     STARTUP_PANE_PATH="${PROJECT_SOURCE_DIR}/src/Gui/CaptureSetupPane.qml")
 set_tests_properties(startup_setup_test PROPERTIES TIMEOUT 60
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+
+# Post-selection recording preparation timing and producer lifetime contracts.
+ecm_add_test(RecordingPreparationTest.cpp ../src/RecordingPreparation.cpp ../src/RecordingPreparation.h
+    TEST_NAME recording_preparation_test LINK_LIBRARIES Qt::Test Qt::Core)
+ecm_add_test(RecordingStartGuardTest.cpp TEST_NAME recording_start_guard_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(recording_preparation_test recording_start_guard_test PROPERTIES TIMEOUT 30)

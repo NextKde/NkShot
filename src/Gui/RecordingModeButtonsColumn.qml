@@ -21,7 +21,7 @@ ColumnLayout {
             topPadding: Kirigami.Units.mediumSpacing
             bottomPadding: Kirigami.Units.mediumSpacing
             text: model.display
-            onClicked: SpectacleCore.startRecording(model.recordingMode, Settings.videoIncludePointer)
+            onClicked: SpectacleCore.startRecording(model.recordingMode, Settings.videoIncludePointer, Settings.recordingStartDelay)
         }
     }
 }
