@@ -137,3 +137,11 @@ CTest runs them through dbus-run-session when that tool is available. In isolate
 build roots without it, supply a dedicated private test bus and explicitly set
 NKSHOT_TEST_PRIVATE_BUS=1; absence is a test failure, not a silent skip.
 The test executable's --fake mode is only a test service, not production code.
+
+### Startup presentation tests
+
+Iteration 075 adds `startup_setup_test` (Qt Test/Quick plus the existing
+`KF6::I18nQml` and Kos.Ui dependencies). No new runtime package is required.
+The full development CTest suite now contains 18 tests. The standalone setup
+fixture injects models/settings only; production still uses SpectacleCore and
+the platform models. See [startup UI reproduction](../tests/ui/README.md#startup-workflow-075).

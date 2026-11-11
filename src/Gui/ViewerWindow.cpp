@@ -40,6 +40,7 @@
 #include <QFile>
 #include <QMimeData>
 #include <QShortcut>
+#include <QScreen>
 
 using namespace Qt::StringLiterals;
 
@@ -315,19 +316,13 @@ void ViewerWindow::setMode(ViewerWindow::Mode mode)
         if (!rootItem) {
             return;
         }
-        const QSize implicitSize = {qRound(rootItem->implicitWidth()), qRound(rootItem->implicitHeight())};
-        setMinimumSize(implicitSize);
-        setMaximumSize(implicitSize);
-        connect(rootItem, &QQuickItem::implicitWidthChanged, this, [this]() {
-            int implicitWidth = qRound(rootObject()->implicitWidth());
-            setMinimumWidth(implicitWidth);
-            setMaximumWidth(implicitWidth);
-        });
-        connect(rootItem, &QQuickItem::implicitHeightChanged, this, [this]() {
-            int implicitHeight = qRound(rootObject()->implicitHeight());
-            setMinimumHeight(implicitHeight);
-            setMaximumHeight(implicitHeight);
-        });
+        // The setup page scrolls its options instead of changing the window's
+        // size whenever a group expands or platform capabilities change.
+        setMaximumSize(QSize(16777215, 16777215));
+        updateMinimumSize();
+        connect(rootItem, SIGNAL(minimumWidthChanged()), this, SLOT(updateMinimumSize()));
+        connect(rootItem, SIGNAL(minimumHeightChanged()), this, SLOT(updateMinimumSize()));
+        resize(QSize(480, 440).expandedTo(minimumSize()).boundedTo(screen()->availableGeometry().size()));
     } else if (mode == Viewer) {
         setBackgroundColorRole(QPalette::Base);
         QVariantMap initialProperties = {// Set the parent in initialProperties to avoid having

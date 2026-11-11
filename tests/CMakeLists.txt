@@ -131,3 +131,11 @@ else()
     add_test(NAME screen_color_picker_test COMMAND screen_color_picker_test)
 endif()
 set_tests_properties(screen_color_picker_test PROPERTIES TIMEOUT 45)
+
+# Production startup QML, synthetic capability/settings fixtures, no desktop capture.
+ecm_add_test(StartupSetupTest.cpp TEST_NAME startup_setup_test
+    LINK_LIBRARIES Qt::Test Qt::Quick Qt::Qml KF6::I18n KF6::I18nQml Kos::Ui Kos::UiPlugin)
+target_compile_definitions(startup_setup_test PRIVATE
+    STARTUP_PANE_PATH="${PROJECT_SOURCE_DIR}/src/Gui/CaptureSetupPane.qml")
+set_tests_properties(startup_setup_test PROPERTIES TIMEOUT 60
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")

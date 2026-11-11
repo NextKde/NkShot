@@ -108,7 +108,10 @@ int main(int argc, char **argv)
         // fire it up
         spectacleCore->activate(app.arguments(), QDir::currentPath());
 
-        return app.exec();
+        const int result = app.exec();
+        // Release QML views/engine while QApplication's GUI services still exist.
+        delete spectacleCore;
+        return result;
     }
 
     // With the StartupOption::Unique flag, this process will exit during the construction of
@@ -148,5 +151,8 @@ int main(int argc, char **argv)
     // fire it up
     spectacleCore->activate(app.arguments(), QDir::currentPath());
 
-    return app.exec();
+    const int result = app.exec();
+    // The unique-instance path has the same GUI teardown ordering.
+    delete spectacleCore;
+    return result;
 }

@@ -82,6 +82,7 @@ int RecordingModeModel::indexOfRecordingMode(VideoPlatform::RecordingMode mode) 
 void RecordingModeModel::setRecordingModes(VideoPlatform::RecordingModes modes)
 {
     auto count = m_data.size();
+    beginResetModel();
     m_data.clear();
     if (modes & VideoPlatform::Region) {
         m_data.append({VideoPlatform::Region, recordingModeLabel(VideoPlatform::Region)});
@@ -92,6 +93,7 @@ void RecordingModeModel::setRecordingModes(VideoPlatform::RecordingModes modes)
     if (modes & VideoPlatform::Window) {
         m_data.append({VideoPlatform::Window, recordingModeLabel(VideoPlatform::Window)});
     }
+    endResetModel();
     Q_EMIT recordingModesChanged();
     if (count != m_data.size()) {
         Q_EMIT countChanged();

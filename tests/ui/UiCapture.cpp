@@ -25,6 +25,8 @@
 #include <QtTest/QTest>
 #include <QtTest/QSignalSpy>
 #include "SpectacleCore.h"
+#include "CaptureModeModel.h"
+#include "RecordingModeModel.h"
 #include <KQuickImageEditor/AnnotationDocument>
 #include <KQuickImageEditor/AnnotationTool>
 
@@ -52,6 +54,7 @@
 #include <QPalette>
 #include <QPainter>
 #include <QQuickItem>
+#include <QJSValue>
 #include <QTimer>
 #include <cstring>
 
@@ -93,6 +96,138 @@ static bool samePixels(const QImage &a, const QImage &b)
 }
 
 
+
+static void runStartupChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
+{
+    const auto fail = [&](const char *reason) { qCritical() << "Startup UI:" << reason; viewer->close(); application.exit(255); };
+    auto core = SpectacleCore::instance();
+    if (!core->annotationDocument()->baseImage().isNull() || core->videoMode()) { fail("requires launchonly empty state"); return; }
+    auto pane = viewer->rootObject()->findChild<QObject *>(QStringLiteral("nkshotSetupPane"));
+    if (!pane) { fail("setup pane missing"); return; }
+    const auto control = [&](const char *name) { return visualItem(viewer->contentItem(), QString::fromLatin1(name)); };
+    const auto click = [&](const char *name) {
+        auto item = control(name); if (!item || !item->isVisible() || !item->isEnabled()) return false;
+        for (auto ancestor=item->parentItem(); ancestor; ancestor=ancestor->parentItem()) {
+            if (ancestor->property("contentY").isValid() && ancestor->property("contentHeight").isValid()) {
+                const auto point=item->mapToItem(ancestor,QPointF(item->width()/2,item->height()/2));
+                const auto maxY=qMax(0.,ancestor->property("contentHeight").toDouble()-ancestor->height());
+                ancestor->setProperty("contentY",qBound(0.,ancestor->property("contentY").toDouble()+point.y()-ancestor->height()/2,maxY));
+            }
+        }
+        QTest::qWait(50);
+        QTest::mouseClick(viewer,Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());
+        QTest::qWait(80); return true;
+    };
+    const auto capture = [&] (const QString &suffix) { QTest::qWait(200); return viewer->grabWindow().save(destination+suffix); };
+    const auto heading = control("nkshotSetupAreaHeading");
+    if (!heading) { fail("area heading");return; }
+    qInfo() << "Startup resolved heading font" << heading->property("font").value<QFont>().family()
+            << QFontInfo(heading->property("font").value<QFont>()).family()
+            << "application" << QFontInfo(application.font()).family();
+    const auto originalPointer=Settings::includePointer();
+    const auto originalDecorations=Settings::includeDecorations();
+    const auto originalShadow=Settings::includeShadow();
+    const auto originalQuit=Settings::quitAfterSaveCopyExport();
+    const auto originalDelay=Settings::captureDelay();
+    const auto originalClick=Settings::captureOnClick();
+    const auto originalMode=Settings::captureMode();
+    const auto originalVideo=core->currentVideo();
+    const auto originalMic=Settings::videoRecordMicrophone();
+    application.clipboard()->setText(QStringLiteral("startup unchanged"));
+    auto restore=qScopeGuard([&] {
+        Settings::setIncludePointer(originalPointer);Settings::setIncludeDecorations(originalDecorations);
+        Settings::setIncludeShadow(originalShadow);Settings::setQuitAfterSaveCopyExport(originalQuit);
+        Settings::setCaptureDelay(originalDelay);Settings::setCaptureOnClick(originalClick);Settings::setCaptureMode(originalMode);Settings::setVideoRecordMicrophone(originalMic);
+    });
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_STARTUP_ERROR")) {
+        InlineMessageModel::instance()->push(InlineMessageModel::Error, QStringLiteral("Synthetic layout check: no screen was captured."));
+        QTest::qWait(500);
+    }
+    if (!capture(QString())) { fail("initial screenshot"); return; }
+    auto target=control("nkshotCaptureTarget");
+    const auto modelObject = [](const QVariant &value) {
+        return value.canConvert<QJSValue>() ? value.value<QJSValue>().toQObject() : value.value<QObject *>();
+    };
+    auto captureModel=qobject_cast<CaptureModeModel *>(modelObject(pane->property("captureModes")));
+    auto recordingModel=qobject_cast<RecordingModeModel *>(modelObject(pane->property("recordingModes")));
+    if (!captureModel || !recordingModel) { fail("actual QML model instances");return; }
+    if (!target || target->property("count").toInt()!=captureModel->rowCount()) { fail("full production target model");return; }
+    if (target->property("count").toInt()>1) {
+        if (!click("nkshotCaptureTarget")) { fail("target open");return; }
+        QTest::keyClick(viewer,Qt::Key_End);QTest::keyClick(viewer,Qt::Key_Return);QTest::qWait(100);
+        if (Settings::captureMode()!=target->property("currentValue").toInt()) { fail("selection persistence");return; }
+    }
+    if (!click("nkshotSetupPointer") || Settings::includePointer()==originalPointer) { fail("pointer toggle");return; }
+    if (control("nkshotSetupDelay")->isEnabled()) {
+        if (!click("nkshotSetupDelay")) { fail("delay reachable");return; }
+        auto editor=control("nkshotSetupDelay")->property("contentItem").value<QQuickItem *>();
+        if (!editor) { fail("delay editor");return; }
+        editor->forceActiveFocus();QTest::keyClick(viewer,Qt::Key_A,Qt::ControlModifier);
+        for(const char character: QByteArrayLiteral("1.25"))QTest::keyClick(viewer,character);
+        QTest::keyClick(viewer,Qt::Key_Return);QTest::qWait(100);
+        if (qAbs(Settings::captureDelay()-1.25)>0.001) {fail("decimal delay persisted");return;}
+    }
+    auto advanced=control("nkshotSetupAdvanced");
+    if (!advanced) {fail("advanced disclosure");return;}
+    advanced->forceActiveFocus();QTest::keyClick(viewer,Qt::Key_Space);QTest::qWait(100);
+    const QSize stableSize=viewer->size();
+    if (!control("nkshotSetupDecorations")->isVisible() || !click("nkshotSetupDecorations")) { fail("keyboard disclosure/options");return; }
+    if (control("nkshotSetupShadow")->isEnabled()!=Settings::includeDecorations() || Settings::includeShadow()!=originalShadow) { fail("shadow dependency");return; }
+    if (!click("nkshotSetupQuit") || Settings::quitAfterSaveCopyExport()==originalQuit || viewer->size()!=stableSize) { fail("quit preference/stable size");return; }
+    capture(QStringLiteral(".options.png"));
+    if (!click("nkshotSetupRecordingTab") || pane->property("modeIndex").toInt()!=1) {fail("recording tab");return;}
+    const bool supported=core->videoPlatform()->supportedRecordingModes()!=VideoPlatform::NoRecordingModes;
+    if (!supported && control("nkshotSetupPrimary")->isEnabled()) {fail("unsupported recording start");return;}
+    auto microphone=control("nkshotSetupMicrophone");
+    if (microphone && microphone->isEnabled()) {
+        if (!click("nkshotSetupMicrophone") || Settings::videoRecordMicrophone()==originalMic) {fail("microphone preference reachable");return;}
+    }
+    qInfo()<<"Startup real platform recording available:"<<supported;
+    capture(QStringLiteral(".recording.png"));
+    if (!click("nkshotSetupScreenshotTab")) {fail("screenshot return");return;}
+    // Exercise actual QAbstractItemModel notifications with same-count replacements.
+    // This alters only UI models, never platform capabilities or capture backends.
+    const auto oldGrab=core->imagePlatform()->supportedGrabModes();
+    const auto oldRecording=core->videoPlatform()->supportedRecordingModes();
+    auto restoreModels=qScopeGuard([&] { captureModel->setGrabModes(oldGrab);recordingModel->setRecordingModes(oldRecording); });
+    QSignalSpy captureReset(captureModel,&QAbstractItemModel::modelReset);
+    QSignalSpy recordingReset(recordingModel,&QAbstractItemModel::modelReset);
+    captureModel->setGrabModes(ImagePlatform::AllScreens);QTest::qWait(80);
+    captureModel->setGrabModes(ImagePlatform::ActiveWindow);QTest::qWait(80);
+    if (captureReset.size()!=2 || target->property("count").toInt()!=1 || target->property("currentValue").toInt()!=CaptureModeModel::ActiveWindow) {qWarning()<<captureModel<<captureModel->rowCount()<<pane->property("captureModes")<<captureReset.size()<<target->property("count")<<target->property("currentValue")<<target->property("currentIndex");fail("same-count capture reset");return;}
+    recordingModel->setRecordingModes(VideoPlatform::Screen);QTest::qWait(80);
+    recordingModel->setRecordingModes(VideoPlatform::Window);QTest::qWait(80);
+    if (recordingReset.size()!=2 || control("nkshotRecordingTarget")->property("currentValue").toInt()!=VideoPlatform::Window) {fail("same-count recording reset");return;}
+    restoreModels.dismiss();captureModel->setGrabModes(oldGrab);recordingModel->setRecordingModes(oldRecording);QTest::qWait(80);
+    if (core->imagePlatform()->supportedShutterModes().testFlag(ImagePlatform::Immediate)) {
+        Settings::setCaptureOnClick(false);Settings::setCaptureDelay(99);
+        if (!click("nkshotSetupPrimary") || !QTest::qWaitFor([&]{return core->captureTimeRemaining()>90000;},1500)) {fail("real Core countdown dispatch");return;}
+        // Cancel more than 90 seconds before the backend's scheduled doGrab.
+        viewer->showNormal();viewer->requestActivate();QTest::qWait(150);
+        capture(QStringLiteral(".countdown.png"));
+        const auto cancel = control("nkshotSetupCancel");
+        const auto more = control("nkshotStartupMore");
+        const QRectF windowBounds(QPointF(),viewer->size());
+        if (!cancel || !more || control("nkshotSetupPrimary")->isVisible()
+            || !windowBounds.contains(cancel->mapRectToScene(QRectF(0,0,cancel->width(),cancel->height())))
+            || !windowBounds.contains(more->mapRectToScene(QRectF(0,0,more->width(),more->height())))) {fail("countdown cancel outside window");return;}
+        if (!click("nkshotSetupRecordingTab") || !click("nkshotSetupCancel")
+            || !QTest::qWaitFor([&]{return core->captureTimeRemaining()==0;},1000)) {fail("real Core countdown cancellation");return;}
+        QTest::qWait(100);
+        if (!click("nkshotSetupScreenshotTab")) {fail("return after countdown");return;}
+        qInfo()<<"Startup actual Core 99-second countdown started and cancelled before doGrab";
+    }
+    if (!click("nkshotStartupMore")) {fail("more entry");return;}
+    QTest::keyClick(viewer,Qt::Key_Escape);QTest::qWait(100);
+    if (application.clipboard()->text()!=QStringLiteral("startup unchanged") || !core->annotationDocument()->baseImage().isNull()
+        || core->currentVideo()!=originalVideo || core->captureTimeRemaining()!=0) {fail("state isolation");return;}
+    qInfo()<<"Startup real QML tabs/target/settings/keyboard/disclosure/no-capability/model reset/state isolation passed";
+    Settings::setIncludePointer(originalPointer);Settings::setIncludeDecorations(originalDecorations);
+    Settings::setIncludeShadow(originalShadow);Settings::setQuitAfterSaveCopyExport(originalQuit);
+    Settings::setCaptureDelay(originalDelay);Settings::setCaptureOnClick(originalClick);Settings::setCaptureMode(originalMode);Settings::setVideoRecordMicrophone(originalMic);
+    restore.dismiss();QTest::qWait(100);
+    viewer->close();QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);application.exit(0);
+}
 
 static void runScreenColorChecks(QApplication &application, ViewerWindow *viewer, const QString &destination)
 {
@@ -922,6 +1057,15 @@ void installUiCaptureHook(QApplication &application)
         application.setAttribute(Qt::AA_DontUseNativeDialogs);
     }
 
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_STARTUP_RTL")) {
+        application.setLayoutDirection(Qt::RightToLeft);
+    }
+    if (qEnvironmentVariableIsSet("NKSHOT_TEST_STARTUP_LARGE_FONT")) {
+        auto font = application.font();
+        font.setPointSizeF(font.pointSizeF() * 1.5);
+        application.setFont(font);
+    }
+
     if (qEnvironmentVariableIsSet("NKSHOT_TEST_DARK")) {
         // Supply a dark desktop palette to the real controls in offscreen tests.
         // This tests palette adaptation without requiring a running desktop.
@@ -1049,7 +1193,7 @@ void installUiCaptureHook(QApplication &application)
             document->tool()->setType(AnnotationTool::SelectTool);
             document->selectItem({90, 90, 270, 180});
         }
-        const auto dimensions = qEnvironmentVariable("NKSHOT_TEST_UI_SIZE", QStringLiteral("960x660")).split(u'x');
+        const auto dimensions = qEnvironmentVariable("NKSHOT_TEST_UI_SIZE", qEnvironmentVariableIsSet("NKSHOT_TEST_STARTUP") ? QStringLiteral("480x440") : QStringLiteral("960x660")).split(u'x');
         if (dimensions.size() == 2) {
             const int width = dimensions[0].toInt();
             const int height = dimensions[1].toInt();
@@ -1075,6 +1219,7 @@ void installUiCaptureHook(QApplication &application)
                 application.exit(3);
                 return;
             }
+            if (qEnvironmentVariableIsSet("NKSHOT_TEST_STARTUP")) { runStartupChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_SCREEN_COLOR")) { runScreenColorChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORD_SCROLL")) { runWordScrollChecks(application, viewer, destination); return; }
             if (qEnvironmentVariableIsSet("NKSHOT_TEST_PIN_WORDS")) { runInlineTextChecks(application, viewer, destination); return; }

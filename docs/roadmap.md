@@ -14,6 +14,10 @@ transforms and actual local media playback. This is not a release-tested product
 See [iterations](iterations.md), [building](building.md) and
 [recording boundaries](recording-verification.md) for exact evidence/limits.
 
+The 075 startup redesign separates target selection from capture/recording and
+retains existing settings and cancellation. Its software UI validation is not a
+substitute for the native capture and recording release gates below.
+
 ## Next substantive workflows
 
 1. **Rolling capture:** verify a fixed-region, manually scrolled capture session

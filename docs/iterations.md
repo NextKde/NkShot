@@ -1887,3 +1887,78 @@ Real KDE/OpenGL selection, native cancellation/focus, Wayland handle lifecycle,
 multiple monitors/mixed DPI, HDR and display-profile accuracy remain unverified.
 This stage does not certify capture or recording. See [protocol and scope](screen-color-picker.md)
 and [reproduction](../tests/ui/README.md#desktop-portal-color-picking-074).
+
+## 075 — Compact screenshot and recording setup, with safe shutdown
+
+Replaced the fixed two-column action-button grid with a single setup hierarchy:
+Screenshot/Recording, a model-driven target selector, common options, discoverable
+additional options and one primary action. Countdown Cancel replaces that action
+and remains available across tabs. Configure, Help, Preferences and the independent
+074 color picker remain accessible. Recording unavailability is explained and
+Start stays disabled; no backend capability is faked for screenshots.
+
+The design was compared against actual NkNotes/NkMail windows, the NextKde demo
+Settings/Gallery sources and its published real Gallery evidence. Content remains
+ordinary solid surfaces rather than a card wall or per-control glass. Dark-mode
+controls, RTL arrow spacing, keyboard focus and larger text were reviewed. The
+window is resizable, normally 480×440; minimum width is 360 and minimum height
+reserves scrolling room according to the font and error banner. Expanding options
+does not change the minimum. A bounded, scrollable message area keeps errors and
+Cancel available rather than forcing everything into an unusably small viewport.
+
+All existing settings/dependencies and target modes are retained; see the
+[complete behavior map](startup-workflow.md). The mode models now notify standard
+model resets, including equal-count changes. The UI follows external screenshot
+mode changes and retains dynamic shortcut descriptions. Translation continues
+through KI18n, not an uninstalled Qt translator.
+
+Testing exposed a real normal-exit crash, also reproduced using a plain launch-only
+window without interaction. Deferred window deletion left selectors alive while
+the QML engine destroyed their models; Core was additionally deleted after GUI
+services during QApplication teardown. Normal exit now synchronously releases
+owned views before their engine, and both executable paths destroy Core while
+QApplication still exists. Runtime deferred window replacement is unchanged.
+
+Verified locally:
+- Final compile/link succeeds without new compiler warnings.
+- Full CTest **18/18**, including **10/10** setup-fixture results; static checks
+  **18/18** and whitespace checks pass.
+- Eight real-window UI scenarios pass: light, dark, 420×520, 360×480, larger font,
+  minimum-size/larger font, RTL, and minimum-size/larger font with a clearly
+  synthetic error. Each uses a fresh configuration directory.
+- Actual target selection, decimal Delay editing, option dependencies, disclosure,
+  microphone preference scrolling, same-count production model replacement and
+  clipboard/document/video isolation pass. Synthetic fixtures separately cover
+  available recording dispatch and unsupported-format preference retention.
+- The real Core starts a 99-second countdown from the actual primary button; the
+  test restores the minimized window and cancels after switching tabs, well before
+  any scheduled grab. This does not establish screenshot backend acceptance.
+- Plain launch-only exits pass both new-instance and unique-instance paths. The
+  final logs contain no QML binding/type/reference errors or former GUI-lifetime
+  shutdown warnings. Font inspection resolves the heading and application font
+  to the same system sans-serif family; no test font is hard-coded in production.
+
+Independent final-binary verification also passes **17 older-workflow baselines**
+and **18 Gio real-DBus/QML cases**, including the launch-only color-picker entry
+and late actual-handle cleanup. Independent MP4 decoding again confirms 70 frames
+in 3.5 seconds, source frames 25/94, audio pulses at 0.75/1.75/2.75 seconds and an
+unchanged source hash. The binary hash remains identical before and after those
+runs; these checks do not certify native recording or GPU rendering.
+
+Before images were captured from the unchanged 074 binary **before** editing:
+[light before](screenshots/075-before-light.png),
+[dark before](screenshots/075-before-dark.png).
+Reviewed real software-window captures:
+[light](screenshots/075-after-light.png),
+[dark](screenshots/075-after-dark.png),
+[options](screenshots/075-after-light.png.options.png),
+[recording unavailable](screenshots/075-after-light.png.recording.png),
+[countdown](screenshots/075-after-light.png.countdown.png),
+[420×520](screenshots/075-after-compact.png),
+[larger text](screenshots/075-after-large-font.png),
+[RTL](screenshots/075-after-rtl.png),
+[small window with synthetic error](screenshots/075-after-minimum-error.png), and
+[error plus countdown](screenshots/075-after-minimum-error.png.countdown.png).
+No private desktop/media or reference-app screenshots are included in this stage's
+captures. Real KDE capture/recording, device A/V, native color picking, window
+movement and compositor/GPU visuals remain unaccepted desktop gates.

@@ -8,6 +8,8 @@ and separate implementation, automated-test and real-KDE acceptance status.
 
 ## Current scope
 
+- Compact [screenshot/recording setup](docs/startup-workflow.md), with separate target selection, one primary action and retained capture options.
+
 - Quick Note: session-only plain-text cards with three styles, image copy and
   immutable pins, grouped under Pins and notes. Save the pinned PNG to keep it.
 

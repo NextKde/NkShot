@@ -103,6 +103,7 @@ void CaptureModeModel::setGrabModes(ImagePlatform::GrabModes modes)
     }
     m_grabModes = modes;
     const int oldCount = m_data.size();
+    beginResetModel();
     m_data.clear();
 
     const bool hasCurrentScreen = m_grabModes.testFlag(ImagePlatform::GrabMode::CurrentScreen);
@@ -149,6 +150,7 @@ void CaptureModeModel::setGrabModes(ImagePlatform::GrabModes modes)
         });
     }
 
+    endResetModel();
     Q_EMIT captureModesChanged();
     if (oldCount != m_data.size()) {
         Q_EMIT countChanged();

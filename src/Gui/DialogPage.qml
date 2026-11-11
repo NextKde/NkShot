@@ -1,60 +1,56 @@
 /* SPDX-FileCopyrightText: 2022 Noah Davis <noahadvs@gmail.com>
  * SPDX-License-Identifier: LGPL-2.0-or-later
  */
-
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Window
 import QtQuick.Controls as QQC
-import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import Kos.Ui as Kos
 import org.kde.spectacle.private
 
-/**
- * This page is shown when a user does not want to take a screenshot when Spectacle is started.
- * It allows the user to set up screen capturing and export screen captures.
- *
- * - There is a `contextWindow` context property that can be used to
- * access the instance of the ViewerWindow.
- */
 EmptyPage {
     id: root
-
+    readonly property real minimumWidth: 360
+    readonly property real minimumHeight: Math.max(360, captureTitle.implicitHeight
+        + footerActions.implicitHeight + topPadding + bottomPadding + 32
+        + captureSetup.chromeMinimumHeight + (header.visible ? header.height : 0))
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
-
-    padding: Kirigami.Units.mediumSpacing * 4
-
-    Item {
-        parent: root
-        anchors.fill: parent
-        z: -1
-        // Allow dragging the window from anywhere
-        DragHandler {
-            acceptedButtons: Qt.LeftButton
-            target: null
-            // BUG: https://bugreports.qt.io/browse/QTBUG-110145
-            // Changing acceptedButtons cancels the drag when the left mouse button is released on
-            // Wayland. If we don't do this, you need to click somewhere in the window to be able to
-            // click or hover on UI elements again.
-            onActiveChanged: if (active) {
-                acceptedButtons = contextWindow.startSystemMove() ? Qt.NoButton : Qt.LeftButton
-            } else {
-                acceptedButtons = Qt.LeftButton
-            }
-        }
-    }
-
+    palette.windowText: Kos.AppTheme.paletteText
+    palette.text: Kos.AppTheme.paletteText
+    palette.buttonText: Kos.AppTheme.paletteText
+    palette.button: Kos.AppTheme.controlBackground
+    padding: 20
+    background: Rectangle { color: Kos.AppTheme.contentBackground }
     component ConfigHelpButtonRow : Row {
         spacing: Kirigami.Units.mediumSpacing
         QQC.Button {
+            implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+            leftPadding: 12
+            rightPadding: 12
+            icon.color: Kos.AppTheme.paletteText
+            background: Rectangle {
+                radius: 8
+                color: Kos.AppTheme.controlBackground
+                border.width: parent.activeFocus ? 2 : 0
+                border.color: Kos.AppTheme.accent
+            }
             y: dprRound((parent.height - height) / 2)
             icon.name: "configure"
             text: i18n("Configure NkShot…")
             onClicked: contextWindow.showPreferencesDialog()
         }
         QQC.ToolButton {
+            implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+            leftPadding: 12
+            rightPadding: 12
+            icon.color: Kos.AppTheme.paletteText
+            background: Rectangle {
+                radius: 8
+                color: parent.down ? Kos.AppTheme.controlBackground : "transparent"
+                border.width: parent.activeFocus ? 2 : 0
+                border.color: Kos.AppTheme.accent
+            }
             id: startupMore
             objectName: "nkshotStartupMore"
             y: dprRound((parent.height - height) / 2)
@@ -86,131 +82,47 @@ EmptyPage {
         }
     }
 
-    Component {
-        id: screenshotComponent
-        GridLayout {
-            rowSpacing: Kirigami.Units.mediumSpacing
-            columnSpacing: Kirigami.Units.mediumSpacing * 4
-            columns: 2
-            rows: 2
-            flow: GridLayout.TopToBottom
 
-            Kirigami.Heading {
-                topPadding: -captureHeadingMetrics.descent
-                bottomPadding: -captureHeadingMetrics.descent + parent.rowSpacing
-                text: i18nc("@title:group", "Take a Screenshot:")
-                level: 3
-                FontMetrics {
-                    id: captureHeadingMetrics
+    header: InlineMessageList { width: root.width; maximumHeight: 96 }
+    contentItem: ColumnLayout {
+        spacing: 16
+        QQC.Label {
+            id: captureTitle
+            Layout.fillWidth: true
+            text: i18nc("@title", "New capture")
+            DragHandler {
+                target: null
+                acceptedButtons: Qt.LeftButton
+                onActiveChanged: if (active) {
+                    acceptedButtons = contextWindow.startSystemMove() ? Qt.NoButton : Qt.LeftButton
+                } else {
+                    acceptedButtons = Qt.LeftButton
                 }
             }
-
-            CaptureModeButtonsColumn {
-                id: buttonsColumn
-                Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-            }
-
-            Kirigami.Heading {
-                topPadding: -captureHeadingMetrics.descent
-                bottomPadding: -captureHeadingMetrics.descent + parent.rowSpacing
-                text: i18nc("@title:group", "Options")
-                level: 3
-            }
-
-            CaptureSettingsColumn {
-                Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-                Layout.preferredWidth: buttonRow.implicitWidth
-                ConfigHelpButtonRow {
-                    id: buttonRow
-                }
-            }
+            font.pointSize: root.font.pointSize * 1.65
+            font.bold: true
+            color: Kos.AppTheme.text
         }
+        CaptureSetupPane {
+            id: captureSetup
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            settings: Settings
+            captureModes: CaptureModeModel
+            recordingModes: RecordingModeModel
+            recordingAvailable: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
+            transientSupported: (ImagePlatform.supportedGrabModes & ImagePlatform.TransientWithParent) !== 0
+            clickSupported: ImagePlatform.supportedShutterModes === (ImagePlatform.Immediate | ImagePlatform.OnClick)
+            onClickOnly: ImagePlatform.supportedShutterModes === ImagePlatform.OnClick
+            audioSupported: SpectacleCore.videoPlatform.formatSupportsAudio(Settings.preferredVideoFormat)
+            captureTimeRemaining: SpectacleCore.captureTimeRemaining
+            captureProgress: SpectacleCore.captureProgress
+            onCaptureRequested: SpectacleCore.takeNewScreenshot()
+            onRecordRequested: recordingMode => SpectacleCore.startRecording(recordingMode, Settings.videoIncludePointer)
+            onCancelRequested: SpectacleCore.cancelScreenshot()
+        }
+        ConfigHelpButtonRow { id: footerActions; Layout.alignment: Qt.AlignHCenter }
     }
-
-    Component {
-        id: recordingComponent
-        GridLayout {
-            rowSpacing: Kirigami.Units.mediumSpacing
-            columnSpacing: Kirigami.Units.mediumSpacing * 4
-            columns: 2
-            rows: 2
-            flow: GridLayout.TopToBottom
-
-            Kirigami.Heading {
-                topPadding: -captureHeadingMetrics.descent
-                bottomPadding: -captureHeadingMetrics.descent + parent.rowSpacing
-                text: i18nc("@title:group", "Make a Recording:")
-                level: 3
-                FontMetrics {
-                    id: captureHeadingMetrics
-                }
-            }
-
-            RecordingModeButtonsColumn {
-                id: buttonsColumn
-                Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-            }
-
-            Kirigami.Heading {
-                topPadding: -captureHeadingMetrics.descent
-                bottomPadding: -captureHeadingMetrics.descent + parent.rowSpacing
-                text: i18nc("@title:group", "Options")
-                level: 3
-            }
-
-            RecordingSettingsColumn {
-                Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-                Layout.preferredWidth: buttonRow.implicitWidth
-                ConfigHelpButtonRow {
-                    id: buttonRow
-                }
-            }
-        }
-    }
-
-    // Not ColumnLayout because layouts don't work well with animations.
-    header: Column {
-        spacing: 0
-
-        Kirigami.NavigationTabBar {
-            id: tabBar
-
-            width: Math.max(parent.width, implicitWidth)
-            currentIndex: 0
-
-            actions: [
-                Kirigami.Action {
-                    text: i18nc("@title:tab", "Screenshot")
-                    icon.name: "camera-photo"
-                    checked: tabBar.currentIndex === 0
-                },
-                Kirigami.Action {
-                    enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
-                    text: i18nc("@title:tab", "Recording")
-                    icon.name: "camera-video"
-                    checked: tabBar.currentIndex === 1
-                    tooltip: enabled ? "" : i18nc("@info:tooltip", "This feature is not supported on the current platform")
-                }
-            ]
-        }
-
-        InlineMessageList {
-            id: inlineMessageList
-            width: parent.width
-        }
-    }
-
-    contentItem: Loader {
-        id: contentLoader
-        sourceComponent: switch (tabBar.currentIndex) {
-            case 0: return screenshotComponent
-            case 1: return recordingComponent
-            default: return null
-        }
-    }
-
-    // FIXME: This shortcut only exists here because spectacle interprets "Ctrl+Shift+,"
-    // as "Ctrl+Shift+<" for some reason unless we use a QML Shortcut.
     Shortcut {
         sequences: [StandardKey.Preferences]
         onActivated: contextWindow.showPreferencesDialog()

@@ -199,6 +199,7 @@ qt_target_qml_sources(spectacle
     Gui/CopyLocationAction.qml
     Gui/DashedOutline.qml
     Gui/DelaySpinBox.qml
+    Gui/CaptureSetupPane.qml
     Gui/DialogPage.qml
     Gui/EditAction.qml
     Gui/EmptyPage.qml

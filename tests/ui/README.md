@@ -539,3 +539,50 @@ No synthetic image is loaded merely to make the entry available.
 External cancellation can additionally use `NKSHOT_TEST_SCREEN_PICK_MARKER`:
 the external test service creates the marker only after receiving PickColor, so
 the test cancels a real request rather than guessing a network delay.
+
+## Startup workflow (075)
+
+Build with the existing opt-in `NKSHOT_ENABLE_UI_CAPTURE` configuration. The
+production executable contains no environment-based capability override. For a
+real empty startup window, use `--launchonly`, not `--edit-existing`:
+
+```sh
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  XDG_CONFIG_HOME="$(mktemp -d)" \
+  NKSHOT_TEST_STARTUP=1 NKSHOT_TEST_UI_CAPTURE=/tmp/startup.png \
+  build/bin/nkshot --new-instance --launchonly
+```
+
+The hook operates the real QML tabs, target popup, disclosure, options and decimal
+delay. It checks equal-count replacements on the actual QML-bound C++ mode models
+and restores them, without changing backend capabilities. If Immediate shutter
+is supported, the actual primary action starts a **99-second** Core countdown,
+then the hook restores the window, changes setup tab, and clicks Cancel long
+before `doGrab` can occur. Document/video/clipboard remain unchanged. This is an
+integration test of dispatch/cancellation, not native screenshot acceptance.
+
+Use a fresh configuration directory for every run. Additional flags:
+- `NKSHOT_TEST_DARK=1`: synthetic dark desktop palette.
+- `NKSHOT_TEST_UI_SIZE=420x520` (also checked at 360x480 and a requested 360x360).
+- `NKSHOT_TEST_STARTUP_LARGE_FONT=1`: 1.5× application font.
+- `NKSHOT_TEST_STARTUP_RTL=1`: right-to-left layout.
+- `NKSHOT_TEST_STARTUP_ERROR=1`: visibly labeled synthetic error to stress layout.
+
+The requested size is subject to the content-derived minimum height, particularly
+with large text and an error banner. Options scroll; Cancel and the footer remain
+inside the window. The test also edits Delay and microphone preferences through
+actual controls to demonstrate that short viewports remain operable.
+
+`startup_setup_test` loads the same production presentation component with
+synthetic settings and models. Its ten QtTest results cover all target values,
+repeated dispatch, missing/changing capabilities, same-count replacements,
+external selection changes, cross-tab cancellation, all retained option
+dependencies, decimal delay, keyboard disclosure, RTL and minimum-size text.
+It cannot trigger a native screenshot or recording. Run the full suite with
+`ctest --test-dir build --output-on-failure`; the portal test still requires the
+isolated private-bus arrangement documented above.
+
+Normal shutdown is checked both with and without `--new-instance`. The 075
+shutdown fix destroys QML views before their engine and destroys Core before
+QApplication's GUI services. A plain `--launchonly` capture/exit reproduced the
+pre-fix crash independently of the interactive harness.

@@ -811,6 +811,15 @@ bool SpectacleCore::performOcrExtraction(const QString &languageCode)
 
 SpectacleCore::~SpectacleCore() noexcept
 {
+    // Runtime window replacement uses deleteLater, but teardown must destroy
+    // the QML views before their shared engine and singleton models disappear.
+    // Otherwise a still-live ComboBox can react to model destruction while the
+    // engine is already tearing down its delegate model.
+    delete static_cast<QObject *>(m_viewerWindow.release());
+    for (auto &window : m_captureWindows) {
+        delete static_cast<QObject *>(window.release());
+    }
+    m_captureWindows.clear();
     s_self = nullptr;
 }
 
