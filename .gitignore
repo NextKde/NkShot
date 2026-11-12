@@ -27,3 +27,9 @@ CMakeLists.txt.user*
 /cmake-build*
 .cache
 .flatpak-builder
+
+# Local build environment, not part of the source tree
+/prefix/
+/deps/
+/run-nkshot.sh
+/nkshot-*.png
