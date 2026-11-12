@@ -21,7 +21,8 @@ safety check or establish native acceptance.
 1. The preview first checks the actual KWin ScreenShot2 Version property. API5 is
    required (upstream Plasma 6.7+; use runtime capability, not the desktop label).
    An unavailable desktop gets an explanation and a disabled Select region button.
-2. Choose one display and Select region. NkShot editor/pin/text windows are hidden
+2. Choose one display and a direction: Vertical (scroll down) or Horizontal
+   (scroll right), then Select region. Direction stays fixed until the session ends. NkShot editor/pin/text windows are hidden
    for access to the target, with their previous visibility state retained.
 3. Drag a region on that display, then fine-tune it and choose Use region or Enter.
    Mouse release no longer commits immediately. Esc cancels and restores hidden
@@ -49,10 +50,11 @@ Every actual frame independently rechecks API5 and explicitly asks the composito
 to omit all windows from the caller PID. This is not a fixed-delay repaint guess.
 Changed output layout/scale, failed captures, unsafe/ambiguous/no overlap and size
 limits reject the candidate. There are at most 16 accepted frames and existing
-40 MP/8192-width/32000-height output limits. Each frame is limited to 8192 pixels
+40 MP output limit. Vertical output is at most 8192×32000; horizontal output
+is at most 32000×8192. Each frame is limited to 8192 pixels
 per side and 16 MP. The scrolling-only matcher tolerates bounded pixel noise and
 small changed islands, but rejects weak texture/coverage, competing offsets,
-reverse/no progress and detected fixed headers. Keep animation and sticky content
+reverse/no progress and detected fixed headers (or fixed left sidebars in horizontal mode). Keep animation and sticky content
 outside the selected area. Ordinary low-information pages can still be rejected;
 a smaller scroll step or more distinctive region is safer than a guessed join.
 
@@ -115,3 +117,44 @@ synthetic alignment diagnostics, not successful desktop captures. See [source ev
 The layout has accessible names/descriptions including position, size and keys.
 That is implementation evidence, not a claim that an actual screen reader or
 native Wayland focus behavior has been certified.
+
+
+## Horizontal collection (116)
+
+Horizontal mode uses the same fixed physical region, original display/DPR checks,
+window-exclusion gate, one-at-a-time requests, cancellation, retry and continuous
+collection policy. You scroll right yourself; NkShot does not inject scrolling.
+The direction selector is available only before selection begins. Accepted work
+cannot be silently reinterpreted by changing direction mid-session.
+
+The aligner views coordinates along the chosen scroll axis without allocating
+transposed images. The session appends new right-edge columns row by row; it does
+not transpose an accumulating panorama or blend earlier accepted pixels. Seam
+coordinates follow the scroll axis, so horizontal joins are vertical lines.
+Fit, 100% inspection, two-axis scrolling and viewport tile rendering are retained.
+A stationary textured left sidebar is treated like a sticky header and rejected.
+
+This expands manual scrolling collection, not automatic horizontal scrolling.
+The actual KWin/API5 gate remains mandatory. Automated frame/controller and
+software-window tests do not establish native capture acceptance.
+
+### Horizontal review evidence
+
+The actual Qt window was exercised in light and dark palettes, 420 px compact
+layout, continuous collection and a long horizontal panorama. Tests select the
+direction through the real control, reject direction changes during a session,
+verify exact appended pixels, scroll across tile boundaries at 100%, retry
+without losing accepted work, and finish into an independent editable pin.
+Existing vertical collection and unavailable-backend refusal were rechecked.
+These checks use explicitly synthetic frames, not a captured user desktop.
+
+- [Light alignment preview](screenshots/116-horizontal-light.png)
+- [Dark continuous collection](screenshots/116-horizontal-dark.png)
+- [Compact fit overview](screenshots/116-horizontal-compact.png)
+- [Compact 100% tile inspection](screenshots/116-horizontal-pixels.png)
+
+Visual review: direction stays in setup rather than adding another active-session
+button; Capture next remains the single primary action, with Finish secondary.
+Very wide results intentionally shrink in Fit; 100% restores readable detail and
+horizontal scrolling without stretching pixels. The imagery is an upright,
+labelled synthetic board. Software screenshots do not validate GPU glass optics.

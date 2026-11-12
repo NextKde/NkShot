@@ -15,7 +15,42 @@ class ScrollCaptureSessionTest : public QObject {
         return image;
     }
     static ScrollCaptureSession::Region region() { return {QRect(-120, 30, 40, 100), QStringLiteral("display-A"), 1}; }
+    static QImage transpose(const QImage &input) {
+        QImage out(input.height(),input.width(),QImage::Format_RGBA8888);
+        for(int y=0;y<input.height();++y)for(int x=0;x<input.width();++x)out.setPixelColor(y,x,input.pixelColor(x,y));
+        out.setDevicePixelRatio(input.devicePixelRatio());out.setColorSpace(input.colorSpace());return out;
+    }
 private Q_SLOTS:
+    void horizontalFrameCap() {
+        const auto source=transpose(page());const ScrollCaptureSession::Region r{QRect(0,0,100,40),QStringLiteral("cap-output"),1};
+        ScrollCaptureSession session;QVERIFY(session.begin(r,ScrollDirection::Horizontal));
+        for(int i=0;i<16;++i){const auto token=session.requestFrame();QVERIFY(token);QVERIFY(session.acceptFrame(*token,r,source.copy(i*5,0,100,40)).accepted());}
+        QCOMPARE(session.frameCount(),16);QVERIFY(!session.requestFrame());QCOMPARE(session.finish(),source.copy(0,0,175,40));
+    }
+    void horizontalExactMetadataAndRetry() {
+        auto source=transpose(page());source.setDevicePixelRatio(2);source.setColorSpace(QColorSpace::SRgb);
+        // Alpha outside the shared overlap must survive the row-wise append.
+        source.setPixelColor(219,5,QColor(30,70,90,88));const auto untouched=source.copy();
+        const ScrollCaptureSession::Region r{QRect(12,-30,100,40),QStringLiteral("horizontal-output"),2};
+        ScrollCaptureSession session;QVERIFY(session.begin(r,ScrollDirection::Horizontal));
+        QCOMPARE(session.direction(),ScrollDirection::Horizontal);QVERIFY(!session.begin(r,ScrollDirection::Vertical));
+        const auto first=source.copy(0,0,100,40);QVERIFY(session.acceptFrame(*session.requestFrame(),r,first).accepted());
+        const auto rejected=session.acceptFrame(*session.requestFrame(),r,first);QCOMPARE(rejected.stitchError,StitchError::NoProgress);QCOMPARE(session.frameCount(),1);
+        QVERIFY(session.acceptFrame(*session.requestFrame(),r,source.copy(60,0,100,40)).accepted());
+        QVERIFY(session.acceptFrame(*session.requestFrame(),r,source.copy(120,0,100,40)).accepted());
+        QCOMPARE(session.seams(),QVector<int>({100,160}));QCOMPARE(session.preview(),source.copy(0,0,220,40));
+        const auto result=session.finish();QCOMPARE(result,source.copy(0,0,220,40));QCOMPARE(result.devicePixelRatio(),2);QCOMPARE(result.colorSpace(),source.colorSpace());QCOMPARE(source,untouched);
+        QVERIFY(session.begin(r,ScrollDirection::Horizontal));const auto stale=*session.requestFrame();session.cancel();
+        QVERIFY(session.begin(r,ScrollDirection::Horizontal));const auto current=*session.requestFrame();
+        QCOMPARE(session.acceptFrame(stale,r,first).error,ScrollCaptureSession::Error::StaleRequest);
+        QVERIFY(session.acceptFrame(current,r,first).accepted());session.cancel();
+        ScrollCaptureSession limited(24,5000);QVERIFY(limited.begin(r,ScrollDirection::Horizontal));
+        QVERIFY(limited.acceptFrame(*limited.requestFrame(),r,first).accepted());
+        QCOMPARE(limited.acceptFrame(*limited.requestFrame(),r,source.copy(60,0,100,40)).stitchError,StitchError::TooLarge);
+        QCOMPARE(limited.preview(),first);QCOMPARE(limited.frameCount(),1);
+        auto invalid=r;invalid.physicalRect=QRect(0,0,8193,8);QVERIFY(!session.begin(invalid,ScrollDirection::Horizontal));
+    }
+
     void contextBoundCompletionSafety() {
         QPromise<int> pending; pending.start(); bool invoked=false;
         auto context=new QObject;

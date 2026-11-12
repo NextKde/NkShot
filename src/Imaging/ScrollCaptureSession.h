@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
-#include "VerticalStitcher.h"
+#include "ScrollFrameAligner.h"
 #include <QRect>
 #include <QString>
 #include <optional>
@@ -26,7 +26,8 @@ public:
         bool accepted() const { return error == Error::None; }
     };
     explicit ScrollCaptureSession(int minimumOverlap = 24, qint64 maximumPixels = 40000000);
-    bool begin(const Region &region);
+    bool begin(const Region &region, ScrollDirection direction = ScrollDirection::Vertical);
+    ScrollDirection direction() const { return m_direction; }
     std::optional<quint64> requestFrame();
     Reply acceptFrame(quint64 ticket, const Region &region, const QImage &image);
     Reply captureFailed(quint64 ticket);
@@ -39,6 +40,7 @@ public:
 private:
     bool consumes(quint64 ticket);
     Region m_region;
+    ScrollDirection m_direction = ScrollDirection::Vertical;
     State m_state = State::Idle;
     quint64 m_serial = 0;
     quint64 m_pending = 0;

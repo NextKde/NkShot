@@ -32,7 +32,7 @@ public:
     using Cancel = std::function<void()>;
     ScrollCaptureController(QObject *backendLifetime, Request request, Cancel cancel, QObject *parent = nullptr);
     ~ScrollCaptureController() override;
-    bool begin(const ScrollOutputLayout &, const QRectF &globalLogicalSelection);
+    bool begin(const ScrollOutputLayout &, const QRectF &globalLogicalSelection, ScrollDirection direction = ScrollDirection::Vertical);
     bool captureNext();
     void setCollecting(bool collecting);
     bool collecting() const { return m_collecting; }
@@ -47,6 +47,7 @@ public:
     int frameCount() const { return m_session.frameCount(); }
     QImage preview() const { return m_session.preview(); }
     QVector<int> seams() const { return m_session.seams(); }
+    ScrollDirection direction() const { return m_session.direction(); }
 Q_SIGNALS:
     void stateChanged();
     void collectingChanged();

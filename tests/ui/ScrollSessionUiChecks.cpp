@@ -21,6 +21,7 @@
 #include <QFile>
 #include <QEvent>
 #include <QWheelEvent>
+#include <QTransform>
 #include <QtTest/QTest>
 
 bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *failure)
@@ -55,10 +56,14 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         if(point.x()<0||point.y()<0||point.x()>view->width()||point.y()>view->height())return false;
         QTest::mouseClick(view,Qt::LeftButton,Qt::NoModifier,point.toPoint());return true;
     };
+    const bool horizontal=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_HORIZONTAL");
+    const auto direction=horizontal?NkShot::Imaging::ScrollDirection::Horizontal:NkShot::Imaging::ScrollDirection::Vertical;
+    const auto oriented=[horizontal](const QImage &image){return horizontal?image.transformed(QTransform(0,1,1,0,0,0)):image;};
     const bool continuous=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_CONTINUOUS");
     const bool longPreview=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SESSION_LONG");
     const int frameHeight=longPreview?2200:420, secondOffset=longPreview?1400:180, thirdOffset=longPreview?2800:410;
-    const Layout layout{QStringLiteral("synthetic-page"),QRectF(0,0,640,frameHeight),QSize(640,frameHeight),1};
+    const QSize frameSize=horizontal?QSize(frameHeight,640):QSize(640,frameHeight);
+    const Layout layout{QStringLiteral("synthetic-page"),QRectF(QPointF(),QSizeF(frameSize)),frameSize,1};
     QObject backendLifetime;
     QImage pending;
     int requests=0;
@@ -71,8 +76,8 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     delete window->m_controller;
     window->m_controller=new Controller(&backendLifetime,[&](quint64 ticket,QRect rect){
         ++requests;
-        if(rect!=QRect(0,0,640,frameHeight)||pending.isNull())return false;
-        const QImage frame=pending;
+        if(rect!=QRect(QPoint(),frameSize)||pending.isNull())return false;
+        const QImage frame=oriented(pending);
         if(holdFrame){heldTicket=ticket;return true;}
         QMetaObject::invokeMethod(window,[&,ticket,frame]{if(window)window->m_controller->frameCaptured(ticket,layout,frame);},Qt::QueuedConnection);
         return true;
@@ -81,8 +86,17 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     QObject::connect(window->m_controller,&Controller::hideWindowsRequested,window,[&](quint64 ticket){
         QMetaObject::invokeMethod(window,[&,ticket]{if(window)window->m_controller->confirmHidden(ticket,layout);},Qt::QueuedConnection);
     });
-    window->m_phase=2;window->m_available=true;
-    if(!window->m_controller->begin(layout,layout.logicalGeometry))return fail(QStringLiteral("Synthetic selected-region controller setup failed"));
+    window->m_available=true;
+    window->show();window->requestActivate();Q_EMIT window->changed();QTest::qWait(100);
+    if(!click(window,"nkshotScrollDirection"))return fail(QStringLiteral("Direction selector unavailable during setup"));
+    QTest::keyClick(window,Qt::Key_Home);
+    if(horizontal)QTest::keyClick(window,Qt::Key_Down);
+    QTest::keyClick(window,Qt::Key_Return);
+    if(window->horizontal()!=horizontal)return fail(QStringLiteral("Actual direction selector did not update session choice"));
+    window->m_phase=2;
+    window->setHorizontal(!horizontal);
+    if(window->horizontal()!=horizontal)return fail(QStringLiteral("Active-session direction changed"));
+    if(!window->m_controller->begin(layout,layout.logicalGeometry,direction))return fail(QStringLiteral("Synthetic selected-region controller setup failed"));
     const bool compact=qEnvironmentVariableIsSet("NKSHOT_TEST_SCROLL_SESSION_COMPACT");
     window->resize(compact?420:760,continuous&&compact?420:600);
     window->show();Q_EMIT window->changed();
@@ -99,10 +113,10 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     if(!deliver(blank)||window->frameCount()!=1)return fail(QStringLiteral("Ambiguous fixture first frame failed"));
     QImage ambiguous=blank;
     {QPainter painter(&ambiguous);painter.fillRect(0,260,640,160,Qt::black);}
-    if(!deliver(ambiguous)||window->frameCount()!=1||window->m_controller->preview()!=blank||!window->property("retryFrame").toBool())
+    if(!deliver(ambiguous)||window->frameCount()!=1||window->m_controller->preview()!=oriented(blank)||!window->property("retryFrame").toBool())
         return fail(QStringLiteral("Ambiguous overlap did not preserve preview and enable retry"));
     window->m_controller->cancel();
-    if(!window->m_controller->begin(layout,layout.logicalGeometry))return fail(QStringLiteral("New synthetic page session could not begin"));
+    if(!window->m_controller->begin(layout,layout.logicalGeometry,direction))return fail(QStringLiteral("New synthetic page session could not begin"));
     }
     QImage page(640,longPreview?6000:1300,QImage::Format_RGBA8888);
     for(int y=0;y<page.height();++y)for(int x=0;x<page.width();++x) {
@@ -115,7 +129,27 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
             painter.fillRect(20,y,8,45,QColor::fromHsv((row*37)%360,180,170));
             painter.setPen(QColor(35,40,50));painter.drawText(QRect(42,y,570,32),QStringLiteral("Synthetic page · section %1").arg(row+1));
             painter.setPen(QColor(90,95,105));painter.drawText(QRect(42,y+28,570,28),QStringLiteral("Read, review, then continue down the page."));}}
-    if(!page.save(path+QStringLiteral(".fixture.png")))return fail(QStringLiteral("Synthetic page provenance could not be saved"));
+    if(horizontal) {
+        QImage board=oriented(page);
+        QPainter painter(&board);
+        painter.fillRect(board.rect(),QColor(238,242,248));
+        // Distinct per-pixel texture keeps matching conservative; upright cards make the evidence legible.
+        painter.end();
+        for(int y=0;y<board.height();++y)for(int x=0;x<board.width();++x){
+            const quint32 n=(quint32(x+1)*2654435761u)^(quint32(y+1)*2246822519u);
+            board.setPixelColor(x,y,QColor(225+n%25,225+(n>>8)%25,225+(n>>16)%25));
+        }
+        painter.begin(&board);QFont font(QStringLiteral("DejaVu Sans"));font.setPixelSize(20);painter.setFont(font);
+        for(int column=0;column<board.width()/180;++column){
+            const int x=18+column*180;
+            painter.setPen(QColor(35,45,65));
+            painter.drawText(QRect(x,40,165,60),Qt::TextWordWrap,QStringLiteral("Synthetic board %1").arg(column+1));
+            painter.fillRect(x,130,155,260,QColor::fromHsv((column*37)%360,45,230));
+            painter.drawText(QRect(x,420,160,60),Qt::TextWordWrap,QStringLiteral("Review, then scroll right."));
+        }
+        painter.end();page=oriented(board);
+    }
+    if(!oriented(page).save(path+QStringLiteral(".fixture.png")))return fail(QStringLiteral("Synthetic page provenance could not be saved"));
     const QImage first=page.copy(0,0,640,frameHeight);
     QImage second=page.copy(0,secondOffset,640,frameHeight);
     {QPainter painter(&second);painter.fillRect(510,70,12,10,QColor(220,90,90));}
@@ -133,9 +167,9 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         if(!QTest::qWaitFor([&]{return window->frameCount()==2&&!window->busy();},3000))
             return fail(QStringLiteral("Continuous collection did not append second frame"));
         const QImage afterTwo=window->m_controller->preview();
-        if(afterTwo.size()!=QSize(640,frameHeight+secondOffset)
-            ||afterTwo.copy(0,0,640,frameHeight)!=first
-            ||afterTwo.copy(0,frameHeight,640,secondOffset)!=page.copy(0,frameHeight,640,secondOffset))
+        if(oriented(afterTwo).size()!=QSize(640,frameHeight+secondOffset)
+            ||oriented(afterTwo).copy(0,0,640,frameHeight)!=first
+            ||oriented(afterTwo).copy(0,frameHeight,640,secondOffset)!=page.copy(0,frameHeight,640,secondOffset))
             return fail(QStringLiteral("Continuous accepted pixels differ from source page"));
         if(!QTest::qWaitFor([&]{return !skipped.isEmpty()&&!window->busy();},3000)
             ||!collecting()||window->frameCount()!=2||window->m_controller->preview()!=afterTwo)
@@ -160,7 +194,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         if(!click(window,"nkshotScrollCollect")||collecting())
             return fail(QStringLiteral("Actual Pause unavailable during in-flight frame"));
         const auto stale=heldTicket;
-        window->m_controller->frameCaptured(stale,layout,page.copy(0,thirdOffset+100,640,frameHeight));
+        window->m_controller->frameCaptured(stale,layout,oriented(page.copy(0,thirdOffset+100,640,frameHeight)));
         holdFrame=false;
         if(window->frameCount()!=3||window->m_controller->preview()!=beforePendingPause||window->busy())
             return fail(QStringLiteral("Late frame after Pause altered accepted preview"));
@@ -168,8 +202,8 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     if(!deliver(first)||window->frameCount()!=1)return fail(QStringLiteral("Textured first frame not accepted"));
     if(!deliver(second)||window->frameCount()!=2)return fail(QStringLiteral("Variable-overlap frame with small dynamic island rejected"));
     const QImage afterTwo=window->m_controller->preview();
-    if(afterTwo.size()!=QSize(640,frameHeight+secondOffset)||afterTwo.copy(0,0,640,frameHeight)!=first
-        ||afterTwo.copy(0,frameHeight,640,secondOffset)!=page.copy(0,frameHeight,640,secondOffset))
+    if(oriented(afterTwo).size()!=QSize(640,frameHeight+secondOffset)||oriented(afterTwo).copy(0,0,640,frameHeight)!=first
+        ||oriented(afterTwo).copy(0,frameHeight,640,secondOffset)!=page.copy(0,frameHeight,640,secondOffset))
         return fail(QStringLiteral("Accepted composite altered original pixels or appended wrong extent"));
     for(int rejected=0;rejected<2;++rejected){
         QImage candidate=second;if(rejected)candidate.fill(Qt::red);
@@ -186,7 +220,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
         return fail(QStringLiteral("Retry after rejected frames did not accept next variable offset"));
     }
     const QImage composite=window->m_controller->preview();
-    if(composite.size()!=QSize(640,frameHeight+thirdOffset)||composite!=page.copy(0,0,640,frameHeight+thirdOffset)
+    if(oriented(composite).size()!=QSize(640,frameHeight+thirdOffset)||composite!=oriented(page.copy(0,0,640,frameHeight+thirdOffset))
         ||window->property("previewSize").toSize()!=composite.size()
         ||window->property("seamRows").toList().size()!=2||window->property("retryFrame").toBool())
         return fail(QStringLiteral("Final preview pixels/provider extent/seams/retry state incorrect"));
@@ -196,20 +230,23 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     QSignalSpy fitted(window,&QQuickWindow::frameSwapped);window->update();
     if(!QTest::qWaitFor([&]{return !fitted.isEmpty();},1500)||!window->grabWindow().save(path+QStringLiteral(".preview.png")))
         return fail(QStringLiteral("Actual fitted seam preview screenshot failed"));
+    auto seam=visual(window->contentItem(),QStringLiteral("nkshotScrollSeam"));
+    if(!seam || (horizontal ? seam->width()!=2 || seam->height()<=2 : seam->height()!=2 || seam->width()<=2))
+        return fail(QStringLiteral("Actual seam orientation did not match selected direction"));
     if(!click(window,"nkshotScrollInspectPixels")||!window->rootObject()->property("inspectPixels").toBool())
         return fail(QStringLiteral("Actual 100-percent control unreachable"));
     auto viewport=visual(window->contentItem(),QStringLiteral("nkshotScrollPreviewViewport"));
     if(!viewport)return fail(QStringLiteral("Preview viewport missing"));
     const auto wheelPoint=viewport->mapToScene(QPointF(viewport->width()/2,viewport->height()/2));
-    QWheelEvent wheel(wheelPoint,window->mapToGlobal(wheelPoint.toPoint()),QPoint(),QPoint(0,longPreview?-3600:-360),
+    QWheelEvent wheel(wheelPoint,window->mapToGlobal(wheelPoint.toPoint()),QPoint(),(horizontal?QPoint(longPreview?-3600:-360,0):QPoint(0,longPreview?-3600:-360)),
         Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);
     QCoreApplication::sendEvent(window,&wheel);
-    if(!QTest::qWaitFor([&]{return viewport->property("contentY").toReal()>0;},1000))
+    if(!QTest::qWaitFor([&]{return viewport->property(horizontal?"contentX":"contentY").toReal()>0;},1000))
         return fail(QStringLiteral("Actual wheel did not scroll 100-percent preview"));
     // Platforms can clamp one wheel event regardless of its large angle delta.
     // Exercise repeated real wheel events until a subsequent tile is visible.
-    if(longPreview) for(int step=0;step<16 && viewport->property("contentY").toReal()<1024;++step) {
-        QWheelEvent nextWheel(wheelPoint,window->mapToGlobal(wheelPoint.toPoint()),QPoint(),QPoint(0,-360),
+    if(longPreview) for(int step=0;step<16 && viewport->property(horizontal?"contentX":"contentY").toReal()<1024;++step) {
+        QWheelEvent nextWheel(wheelPoint,window->mapToGlobal(wheelPoint.toPoint()),QPoint(),(horizontal?QPoint(-360,0):QPoint(0,-360)),
             Qt::NoButton,Qt::NoModifier,Qt::NoScrollPhase,false);
         QCoreApplication::sendEvent(window,&nextWheel);QTest::qWait(60);
     }
@@ -221,7 +258,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     auto tile=visual(window->contentItem(),QStringLiteral("nkshotScrollPreviewTile"));
     if(!tile || tile->width()>1024 || tile->height()>1024 || !tile->property("source").toUrl().path().contains(QStringLiteral("/tile/")))
         return fail(QStringLiteral("100-percent preview did not use bounded visible tiles"));
-    if(longPreview && viewport->property("contentY").toReal()<1024)
+    if(longPreview && viewport->property(horizontal?"contentX":"contentY").toReal()<1024)
         return fail(QStringLiteral("Long-preview wheel did not cross a tile boundary"));
     QSignalSpy rendered(window,&QQuickWindow::frameSwapped);window->update();
     if(!QTest::qWaitFor([&]{return !rendered.isEmpty();},1500)||!window->grabWindow().save(path+QStringLiteral(".pixels.png")))
@@ -247,7 +284,7 @@ bool ScrollSessionUiChecks::run(QApplication &app,const QString &path,QString *f
     }
     if(!click(window,"nkshotScrollFinish"))return fail(QStringLiteral("Actual Finish action unreachable"));
     if(continuous&&finishingController)
-        finishingController->frameCaptured(finishingTicket,layout,pending);
+        finishingController->frameCaptured(finishingTicket,layout,oriented(pending));
 
     if(!QTest::qWaitFor([&]{for(auto view:QGuiApplication::allWindows())
         if(auto candidate=qobject_cast<PinnedImageWindow *>(view))if(candidate->snapshot()==composite)pin=candidate;

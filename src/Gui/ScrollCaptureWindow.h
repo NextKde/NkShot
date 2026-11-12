@@ -18,6 +18,7 @@ class ScrollCaptureWindow : public QQuickView {
     Q_PROPERTY(int outputIndex READ outputIndex WRITE setOutputIndex NOTIFY changed)
     Q_PROPERTY(qreal selectionScale READ selectionScale NOTIFY changed)
     Q_PROPERTY(int phase READ phase NOTIFY changed)
+    Q_PROPERTY(bool horizontal READ horizontal WRITE setHorizontal NOTIFY changed)
     Q_PROPERTY(bool available READ available NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(bool canCapture READ canCapture NOTIFY changed)
@@ -38,6 +39,8 @@ public:
     void setOutputIndex(int index);
     qreal selectionScale() const;
     int phase() const { return m_phase; }
+    bool horizontal() const { return m_horizontal; }
+    void setHorizontal(bool horizontal);
     bool available() const { return m_available; }
     bool busy() const;
     int frameCount() const;
@@ -81,6 +84,7 @@ private:
     NkShot::Imaging::ScrollCaptureController *m_controller;
     int m_outputIndex=0;
     int m_phase=0;
+    bool m_horizontal=false;
     bool m_available=false;
     QString m_status;
     QImage m_result;

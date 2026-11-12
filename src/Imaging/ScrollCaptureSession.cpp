@@ -10,18 +10,20 @@ namespace NkShot::Imaging {
 ScrollCaptureSession::ScrollCaptureSession(int overlap, qint64 pixels)
     : m_minimumOverlap(overlap), m_maximumPixels(pixels) {}
 
-bool ScrollCaptureSession::begin(const Region &region)
+bool ScrollCaptureSession::begin(const Region &region, ScrollDirection direction)
 {
     // Starting over requires explicit cancel/finish; accidental double-clicks
     // cannot discard accepted work or invalidate an in-flight capture.
     if (m_state == State::Collecting || m_state == State::AwaitingFrame) return false;
+    if(direction!=ScrollDirection::Vertical && direction!=ScrollDirection::Horizontal)return false;
+    const bool horizontal=direction==ScrollDirection::Horizontal;
     const auto size = region.physicalRect.size();
     if (!region.physicalRect.isValid() || region.outputId.isEmpty()
         || !qIsFinite(region.devicePixelRatio) || region.devicePixelRatio <= 0
-        || m_minimumOverlap < 24 || size.height() <= m_minimumOverlap
-        || size.width() < 8 || size.width() > 8192 || size.height() > 8192
+        || m_minimumOverlap < 24 || (horizontal ? size.width() : size.height()) <= m_minimumOverlap
+        || (horizontal ? size.height() : size.width()) < 8 || size.width() > 8192 || size.height() > 8192
         || qint64(size.width()) * size.height() > qMin(m_maximumPixels, qint64(16000000))) return false;
-    m_region = region;
+    m_region = region; m_direction = direction;
     m_frameCount = 0; m_composite = {}; m_lastFrame = {}; m_seams.clear(); m_pending = 0;
     m_state = State::Collecting;
     return true;
@@ -61,21 +63,31 @@ ScrollCaptureSession::Reply ScrollCaptureSession::acceptFrame(quint64 ticket, co
     }
     // Estimate displacement using consecutive actual captures, not a composite
     // whose overlap deliberately keeps earlier pixels. Never blend or warp.
-    const auto alignment = alignScrollFrames(m_lastFrame, owned, m_minimumOverlap);
+    const auto alignment = alignScrollFrames(m_lastFrame, owned, m_minimumOverlap, m_direction);
     if (alignment.error != StitchError::None) return {Error::StitchFailed, alignment.error};
-    const qint64 height = qint64(m_composite.height()) + owned.height() - alignment.overlap;
-    if (height > 32000 || height * owned.width() > m_maximumPixels)
+    const bool horizontal=m_direction==ScrollDirection::Horizontal;
+    const qint64 width=qint64(m_composite.width())+(horizontal ? owned.width()-alignment.overlap : 0);
+    const qint64 height=qint64(m_composite.height())+(horizontal ? 0 : owned.height()-alignment.overlap);
+    if(width>(horizontal?32000:8192)||height>(horizontal?8192:32000)
+        ||width*height>qMin(m_maximumPixels,qint64(40000000)))
         return {Error::StitchFailed, StitchError::TooLarge};
     const auto previous = m_composite.convertToFormat(QImage::Format_RGBA8888);
     const auto next = owned.convertToFormat(QImage::Format_RGBA8888);
-    QImage joined(owned.width(), int(height), QImage::Format_RGBA8888);
+    QImage joined(int(width), int(height), QImage::Format_RGBA8888);
     if (joined.isNull() || previous.isNull() || next.isNull()) return {Error::InvalidFrame};
     joined.setDevicePixelRatio(owned.devicePixelRatio()); joined.setColorSpace(owned.colorSpace());
-    const size_t bytes = size_t(owned.width()) * 4;
-    for (int y = 0; y < previous.height(); ++y) std::memcpy(joined.scanLine(y), previous.constScanLine(y), bytes);
-    for (int y = alignment.overlap; y < next.height(); ++y)
-        std::memcpy(joined.scanLine(previous.height() + y - alignment.overlap), next.constScanLine(y), bytes);
-    m_seams.append(previous.height());
+    if(horizontal) {
+        for(int y=0;y<previous.height();++y) {
+            std::memcpy(joined.scanLine(y),previous.constScanLine(y),size_t(previous.width())*4);
+            std::memcpy(joined.scanLine(y)+size_t(previous.width())*4,next.constScanLine(y)+size_t(alignment.overlap)*4,size_t(next.width()-alignment.overlap)*4);
+        }
+    } else {
+        const size_t bytes = size_t(owned.width()) * 4;
+        for (int y = 0; y < previous.height(); ++y) std::memcpy(joined.scanLine(y), previous.constScanLine(y), bytes);
+        for (int y = alignment.overlap; y < next.height(); ++y)
+            std::memcpy(joined.scanLine(previous.height() + y - alignment.overlap), next.constScanLine(y), bytes);
+    }
+    m_seams.append(horizontal ? previous.width() : previous.height());
     ++m_frameCount; m_composite = joined; m_lastFrame = owned;
     return {};
 }

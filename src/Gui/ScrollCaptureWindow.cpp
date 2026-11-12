@@ -105,14 +105,16 @@ void ScrollCaptureWindow::bindController()
     connect(m_controller,&ScrollCaptureController::collectingChanged,this,[this]{
         if(collecting()) {
             m_retryFrame=false;
-            setStatus(i18nc("@info","Collecting while you scroll. Unchanged frames are skipped. Turn off collection to pause."));
+            setStatus(m_horizontal ? i18nc("@info","Collecting while you scroll right yourself. Unchanged frames are skipped. Turn off collection to pause.")
+                : i18nc("@info","Collecting while you scroll down yourself. Unchanged frames are skipped. Turn off collection to pause."));
         } else {
             setStatus(frameCount()>=16 ? i18nc("@info","The 16-frame limit was reached. Inspect the result and choose Finish.")
                                       : i18nc("@info","Collection paused. Accepted frames are kept; inspect, retry, or finish."));
         }
     });
     connect(m_controller,&ScrollCaptureController::frameSkipped,this,[this]{
-        setStatus(i18nc("@info","Waiting for new content. Scroll the target yourself; collection does not scroll for you."));
+        setStatus(m_horizontal ? i18nc("@info","Waiting for new content. Scroll right yourself; collection does not scroll for you.")
+            : i18nc("@info","Waiting for new content. Scroll down yourself; collection does not scroll for you."));
     });
     connect(m_controller,&ScrollCaptureController::failed,this,[this](const QString &reason){
         m_retryFrame=true;
@@ -155,6 +157,12 @@ ScrollCaptureWindow::~ScrollCaptureWindow()
     if(m_engine)m_engine->removeImageProvider(m_providerId);
 }
 void ScrollCaptureWindow::setStatus(const QString &text) {m_status=text;Q_EMIT changed();}
+void ScrollCaptureWindow::setHorizontal(bool value)
+{
+    if (m_phase != 0 || m_horizontal == value) return;
+    m_horizontal = value;
+    Q_EMIT changed();
+}
 void ScrollCaptureWindow::setOutputIndex(int index)
 {
     if(m_phase || index<0 || index>=m_screens.size()) return;
@@ -202,12 +210,13 @@ void ScrollCaptureWindow::acceptRegion(const QRectF &local)
 {
     if(m_phase!=1 || !m_screen) return;
     const auto layout=currentLayout();
-    if(!m_controller->begin(layout,local.translated(layout.logicalGeometry.topLeft()))) {
+    if(!m_controller->begin(layout,local.translated(layout.logicalGeometry.topLeft()), m_horizontal ? NkShot::Imaging::ScrollDirection::Horizontal : NkShot::Imaging::ScrollDirection::Vertical)) {
         setStatus(i18nc("@info","This region is too small, too large, or no longer on this display. Drag a new region."));return;
     }
     m_phase=2; setMinimumSize({420,420}); resize(640,560);
     if(m_overlay) {auto overlay=m_overlay.data();m_overlay=nullptr;overlay->removeEventFilter(this);overlay->close();overlay->deleteLater();}
-    setStatus(i18nc("@info","Capture the first frame, then scroll the target yourself. Finish creates a separate image; the original stays unchanged."));
+    setStatus(m_horizontal ? i18nc("@info","Capture the first frame, then scroll right yourself. Finish creates a separate image; the original stays unchanged.")
+        : i18nc("@info","Capture the first frame, then scroll down yourself. Finish creates a separate image; the original stays unchanged."));
     show();raise();requestActivate();
 }
 void ScrollCaptureWindow::setCollecting(bool enabled)

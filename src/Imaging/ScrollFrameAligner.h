@@ -2,6 +2,7 @@
 #pragma once
 #include "VerticalStitcher.h"
 namespace NkShot::Imaging {
+enum class ScrollDirection { Vertical, Horizontal };
 struct ScrollAlignment {
     StitchError error = StitchError::NoOverlap;
     int overlap = 0;
@@ -22,7 +23,8 @@ struct ScrollAlignment {
 // A stationary textured header with nontrivial horizontal extent is rejected.
 // Confidence is an internal agreement score, never a statistical probability.
 // A localized changed island can fit within the 6% budget; it is not reconstructed.
-// Only a unique positive downward-content displacement is accepted. The session
-// must retain its accepted composite and append only next[overlap..height).
-ScrollAlignment alignScrollFrames(const QImage &previous, const QImage &next, int minimumOverlap = 24);
+// Only a unique positive displacement along the chosen scroll axis is accepted.
+// The session retains earlier pixels and appends next beyond the overlap.
+// Horizontal uses a zero-copy coordinate view, including fixed-sidebar rejection.
+ScrollAlignment alignScrollFrames(const QImage &previous, const QImage &next, int minimumOverlap = 24, ScrollDirection direction = ScrollDirection::Vertical);
 }

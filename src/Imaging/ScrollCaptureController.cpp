@@ -67,7 +67,7 @@ void ScrollCaptureController::setState(State state)
     if (m_state==state) return;
     m_state=state; Q_EMIT stateChanged();
 }
-bool ScrollCaptureController::begin(const ScrollOutputLayout &layout, const QRectF &selection)
+bool ScrollCaptureController::begin(const ScrollOutputLayout &layout, const QRectF &selection, ScrollDirection direction)
 {
     if (m_transition) return false;
     Transition guard(this);
@@ -75,7 +75,7 @@ bool ScrollCaptureController::begin(const ScrollOutputLayout &layout, const QRec
     if (!m_backend || !m_request || !m_cancel || m_state==State::Ready || m_state==State::WaitingForHidden || m_state==State::Capturing) return false;
     const auto pixels=scrollSelectionPixels(layout,selection);
     const ScrollCaptureSession::Region region{pixels,layout.id,layout.dpr};
-    if (!pixels.isValid() || !m_session.begin(region)) return false;
+    if (!pixels.isValid() || !m_session.begin(region,direction)) return false;
     m_layout=layout; m_region=region; m_pending=0; m_lastAccepted=QImage();
     setState(State::Ready); return true;
 }

@@ -41,7 +41,8 @@ Item {
         QQC.Label {
             Layout.fillWidth: true
             text: root.phase === 0 ? i18nc("@info", "One region. You scroll. NkShot joins matching frames.")
-                : i18ncp("@info", "%1 frame", "%1 frames", scrollWindow.frameCount)
+                : (scrollWindow.horizontal ? i18nc("@info", "Scroll right yourself") : i18nc("@info", "Scroll down yourself"))
+                    + " · " + i18ncp("@info", "%1 frame", "%1 frames", scrollWindow.frameCount)
             color: Kos.AppTheme.mutedText; wrapMode: Text.Wrap
         }
         QQC.ComboBox {
@@ -62,6 +63,20 @@ Item {
             enabled: scrollWindow.available
             onActivated: scrollWindow.outputIndex = currentIndex
             Accessible.name: i18nc("@label", "Display to capture")
+        }
+        QQC.ComboBox {
+            id: directionPicker
+            objectName: "nkshotScrollDirection"
+            visible: root.phase === 0
+            Layout.fillWidth: true
+            implicitHeight: 36
+            model: [i18nc("@option", "Vertical · scroll down"), i18nc("@option", "Horizontal · scroll right")]
+            currentIndex: scrollWindow.horizontal ? 1 : 0
+            onActivated: scrollWindow.horizontal = currentIndex === 1
+            background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0; focused: directionPicker.visualFocus}
+            contentItem: QQC.Label {text: directionPicker.displayText; color: Kos.AppTheme.paletteText; leftPadding: 12; rightPadding: 30; verticalAlignment: Text.AlignVCenter}
+            indicator: QQC.Label {x: directionPicker.width-width-12; y: (directionPicker.height-height)/2; text: "⌄"; color: Kos.AppTheme.mutedText}
+            Accessible.name: i18nc("@label", "Manual scrolling direction")
         }
         QQC.ScrollView {
             id: statusScroll
@@ -184,8 +199,11 @@ Item {
                             model: root.showSeams ? scrollWindow.seamRows : []
                             Rectangle {
                                 required property var modelData
-                                x: 0; y: modelData * previewImage.previewScale - 1
-                                width: previewImage.width; height: 2
+                                objectName: "nkshotScrollSeam"
+                                x: scrollWindow.horizontal ? modelData * previewImage.previewScale - 1 : 0
+                                y: scrollWindow.horizontal ? 0 : modelData * previewImage.previewScale - 1
+                                width: scrollWindow.horizontal ? 2 : previewImage.width
+                                height: scrollWindow.horizontal ? previewImage.height : 2
                                 color: "#e59a31"
                             }
                         }
@@ -243,7 +261,7 @@ Item {
         readonly property rect selectionRect: Qt.rect(Math.min(origin.x,end.x), Math.min(origin.y,end.y), Math.abs(end.x-origin.x), Math.abs(end.y-origin.y))
         readonly property int pixelWidth: Math.round(Math.max(origin.x,end.x)*scrollWindow.selectionScale)-Math.round(Math.min(origin.x,end.x)*scrollWindow.selectionScale)
         readonly property int pixelHeight: Math.round(Math.max(origin.y,end.y)*scrollWindow.selectionScale)-Math.round(Math.min(origin.y,end.y)*scrollWindow.selectionScale)
-        readonly property bool regionValid: pixelWidth>=8 && pixelHeight>24 && pixelWidth<=8192 && pixelHeight<=8192 && pixelWidth*pixelHeight<=16000000
+        readonly property bool regionValid: (scrollWindow.horizontal ? pixelWidth>24 && pixelHeight>=8 : pixelWidth>=8 && pixelHeight>24) && pixelWidth<=8192 && pixelHeight<=8192 && pixelWidth*pixelHeight<=16000000
         function adjust(dx,dy,resizeRegion,fast) {
             if (selectionRect.width<=0 || selectionRect.height<=0) {
                 origin=Qt.point(Math.floor(width/4),Math.floor(height/4))
@@ -253,8 +271,8 @@ Item {
             let w=selectionRect.width, h=selectionRect.height
             let step=fast?10:1
             if(resizeRegion) {
-                w=Math.max(Math.min(width-x,Math.ceil(1/scrollWindow.selectionScale)),Math.min(width-x,w+dx*step))
-                h=Math.max(Math.min(height-y,Math.ceil(25/scrollWindow.selectionScale)),Math.min(height-y,h+dy*step))
+                w=Math.max(Math.min(width-x,Math.ceil((scrollWindow.horizontal ? 25 : 8)/scrollWindow.selectionScale)),Math.min(width-x,w+dx*step))
+                h=Math.max(Math.min(height-y,Math.ceil((scrollWindow.horizontal ? 8 : 25)/scrollWindow.selectionScale)),Math.min(height-y,h+dy*step))
             } else {
                 x=Math.max(0,Math.min(width-w,x+dx*step))
                 y=Math.max(0,Math.min(height-h,y+dy*step))
@@ -328,7 +346,8 @@ Item {
                 id: hint
                 anchors.centerIn: parent; width: parent.width - 28
                 text: selector.pixelWidth>0 && selector.pixelHeight>0 && !selector.regionValid
-                    ? i18nc("@info", "Use a region at least 8 px wide and 25 px tall, at most 8192 px per side and 16 MP.")
+                    ? (scrollWindow.horizontal ? i18nc("@info", "Use a region at least 25 px wide and 8 px tall, at most 8192 px per side and 16 MP.")
+                        : i18nc("@info", "Use a region at least 8 px wide and 25 px tall, at most 8192 px per side and 16 MP."))
                     : scrollWindow.phase === 1 ? scrollWindow.statusText : i18nc("@info", "Drag a region, or use arrows to move.\nAlt + arrows resize; Shift adjusts faster.")
                 wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; color: "white"
             }

@@ -12,7 +12,40 @@ class ScrollFrameAlignerTest : public QObject {
         QImage image(width,height,QImage::Format_RGBA8888);
         for(int y=0;y<height;++y)for(int x=0;x<width;++x){quint32 n=quint32(x+1)*2654435761u^quint32(y+seed+1)*2246822519u;n^=n>>13;n*=3266489917u;image.setPixelColor(x,y,QColor(30+int(n%190),30+int((n>>8)%190),30+int((n>>16)%190)));}return image;
     }
+    static QImage transpose(const QImage &input) {
+        QImage out(input.height(),input.width(),QImage::Format_RGBA8888);
+        for(int y=0;y<input.height();++y)for(int x=0;x<input.width();++x)out.setPixelColor(y,x,input.pixelColor(x,y));
+        out.setDevicePixelRatio(input.devicePixelRatio());out.setColorSpace(input.colorSpace());return out;
+    }
 private Q_SLOTS:
+    void horizontalRepresentativeTiming() {
+        const auto source=pattern(2400,1080);
+        const auto a=source.copy(0,0,1920,1080),b=source.copy(400,0,1920,1080);
+        QElapsedTimer timer;timer.start();const auto result=alignScrollFrames(a,b,24,ScrollDirection::Horizontal);
+        qInfo()<<"Horizontal 1920x1080 alignment elapsed ms"<<timer.elapsed();
+        QCOMPARE(result.error,StitchError::None);QCOMPARE(result.overlap,1520);
+    }
+    void horizontalParityAndGuards() {
+        const auto page=pattern(160,600);
+        auto a=page.copy(0,0,160,240),b=page.copy(0,73,160,240);
+        a.setDevicePixelRatio(2);b.setDevicePixelRatio(2);a.setColorSpace(QColorSpace::SRgb);b.setColorSpace(QColorSpace::SRgb);
+        const auto left=transpose(a),right=transpose(b),before=left.copy();
+        const auto result=alignScrollFrames(left,right,24,ScrollDirection::Horizontal);
+        QCOMPARE(result.error,StitchError::None);QCOMPARE(result.overlap,167);QCOMPARE(left,before);
+        QCOMPARE(alignScrollFrames(left,left,24,ScrollDirection::Horizontal).error,StitchError::NoProgress);
+        QVERIFY(alignScrollFrames(right,left,24,ScrollDirection::Horizontal).error!=StitchError::None);
+        auto sidebarA=a,sidebarB=b;const auto header=pattern(160,8);
+        {QPainter p(&sidebarA);p.drawImage(0,0,header);}{QPainter p(&sidebarB);p.drawImage(0,0,header);}
+        QVERIFY(alignScrollFrames(transpose(sidebarA),transpose(sidebarB),24,ScrollDirection::Horizontal).error!=StitchError::None);
+        const auto repeat=pattern(160,16);QImage periodic(160,240,QImage::Format_RGBA8888),shifted(160,240,QImage::Format_RGBA8888);
+        for(int y=0;y<240;++y){memcpy(periodic.scanLine(y),repeat.constScanLine(y%16),640);memcpy(shifted.scanLine(y),repeat.constScanLine((y+5)%16),640);}
+        QCOMPARE(alignScrollFrames(transpose(periodic),transpose(shifted),24,ScrollDirection::Horizontal).error,StitchError::AmbiguousOverlap);
+        auto bad=right;bad.setDevicePixelRatio(1);QCOMPARE(alignScrollFrames(left,bad,24,ScrollDirection::Horizontal).error,StitchError::IncompatibleFrames);
+        bad=right;bad.setColorSpace(QColorSpace::DisplayP3);QCOMPARE(alignScrollFrames(left,bad,24,ScrollDirection::Horizontal).error,StitchError::IncompatibleFrames);
+        QImage huge(8193,8,QImage::Format_RGBA8888);QCOMPARE(alignScrollFrames(huge,huge,24,ScrollDirection::Horizontal).error,StitchError::TooLarge);
+        QImage blank(240,160,QImage::Format_RGBA8888);blank.fill(Qt::white);QVERIFY(alignScrollFrames(blank,blank,24,ScrollDirection::Horizontal).error!=StitchError::None);
+    }
+
     void variablePositiveScroll_data(){QTest::addColumn<int>("distance");for(int n:{1,17,73,150,216})QTest::newRow(qPrintable(QString::number(n)))<<n;}
     void variablePositiveScroll(){QFETCH(int,distance);const auto page=pattern(160,600);const auto previous=page.copy(0,0,160,240),next=page.copy(0,distance,160,240);const auto result=alignScrollFrames(previous,next);QCOMPARE(result.error,StitchError::None);QCOMPARE(result.overlap,240-distance);QVERIFY(result.confidence>=.94);QVERIFY(result.runnerUpGap>=.08);}
     void smallNoiseAndLocalIsland(){const auto page=pattern(192,500);const auto previous=page.copy(0,0,192,240);auto next=page.copy(0,60,192,240);for(int y=0;y<next.height();++y)for(int x=0;x<next.width();++x){auto c=next.pixelColor(x,y);const int n=((x*7+y*3)%5)-2;c.setRgb(c.red()+n,c.green()-n,c.blue()+n);next.setPixelColor(x,y,c);}for(int y=55;y<67;++y)for(int x=65;x<82;++x)next.setPixelColor(x,y,Qt::red);const auto result=alignScrollFrames(previous,next);QCOMPARE(result.error,StitchError::None);QCOMPARE(result.overlap,180);QCOMPARE(previous,page.copy(0,0,192,240));}

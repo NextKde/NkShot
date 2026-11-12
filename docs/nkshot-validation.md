@@ -43,3 +43,20 @@ Xvfb/KWin. See the iteration log; no screenshot-success claim is made.
   Spectacle, both can launch independently, and KWin authorizes normal capture.
 - Verify translations compile under the nkshot domain and notifications resolve.
 - Assign optional global shortcuts manually and check no Spectacle bindings change.
+
+
+## Cloud desktop boundary rechecked (2026-11-12)
+
+Creating a listening AF_UNIX socket still returns EPERM in this execution
+environment, including a permission-approved minimal probe. A separate
+socketpair/SCM_RIGHTS probe succeeds, but that does not provide the listening
+sockets required by Wayland, Unix D-Bus and PipeWire servers. An isolated official
+runtime preparation and real Qt test surface were retained; no KWin session or
+native capture was started, and no interface permission checks were disabled.
+Do not repeat this setup without a relevant environment capability change.
+
+CLI recording also requires actual KWin target selection; a single display does
+not automatically skip selection. Stopping can use the product's normal second
+activation. There is no current public D-Bus Stop/Pause/Resume API. GUI recording
+additionally requires a real registered status-notifier host. These requirements
+must not be replaced with fake host properties to claim desktop acceptance.

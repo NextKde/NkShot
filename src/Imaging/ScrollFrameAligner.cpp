@@ -10,16 +10,23 @@ constexpr int tolerance=8;
 constexpr double acceptance=.94, minimumGap=.08;
 struct Cell {int anchors=0, matched=0;};
 struct Score {double value=-1;};
-const uchar *pixel(const QImage &image,int x,int y){return image.constScanLine(y)+4*x;}
+// Logical x crosses the scroll axis; logical y follows it. No image transpose.
+struct AxisView {
+    const QImage &image;
+    bool horizontal;
+    int width() const { return horizontal ? image.height() : image.width(); }
+    int height() const { return horizontal ? image.width() : image.height(); }
+};
+const uchar *pixel(const AxisView &view,int x,int y){return view.horizontal ? view.image.constScanLine(x)+4*y : view.image.constScanLine(y)+4*x;}
 bool matches(const uchar *a,const uchar *b){for(int c=0;c<4;++c)if(std::abs(int(a[c])-int(b[c]))>tolerance)return false;return true;}
-bool textured(const QImage &image,int x,int y) {
+bool textured(const AxisView &image,int x,int y) {
     const auto center=pixel(image,x,y);if(center[3]<248)return false;
     const auto horizontal=pixel(image,x+1<image.width()?x+1:x-1,y);
     const auto vertical=pixel(image,x,y+1<image.height()?y+1:y-1);
     for(int c=0;c<3;++c)if(std::abs(int(center[c])-int(horizontal[c]))>=12||std::abs(int(center[c])-int(vertical[c]))>=12)return true;
     return false;
 }
-bool stationaryHeader(const QImage &a,const QImage &b) {
+bool stationaryHeader(const AxisView &a,const AxisView &b) {
     int supportedRows=0,minX=a.width(),maxX=-1;
     for(int y=0;y<std::max(4,a.height()/4);++y) {
         int matching=0,anchors=0,allAnchors=0,rowMin=a.width(),rowMax=-1;
@@ -43,7 +50,7 @@ bool stationaryHeader(const QImage &a,const QImage &b) {
     }
     return supportedRows>=3&&maxX-minX>=std::max(8,a.width()/20);
 }
-Score score(const QImage &previous,const QImage &next,int displacement,bool exhaustive) {
+Score score(const AxisView &previous,const AxisView &next,int displacement,bool exhaustive) {
     const int overlap=previous.height()-std::abs(displacement);
     const int py=std::max(displacement,0),ny=std::max(-displacement,0);
     const int columns=exhaustive?previous.width():std::min(previous.width(),48);
@@ -78,15 +85,19 @@ Score score(const QImage &previous,const QImage &next,int displacement,bool exha
     return {std::min(double(matched)/total,double(anchorMatched)/anchors)};
 }
 }
-ScrollAlignment alignScrollFrames(const QImage &previous,const QImage &next,int minimumOverlap) {
-    if(previous.isNull()||next.isNull()||minimumOverlap<24||previous.width()<8||previous.height()<=minimumOverlap)return {StitchError::InvalidInput};
+ScrollAlignment alignScrollFrames(const QImage &previous,const QImage &next,int minimumOverlap,ScrollDirection direction) {
+    if(direction!=ScrollDirection::Vertical&&direction!=ScrollDirection::Horizontal)return {StitchError::InvalidInput};
+    const bool horizontal=direction==ScrollDirection::Horizontal;
+    const AxisView geometry{previous,horizontal};
+    if(previous.isNull()||next.isNull()||minimumOverlap<24||geometry.width()<8||geometry.height()<=minimumOverlap)return {StitchError::InvalidInput};
     if(previous.size()!=next.size()||previous.devicePixelRatio()!=next.devicePixelRatio()||previous.colorSpace()!=next.colorSpace())return {StitchError::IncompatibleFrames};
     if(previous.width()>8192||previous.height()>8192||qint64(previous.width())*previous.height()>16000000)return {StitchError::TooLarge};
-    const auto a=previous.convertToFormat(QImage::Format_RGBA8888),b=next.convertToFormat(QImage::Format_RGBA8888);
-    if(a.isNull()||b.isNull())return {StitchError::TooLarge};
+    const auto first=previous.convertToFormat(QImage::Format_RGBA8888),secondImage=next.convertToFormat(QImage::Format_RGBA8888);
+    if(first.isNull()||secondImage.isNull())return {StitchError::TooLarge};
+    const AxisView a{first,horizontal},b{secondImage,horizontal};
     double best=-1,second=-1;int bestDisplacement=0;
     QVector<QPair<int,double>> candidates;
-    const int maximum=previous.height()-minimumOverlap;
+    const int maximum=a.height()-minimumOverlap;
     for(int displacement=-maximum;displacement<=maximum;++displacement) {
         const auto candidate=score(a,b,displacement,false).value;
         if(candidate>=0)candidates.append({displacement,candidate});
@@ -117,7 +128,7 @@ ScrollAlignment alignScrollFrames(const QImage &previous,const QImage &next,int 
     if(stationaryHeader(a,b))return {StitchError::NoOverlap,0,best,gap};
     const auto full=fullyScored?best:score(a,b,bestDisplacement,true).value;
     if(full<acceptance)return {StitchError::NoOverlap,0,std::max(0.,full),gap};
-    return {StitchError::None,previous.height()-bestDisplacement,full,gap};
+    return {StitchError::None,a.height()-bestDisplacement,full,gap};
 }
 
 } // namespace NkShot::Imaging

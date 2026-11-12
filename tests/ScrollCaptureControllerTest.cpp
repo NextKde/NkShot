@@ -15,7 +15,36 @@ class ScrollCaptureControllerTest : public QObject {
         for(int y=0;y<100;++y) for(int x=0;x<40;++x) image.setPixelColor(x,y,QColor((x*7+y+offset)%256,((y+offset)*13+x)%256,(x+(y+offset)*3)%256));
         return image;
     }
+    static QRectF horizontalSelection() { return {-180,10,100,40}; }
+    static QImage horizontalFrame(int offset) {
+        const auto vertical=frame(offset);QImage image(100,40,QImage::Format_RGBA8888);
+        for(int y=0;y<image.height();++y)for(int x=0;x<image.width();++x)image.setPixelColor(x,y,vertical.pixelColor(y,x));
+        return image;
+    }
 private Q_SLOTS:
+    void horizontalContinuousSkipAppendFailureRetry() {
+        QObject backend;int calls=0;
+        ScrollCaptureController c(&backend,[&](quint64,QRect rect){++calls;return rect==QRect(20,10,100,40);},[]{});
+        QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),skipped(&c,&ScrollCaptureController::frameSkipped),failed(&c,&ScrollCaptureController::failed),results(&c,&ScrollCaptureController::resultReady);
+        QVERIFY(c.begin(layout(),horizontalSelection(),ScrollDirection::Horizontal));QCOMPARE(c.direction(),ScrollDirection::Horizontal);
+        QVERIFY(!c.begin(layout(),selection(),ScrollDirection::Vertical));QCOMPARE(c.direction(),ScrollDirection::Horizontal);
+        c.setCollecting(true);QTRY_COMPARE(hidden.size(),1);QCOMPARE(calls,0);
+        auto ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameCaptured(ticket,layout(),horizontalFrame(0));QCOMPARE(c.frameCount(),1);
+        QTRY_COMPARE_WITH_TIMEOUT(hidden.size(),2,1600);ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameCaptured(ticket,layout(),horizontalFrame(0));QCOMPARE(skipped.size(),1);QCOMPARE(failed.size(),0);QVERIFY(c.collecting());
+        QTRY_COMPARE_WITH_TIMEOUT(hidden.size(),3,1600);ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameCaptured(ticket,layout(),horizontalFrame(60));QCOMPARE(c.frameCount(),2);QCOMPARE(c.preview().size(),QSize(160,40));QCOMPARE(c.preview().copy(0,0,100,40),horizontalFrame(0));QCOMPARE(c.preview().copy(60,0,100,40),horizontalFrame(60));
+        const auto accepted=c.preview();const auto seams=c.seams();
+        QVERIFY(c.captureNext());ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameFailed(ticket,QStringLiteral("backend denied"));QVERIFY(!c.collecting());QCOMPARE(failed.size(),1);QCOMPARE(c.preview(),accepted);QCOMPARE(c.seams(),seams);
+        QVERIFY(c.captureNext());ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));
+        QImage incompatible(100,40,QImage::Format_RGBA8888);incompatible.fill(Qt::white);c.frameCaptured(ticket,layout(),incompatible);QCOMPARE(failed.size(),2);QCOMPARE(c.frameCount(),2);QCOMPARE(c.preview(),accepted);QCOMPARE(c.direction(),ScrollDirection::Horizontal);
+        QVERIFY(c.captureNext());ticket=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(ticket,layout()));c.frameCaptured(ticket,layout(),horizontalFrame(120));QCOMPARE(c.frameCount(),3);QCOMPARE(c.preview().size(),QSize(220,40));QVERIFY(c.finish());QCOMPARE(results.size(),1);QCOMPARE(qvariant_cast<QImage>(results.first().first()).copy(120,0,100,40),horizontalFrame(120));
+    }
+    void horizontalCancellationTicketsAndDefaultDirection() {
+        QObject backend;int cancels=0;ScrollCaptureController c(&backend,[](quint64,QRect){return true;},[&]{++cancels;});
+        QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested);
+        QVERIFY(c.begin(layout(),horizontalSelection(),ScrollDirection::Horizontal));QVERIFY(c.captureNext());const auto stale=hidden.last().first().toULongLong();QVERIFY(c.confirmHidden(stale,layout()));c.cancel();QCOMPARE(cancels,1);
+        QVERIFY(c.begin(layout(),selection()));QCOMPARE(c.direction(),ScrollDirection::Vertical);c.frameCaptured(stale,layout(),horizontalFrame(0));QCOMPARE(c.frameCount(),0);
+        QVERIFY(c.captureNext());auto fresh=hidden.last().first().toULongLong();QVERIFY(fresh!=stale);QVERIFY(!c.confirmHidden(stale,layout()));QVERIFY(c.confirmHidden(fresh,layout()));c.frameCaptured(fresh,layout(),frame(0));QCOMPARE(c.frameCount(),1);QCOMPARE(c.preview(),frame(0));
+    }
     void automaticPauseResumeSkipAndFailure() {
         QObject backend;int cancels=0,calls=0;ScrollCaptureController c(&backend,[&](quint64,QRect){++calls;return true;},[&]{++cancels;});
         QSignalSpy hidden(&c,&ScrollCaptureController::hideWindowsRequested),skipped(&c,&ScrollCaptureController::frameSkipped),failed(&c,&ScrollCaptureController::failed);
