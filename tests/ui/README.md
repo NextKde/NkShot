@@ -806,3 +806,24 @@ Use `NKSHOT_TEST_STACK=1` for edge-to-edge and
 compact flags apply. Evidence suffixes include `.review.png`,
 `.review-one-image.png` and `.review-error.png`. These are actual Qt software
 windows and synthetic local image fixtures, not native KDE capture acceptance.
+
+## Exact local frame inspection (115)
+
+Run `NKSHOT_TEST_LOCAL_MEDIA_OPEN=1 NKSHOT_TEST_FRAME_INSPECTION=1` to open a real
+local synthetic video, enter Browse exact frames through the playback menu and
+exercise Previous/Next, continuous arrow-key requests, first/last bounds and
+busy-state extraction guards. The helper uses a separate full sequential RGB24
+decode from the file start as its pixel oracle, not a player seek or sink buffer.
+It checks the actual frame number and presentation time, then copies and saves
+an extracted immutable pin and compares exact pixels.
+
+The original video hash, image/base/history, playback position and clip options
+must remain unchanged. Closing/reopening, hiding the owner and retiring its
+source must close the inspector. A final source-change fixture intentionally
+reloads playback only after the playback-position isolation assertion. One extra
+short B-frame/VFR fixture has independently verified unequal timestamp gaps;
+its actual window navigation must match the same sequential decode oracle.
+
+Evidence suffixes: `.exact-frame.png`, `.exact-vfr.png`. Standard dark and compact
+flags apply. These are actual software-rendered Qt windows containing generated
+media. They do not establish native KDE capture, GPU or device A/V acceptance.

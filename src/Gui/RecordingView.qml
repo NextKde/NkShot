@@ -623,6 +623,30 @@ FocusScope {
                 }
             }
             QQC.Button {
+                id: inspectFramesButton
+                objectName: "nkshotInspectVideoFrames"
+                Layout.fillWidth: true
+                text: i18nc("@action", "Browse exact frames…")
+                enabled: mediaPlayer.hasVideo && !root.captureActive && contextWindow.canOpenMedia
+                font: Qt.application.font
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                contentItem: QQC.Label {
+                    text: inspectFramesButton.text; font: inspectFramesButton.font
+                    color: Kos.AppTheme.paletteText
+                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                background: Kos.KosSurface {
+                    fillColor: Kos.AppTheme.controlBackground
+                    radius: 9; elevation: 0; strokeWidth: 0
+                    hovered: inspectFramesButton.hovered; pressed: inspectFramesButton.down; focused: inspectFramesButton.visualFocus
+                }
+                onClicked: {
+                    mediaPlayer.pause()
+                    playbackSettings.close()
+                    contextWindow.inspectVideoFrames(root.sourceUrl, mediaPlayer.position)
+                }
+            }
+            QQC.Button {
                 id: openClipButton
                 objectName: "nkshotOpenClip"
                 Layout.fillWidth: true

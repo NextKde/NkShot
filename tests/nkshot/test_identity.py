@@ -427,8 +427,22 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('clearMatches()', popup)
         self.assertIn('OCR can miss text', popup)
 
+    def test_frame_inspection_uses_verified_presentation_timestamps(self):
+        session = read('src/Media/FrameInspectionSession.cpp')
+        window = read('src/Gui/FrameInspectionWindow.cpp')
+        view = read('src/Gui/RecordingView.qml')
+        self.assertIn('best_effort_timestamp', session)
+        self.assertIn('-noaccurate_seek', session)
+        self.assertIn('-copyts', session)
+        self.assertIn('settb=expr=', session)
+        self.assertIn('showinfo', session)
+        self.assertIn('m_runningEpoch!=m_epoch', session)
+        self.assertIn('snapshot()', window)
+        self.assertIn('nkshotInspectVideoFrames', view)
+        self.assertIn('pinVideoFrame(videoOutput.videoSink', view)
+
     def test_qml_returned_windows_keep_cpp_lifetime(self):
-        for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow'):
+        for name in ('PinnedImageWindow', 'ImageCopyEditor', 'QuickNoteWindow', 'ColorPickerWindow', 'ScrollCaptureWindow', 'FrameInspectionWindow'):
             source = read('src/Gui/' + name + '.cpp')
             self.assertIn('QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership)', source)
 

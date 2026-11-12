@@ -71,6 +71,7 @@ public:
     Q_INVOKABLE void startDrag();
     Q_INVOKABLE QQuickWindow *pinImage();
     Q_INVOKABLE QQuickWindow *pinVideoFrame(QVideoSink *sink, const QUrl &source);
+    Q_INVOKABLE QQuickWindow *inspectVideoFrames(const QUrl &source, qint64 positionMs);
     Q_INVOKABLE QQuickWindow *openQuickNote();
     Q_INVOKABLE QQuickWindow *openColorPicker();
     Q_INVOKABLE void scanImageCode();
@@ -128,6 +129,7 @@ private:
     QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
     QPointer<QQuickWindow> m_combineReview;
+    QPointer<QQuickWindow> m_frameInspector;
     VideoClipJob *m_clipJob = nullptr;
     QPointer<QObject> m_clipSaveDialog;
     QPointer<ImageCopyEditor> m_videoAnnotationEditor;

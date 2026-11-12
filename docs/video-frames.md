@@ -34,3 +34,8 @@ unverified. Offline translation is not part of this feature.
 
 The pin chooses its own size independently of the main viewer. The compact
 image above refers to the playback menu, not a compact pinned window.
+
+For verified previous/next decoded-frame navigation, use the separate
+[Browse exact frames workflow](video-frame-inspection.md) added in 115.
+The quick current-player-frame action above is preserved and does not acquire
+new frame-accurate-seek guarantees.

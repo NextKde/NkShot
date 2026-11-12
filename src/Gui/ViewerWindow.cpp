@@ -19,6 +19,7 @@
 #include "PinnedImageWindow.h"
 #include "ImageCopyEditor.h"
 #include "ImageCombineWindow.h"
+#include "FrameInspectionWindow.h"
 #include "PresentationPreview.h"
 #include "QuickNoteWindow.h"
 #include "ColorPickerWindow.h"
@@ -203,6 +204,33 @@ QQuickWindow *ViewerWindow::pinVideoFrame(QVideoSink *sink, const QUrl &source)
     return window;
 }
 
+QQuickWindow *ViewerWindow::inspectVideoFrames(const QUrl &source, qint64 positionMs)
+{
+    const auto core = SpectacleCore::instance();
+    if (!core->videoMode() || source.isEmpty() || source != core->currentVideo()) return nullptr;
+    if (m_frameInspector) { m_frameInspector->showNormal(); m_frameInspector->requestActivate(); return m_frameInspector; }
+    if (!canOpenMedia() || m_videoAnnotationEditor || positionMs < 0) return nullptr;
+    auto window = new FrameInspectionWindow(source, positionMs, engine());
+    if (window->status() != QQuickView::Ready) { delete window; return nullptr; }
+    m_frameInspector = window;
+    window->setTransientParent(this);
+    window->setModality(Qt::WindowModal);
+    window->setScreen(screen());
+    window->setPosition(position() + QPoint(30, 30));
+    connect(window, &QObject::destroyed, this, &ViewerWindow::openingMediaChanged);
+    connect(this, &QObject::destroyed, window, [window] { delete window; });
+    connect(this, &QWindow::visibleChanged, window, [window](bool visible) { if (!visible) window->close(); });
+    connect(core, &SpectacleCore::currentVideoChanged, window, [window] { window->close(); });
+    connect(core, &SpectacleCore::videoModeChanged, window, [window] { window->close(); });
+    connect(core->videoPlatform(), &VideoPlatform::recordingStateChanged, window, [window, core] {
+        if (core->videoPlatform()->isRecording()) window->close();
+    });
+    window->show();
+    window->requestActivate();
+    Q_EMIT openingMediaChanged();
+    return window;
+}
+
 QSize ViewerWindow::imageSnapshotSize() const
 {
     return SpectacleCore::instance()->annotationDocument()->renderToImage().size();
@@ -331,7 +359,7 @@ bool ViewerWindow::canOpenMedia() const
 {
     return !m_openingMedia && SpectacleCore::instance()->canOpenMedia()
         && !m_clipJob->busy() && !choosingClipOutput()
-        && !m_combiningImages && !m_resizingImage;
+        && !m_combiningImages && !m_resizingImage && !m_frameInspector;
 }
 
 bool ViewerWindow::canDropMedia() const
@@ -751,7 +779,7 @@ QObject *ViewerWindow::clipJobObject() const { return m_clipJob; }
 QQuickWindow *ViewerWindow::editVideoAnnotations(QVideoSink *sink, const QUrl &source)
 {
     const auto core=SpectacleCore::instance();
-    if(!m_clipJob||!m_clipJob->ready()||m_clipJob->busy()||m_clipSaveDialog||!m_clipJob->annotationAvailable()
+    if(m_frameInspector||!m_clipJob||!m_clipJob->ready()||m_clipJob->busy()||m_clipSaveDialog||!m_clipJob->annotationAvailable()
         ||!core->videoMode()||core->videoPlatform()->isRecording()||source.isEmpty()
         ||source!=core->currentVideo()||source!=m_clipJob->sourceUrl()||!sink)return nullptr;
     if(m_videoAnnotationEditor){m_videoAnnotationEditor->show();m_videoAnnotationEditor->requestActivate();return m_videoAnnotationEditor;}
@@ -784,14 +812,14 @@ void ViewerWindow::clearVideoAnnotations()
 
 void ViewerWindow::prepareClipExport(const QUrl &source)
 {
-    if (!m_clipJob || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
+    if (!m_clipJob || m_frameInspector || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
     ++m_annotationSession;delete m_videoAnnotationEditor;m_videoAnnotationEditor=nullptr;
     m_clipJob->inspect(source);
 }
 
 void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
 {
-    if (!m_clipJob || m_clipJob->busy() || !m_clipJob->ready() || m_clipSaveDialog
+    if (m_frameInspector || !m_clipJob || m_clipJob->busy() || !m_clipJob->ready() || m_clipSaveDialog
         || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
     const QUrl source = m_clipJob->sourceUrl();
     const QString format = m_clipJob->outputFormat();

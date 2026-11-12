@@ -5,6 +5,7 @@
 #include "ImageExportUiChecks.h"
 #include "VideoAnnotationsUiChecks.h"
 #include "FreeCropUiChecks.h"
+#include "FrameInspectionUiChecks.h"
 #include "SpectacleCore.h"
 #include "RecentMediaModel.h"
 #include "Platforms/ImagePlatform.h"
@@ -463,6 +464,11 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             if(parent->property("moving").isValid()&&!QTest::qWaitFor([&]{return !parent->property("moving").toBool();},4000))return false;
         QTest::mouseClick(viewer(),Qt::LeftButton,Qt::NoModifier,item->mapToScene(QPointF(item->width()/2,item->height()/2)).toPoint());return true;
     };
+    if(qEnvironmentVariableIsSet("NKSHOT_TEST_FRAME_INSPECTION")) {
+        QString inspectionFailure;
+        if(!FrameInspectionUiChecks::run(application,viewer(),recording,movie,screenshot,[core](const QUrl &source){core->setCurrentVideo(source);},&inspectionFailure))return fail(inspectionFailure);
+        return true;
+    }
     // The production playback toolbar reveals itself on actual pointer hover.
     QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
     if(!recording->property("playing").toBool()&&!click(QStringLiteral("nkshotPlaybackToggle")))return fail(QStringLiteral("Playback control unavailable"));

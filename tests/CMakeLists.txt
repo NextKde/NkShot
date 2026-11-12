@@ -237,3 +237,8 @@ set_tests_properties(recording_auto_stop_test PROPERTIES TIMEOUT 30)
 ecm_add_test(ImageCombineSessionTest.cpp ../src/Gui/ImageCombineSession.cpp ../src/Gui/ImageCombineSession.h ../src/Imaging/VerticalStitcher.cpp
     TEST_NAME image_combine_session_test LINK_LIBRARIES Qt::Test Qt::Quick Qt::Concurrent)
 set_tests_properties(image_combine_session_test PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# True presentation-timestamp frame inspection, independent of player seek.
+ecm_add_test(FrameInspectionSessionTest.cpp ../src/Media/FrameInspectionSession.cpp ../src/Media/FrameInspectionSession.h
+    TEST_NAME frame_inspection_session_test LINK_LIBRARIES Qt::Test Qt::Quick)
+set_tests_properties(frame_inspection_session_test PROPERTIES TIMEOUT 120 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
