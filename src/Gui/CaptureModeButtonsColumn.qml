@@ -12,22 +12,17 @@ ColumnLayout {
     spacing: Kirigami.Units.mediumSpacing
     Repeater {
         model: CaptureModeModel
-        delegate: QQC.DelayButton {
-            contentItem: SymbolLabel { control: parent }
+        delegate: ModeButton {
             id: button
             readonly property bool showCancel: Settings.captureMode === model.captureMode && SpectacleCore.captureTimeRemaining > 0
             Layout.fillWidth: true
-            leftPadding: Kirigami.Units.mediumSpacing + QmlUtils.fontMetrics.descent
-            rightPadding: Kirigami.Units.mediumSpacing + QmlUtils.fontMetrics.descent
-            topPadding: Kirigami.Units.mediumSpacing
-            bottomPadding: Kirigami.Units.mediumSpacing
-            // Delay doesn't really matter since we set
-            // progress directly and have no transition
-            delay: 1
-            transition: null
             progress: Settings.captureMode === model.captureMode ?
                 SpectacleCore.captureProgress : 0
-            icon.name: showCancel ? "dialog-cancel" : ""
+            icon.name: showCancel ? "dialog-cancel"
+                : model.captureMode === CaptureModeModel.RectangularRegion ? "transform-crop"
+                : model.captureMode === CaptureModeModel.ActiveWindow
+                    || model.captureMode === CaptureModeModel.WindowUnderCursor ? "draw-rectangle"
+                : "view-fullscreen"
             text: showCancel ?
                 i18np("Cancel (%1 second)", "Cancel (%1 seconds)",
                         Math.ceil(SpectacleCore.captureTimeRemaining / 1000))

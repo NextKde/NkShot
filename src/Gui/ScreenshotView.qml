@@ -66,9 +66,9 @@ EmptyPage {
         zoomToPercent(currentZoom + (inverseRemainder % stepSize) - stepSize, centerPos)
     }
 
-    leftPadding: mirrored && verticalScrollBar.visible ? verticalScrollBar.width : 0
-    rightPadding: !mirrored && verticalScrollBar.visible ? verticalScrollBar.width : 0
-    bottomPadding: horizontalScrollBar.visible ? horizontalScrollBar.height : 0
+    // Overlay scrollbars must not resize the viewport: their visibility depends
+    // on content size, which itself depends on the viewport through fitZoom.
+    padding: 0
 
     contentItem: Flickable {
         id: flickable

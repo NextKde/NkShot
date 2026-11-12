@@ -8,6 +8,7 @@ import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import Kos.Icons as Symbols
+import Kos.Ui as Kos
 import "SymbolMap.js" as SymbolMap
 
 // Menu item counterpart of SymbolLabel. Everything that makes a menu item a menu
@@ -121,10 +122,11 @@ QQC.MenuItem {
                 // Reserve the column even for items without a glyph, so a menu
                 // that mixes both still lines its text up.
                 visible: content.reserveGlyph
-                opacity: content.hasIcon ? (root.enabled ? 1 : 0.38) : 0
+                opacity: content.hasIcon ? 1 : 0
                 name: SymbolMap.glyph(root.glyphName)
                 size: root.glyphSize
-                color: root.icon.color.a > 0 ? root.icon.color : Kirigami.Theme.textColor
+                color: !root.enabled ? Kos.AppTheme.disabledText
+                    : root.icon.color.a > 0 ? root.icon.color : root.palette.windowText
             }
 
             // MnemonicData hands us markup with the underlines already in place,
@@ -137,10 +139,9 @@ QQC.MenuItem {
                 text: root.Kirigami.MnemonicData.richTextLabel
                 textFormat: Text.RichText
                 font: root.font
-                color: Kirigami.Theme.textColor
+                color: root.enabled ? root.palette.windowText : Kos.AppTheme.disabledText
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
-                opacity: root.enabled ? 1 : 0.38
             }
 
             Text {
@@ -156,8 +157,8 @@ QQC.MenuItem {
                 // ("Ctrl+Shift+S" here, "Strg+Umschalt+S" on a German desktop).
                 text: visible ? shortcutResolver.nativeText : ""
                 font: root.font
-                color: Kirigami.Theme.textColor
-                opacity: root.enabled ? 0.7 : 0.3
+                color: root.enabled ? root.palette.windowText : Kos.AppTheme.disabledText
+                opacity: root.enabled ? 0.7 : 1
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignVCenter
 

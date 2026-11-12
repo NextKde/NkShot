@@ -18,6 +18,7 @@ Shape {
     property alias svgPath: pathSvg.path
     property alias pathScale: shapePath.scale
     property alias pathHints: shapePath.pathHints
+    property real cornerRadius: 0
 
     // Get a rectangular SVG path
     function rectanglePath(x, y, w, h) {
@@ -30,6 +31,23 @@ Shape {
                 l ${w},0
                 l 0,${h}
                 l ${-w},0
+                z`
+    }
+
+    function roundedRectanglePath(x, y, w, h, radius) {
+        const r = Math.max(0, Math.min(radius, w / 2, h / 2))
+        if (r === 0) {
+            return rectanglePath(x, y, w, h)
+        }
+        return `M ${x + r},${y}
+                l ${w - 2 * r},0
+                A ${r},${r} 0 0 1 ${x + w},${y + r}
+                l 0,${h - 2 * r}
+                A ${r},${r} 0 0 1 ${x + w - r},${y + h}
+                l ${2 * r - w},0
+                A ${r},${r} 0 0 1 ${x},${y + h - r}
+                l 0,${2 * r - h}
+                A ${r},${r} 0 0 1 ${x + r},${y}
                 z`
     }
 
@@ -56,7 +74,10 @@ Shape {
         joinStyle: ShapePath.MiterJoin
         PathSvg {
             id: pathSvg
-            path: rectanglePath(strokeWidth / 2, strokeWidth / 2,
+            path: root.cornerRadius > 0
+                ? roundedRectanglePath(strokeWidth / 2, strokeWidth / 2,
+                                       width - strokeWidth, height - strokeWidth, root.cornerRadius)
+                : rectanglePath(strokeWidth / 2, strokeWidth / 2,
                                 width - strokeWidth, height - strokeWidth)
         }
     }

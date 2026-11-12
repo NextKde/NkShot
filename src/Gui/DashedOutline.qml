@@ -32,11 +32,11 @@ Outline {
         strokeWidth: root.strokeWidth
         strokeColor: palette.base
         strokeStyle: ShapePath.DashLine
-        dashPattern: regularDashPattern(Kirigami.Units.mediumSpacing)
+        // A near-zero dash becomes a dot with RoundCap. Reserve two stroke
+        // widths in the space for the caps to keep the visible dots separate.
+        dashPattern: [0.01, Kirigami.Units.smallSpacing / root.strokeWidth + 2]
         dashOffset: 0
-        // FlatCap ensures that dash and space length are equal.
-        // With other cap styles, subtract strokeWidth * 2 from the logical pixel length of dashes.
-        capStyle: ShapePath.FlatCap
+        capStyle: ShapePath.RoundCap
         joinStyle: root.joinStyle
         scale: root.pathScale
         pathHints: root.pathHints

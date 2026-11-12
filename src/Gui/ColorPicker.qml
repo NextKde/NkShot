@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
@@ -10,31 +11,23 @@ QQC.Pane {
     palette.text: Kos.AppTheme.paletteText
     palette.windowText: Kos.AppTheme.paletteText
     palette.buttonText: Kos.AppTheme.paletteText
-    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentSecondaryBackground; radius: 16; elevation: 0 }
+    // Fill the complete client area of this decorated QQuickView.
+    background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
 
-    component PickerButton: QQC.ToolButton {
-        implicitHeight: 36
-        opacity: enabled ? 1 : 0.38
-        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
-        property string symbol: ""
-        icon.color: Kos.AppTheme.paletteText
-        contentItem: SymbolLabel {
-            symbol: parent.symbol
-            text: parent.text
-            display: parent.display
-            color: Kos.AppTheme.paletteText
-            iconSize: Math.max(parent.icon.height, 16)
-            font: parent.font
-        }
+    component PickerButton: Kos.LiquidActionButton {
+        id: button
+        implicitHeight: 30
+        implicitWidth: iconOnly ? implicitHeight : Math.max(implicitHeight,
+            captionMetrics.advanceWidth(text) + leftPadding + rightPadding)
+        FontMetrics { id: captionMetrics; font: button.font }
+        materialForm: true
+        iconOnly: display === QQC.AbstractButton.IconOnly
+        font.pixelSize: 13
+        focusRingColor: "transparent"
+        contentItem: SymbolLabel { control: parent; color: parent.textColor }
         QQC.ToolTip.visible: hovered
         QQC.ToolTip.text: text
-        background: Kos.KosSurface {
-            fillColor: parent.down || parent.hovered ? Kos.AppTheme.controlBackground : "transparent"
-            radius: 9
-            elevation: 0
-            strokeWidth: parent.activeFocus ? 2 : 0
-            strokeColor: Kos.AppTheme.accent
-        }
+        Accessible.name: text
     }
     component Checker: Canvas {
         onWidthChanged: requestPaint()
@@ -62,7 +55,7 @@ QQC.Pane {
                 anchors.right: closeButton.left
                 anchors.rightMargin: 12
                 spacing: 4
-                QQC.Label { text: i18nc("@title", "Pick a color"); font.pixelSize: 20; font.bold: true; color: Kos.AppTheme.paletteText }
+                QQC.Label { text: i18nc("@title", "Pick a color"); font.pixelSize: 17; font.weight: Font.DemiBold; color: Kos.AppTheme.paletteText }
                 QQC.Label { width: parent.width; text: colorWindow.screenMode ? i18nc("@info", "Choose with your desktop’s color picker") : i18nc("@info", "From a snapshot of your edited image"); color: Kos.AppTheme.mutedText; font.pixelSize: 12; elide: Text.ElideRight }
             }
             PickerButton {
@@ -70,7 +63,7 @@ QQC.Pane {
                 anchors.right: parent.right
                 objectName: "nkshotColorClose"
                 text: i18nc("@action", "Close")
-                symbol: "window-close"
+                icon.name: "window-close"
                 display: QQC.AbstractButton.IconOnly
                 onClicked: colorWindow.close()
             }
@@ -79,31 +72,25 @@ QQC.Pane {
             Layout.fillWidth: true
             spacing: 12
             QQC.Label {text: i18nc("@label", "Source"); color: Kos.AppTheme.mutedText; Layout.fillWidth: true}
-            QQC.ComboBox {
+            Kos.LiquidSelect {
                 id: sourceChoice
                 objectName: "nkshotColorSource"
                 implicitWidth: 160
-                implicitHeight: 32
-                model: [i18nc("@item", "Screenshot"), i18nc("@item", "Screen")]
-                currentIndex: colorWindow.screenMode ? 1 : 0
-                palette.text: Kos.AppTheme.paletteText
-                palette.buttonText: Kos.AppTheme.paletteText
-                background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 8; elevation: 0}
+                implicitHeight: 30
+                materialForm: true
+                popupBorderWidth: 0
+                appearanceMode: Kos.AppTheme.dark ? "dark" : "light"
+                accentColor: Kos.AppTheme.accent
+                focusRingColor: "transparent"
+                opacity: 1
+                textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
+                // LiquidSelect has no disabled-row role; expose only usable sources.
+                model: colorWindow.hasImage ? [i18nc("@item", "Screenshot"), i18nc("@item", "Screen")]
+                    : [i18nc("@item", "Screen")]
+                currentIndex: colorWindow.hasImage && colorWindow.screenMode ? 1 : 0
                 Accessible.name: i18nc("@label", "Color source")
-                delegate: QQC.ItemDelegate {
-                    required property int index
-                    required property string modelData
-                    width: sourceChoice.width
-                    text: modelData
-                    enabled: index === 1 || colorWindow.hasImage
-                    highlighted: sourceChoice.highlightedIndex === index
-                }
-                onActivated: index => {
-                    colorWindow.screenMode = index === 1
-                    // Keyboard navigation may activate a disabled delegate.
-                    // Restore the authoritative source after the C++ guard.
-                    currentIndex = Qt.binding(function() { return colorWindow.screenMode ? 1 : 0 })
-                }
+                onActivated: index => colorWindow.screenMode = !colorWindow.hasImage || index === 1
             }
         }
         Rectangle {
@@ -113,7 +100,7 @@ QQC.Pane {
             Layout.minimumHeight: 100
             color: Kos.AppTheme.contentBackground
             radius: 12
-            border.color: viewport.activeFocus ? Kos.AppTheme.accent : Kos.AppTheme.border
+            border.color: Kos.AppTheme.border
             Item {
                 id: viewport
                 objectName: "nkshotColorViewport"
@@ -184,8 +171,8 @@ QQC.Pane {
                     Layout.preferredHeight: 64
                     color: colorWindow.hasSample ? colorWindow.sampleColor : Kos.AppTheme.controlBackground
                     border.color: Kos.AppTheme.border
-                    radius: 14
-                    QQC.Label {anchors.centerIn: parent; visible: !colorWindow.hasSample; text: "○"; font.pixelSize: 28; color: Kos.AppTheme.mutedText}
+                    radius: 12
+                    Kos.VectorIcon { anchors.centerIn: parent; visible: !colorWindow.hasSample; name: "circle"; size: 28; color: Kos.AppTheme.mutedText }
                 }
                 QQC.Label {
                     objectName: "nkshotScreenHex"
@@ -246,7 +233,19 @@ QQC.Pane {
                 Rectangle { anchors.centerIn: parent; width: 8; height: 8; color: "transparent"; border.width: 1; border.color: "white"; visible: colorWindow.hasSample
                     Rectangle { anchors.fill: parent; anchors.margins: -1; color: "transparent"; border.color: "#202023" }
                 }
-                Rectangle { anchors.fill: parent; color: "transparent"; border.color: Kos.AppTheme.border }
+                // Cover only the corners so the sampler also works with software rendering.
+                Shape {
+                    anchors.fill: parent
+                    ShapePath {
+                        strokeWidth: -1
+                        fillColor: Kos.AppTheme.contentSecondaryBackground
+                        fillRule: ShapePath.OddEvenFill
+                        PathSvg {
+                            path: "M 0 0 H 66 V 66 H 0 Z M 8 0 H 58 A 8 8 0 0 1 66 8 V 58 A 8 8 0 0 1 58 66 H 8 A 8 8 0 0 1 0 58 V 8 A 8 8 0 0 1 8 0 Z"
+                        }
+                    }
+                }
+                Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: Kos.AppTheme.border }
             }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -254,7 +253,7 @@ QQC.Pane {
                 RowLayout {
                     spacing: 8
                     Rectangle {
-                        width: 18; height: 18; radius: 5
+                        width: 18; height: 18; radius: 8
                         color: colorWindow.hasSample ? colorWindow.sampleColor : "transparent"
                         border.color: Kos.AppTheme.border
                     }
@@ -307,13 +306,7 @@ QQC.Pane {
                 objectName: "nkshotColorCopyHex"
                 text: i18nc("@action", "Copy HEX")
                 enabled: colorWindow.hasSample
-                palette.buttonText: Kos.AppTheme.accentText
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.accent; radius: 9; elevation: 0
-                    strokeWidth: copyHex.activeFocus ? 2 : 0
-                    strokeColor: Kos.AppTheme.paletteText
-                    opacity: copyHex.enabled ? 1 : 0.4
-                }
+                highlighted: true
                 onClicked: colorWindow.copyHex()
             }
         }

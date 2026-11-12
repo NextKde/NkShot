@@ -22,6 +22,9 @@ Item {
         font: Qt.application.font
     }
 
+    readonly property int toolbarButtonHeight: 28
+    readonly property int toolbarIconSize: 16
+
     readonly property real iconTextButtonHeight: iconTextButton.implicitHeight
 
     readonly property real textOnlyButtonHeight: textOnlyButton.implicitHeight

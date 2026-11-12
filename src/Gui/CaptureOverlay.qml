@@ -84,47 +84,62 @@ MouseArea {
         maximumTextureSize: 2048
     }
 
-    component ToolButton : TtToolButton {
+    component ToolButton: Kos.LiquidActionButton {
+        id: toolButton
         property bool primaryAction: false
+        property string symbol: ""
+        materialForm: false
+        implicitHeight: QmlUtils.toolbarButtonHeight
+        iconSize: QmlUtils.toolbarIconSize
+        iconOnly: display === QQC.AbstractButton.IconOnly
+        highlighted: primaryAction
         focusPolicy: Qt.NoFocus
-        implicitHeight: 36
-        icon.width: 18
-        icon.height: 18
-        leftPadding: 10
-        rightPadding: 10
-        palette.buttonText: primaryAction ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
-        background: Kos.KosSurface {
-            fillColor: parent.primaryAction ? Kos.AppTheme.accent
-                : parent.hovered || parent.down ? Kos.AppTheme.controlBackground : "transparent"
-            radius: 10
-            elevation: 0
-            strokeWidth: 0
-            showInnerHighlight: false
+        display: QQC.AbstractButton.TextBesideIcon
+        implicitWidth: iconOnly ? implicitHeight
+            : Math.max(2 * QmlUtils.toolbarButtonHeight,
+                       implicitContentWidth + leftPadding + rightPadding)
+        width: iconOnly ? height : implicitWidth
+        topPadding: (height - Math.max(iconSize, implicitContentHeight)) / 2
+        bottomPadding: topPadding
+        leftPadding: iconOnly ? (height - iconSize) / 2 : 12
+        rightPadding: leftPadding
+        icon.width: iconSize
+        icon.height: iconSize
+        icon.color: textColor
+        // Captured imagery also tints the panel; use full-contrast foreground ink.
+        textColor: !enabled ? Kos.AppTheme.disabledText
+            : primaryAction ? "#FFFFFF" : Kos.AppTheme.paletteText
+        reduceMotion: Settings.reduceUiMotion
+        Rectangle {
+            anchors.fill: parent
+            visible: !toolButton.materialForm && !toolButton.highlighted && !toolButton.checked
+            radius: toolButton.cornerRadius
+            color: Kos.AppTheme.paletteText
+            opacity: toolButton.down ? 0.13 : toolButton.hovered ? 0.07 : 0
+            Behavior on opacity {
+                NumberAnimation { duration: Settings.reduceUiMotion ? 0 : 150 }
+            }
         }
-    }
-    component CaptureMenuItem: SymbolMenuItem {
-        icon.color: palette.buttonText
-        opacity: enabled ? 1 : 0.38
-    }
-    component CaptureMenu: QQC.Menu {
-        width: 240
-        padding: 6
-        palette.windowText: Kos.AppTheme.paletteText
-        palette.text: Kos.AppTheme.paletteText
-        palette.buttonText: Kos.AppTheme.paletteText
-        palette.base: Kos.AppTheme.contentBackground
-        palette.button: Kos.AppTheme.controlBackground
-        background: Kos.KosSurface {
-            fillColor: Kos.AppTheme.contentBackground
-            radius: 14
-            elevation: 0.5
+        contentItem: SymbolLabel {
+            z: 1
+            control: toolButton
+            symbol: toolButton.symbol
+                || (toolButton.action && toolButton.action.symbol !== undefined ? toolButton.action.symbol : "")
+                || toolButton.icon.name
+            color: toolButton.textColor
+            iconSize: toolButton.iconSize
         }
+        QQC.ToolTip.text: text
+        QQC.ToolTip.visible: (hovered || pressed) && iconOnly
+        QQC.ToolTip.delay: Kirigami.Units.toolTipDelay
     }
+    component CaptureMenuItem: GlassMenuItem {}
+    component CaptureMenu: GlassMenu {}
 
     component ToolBarSizeLabel: SizeLabel {
-        height: QmlUtils.iconTextButtonHeight
+        height: QmlUtils.toolbarButtonHeight
         size: root.rawSelectionSize
-        leftPadding: Kirigami.Units.mediumSpacing + QmlUtils.fontMetrics.descent
+        leftPadding: Kirigami.Units.mediumSpacing
         rightPadding: leftPadding
     }
 
@@ -216,21 +231,15 @@ MouseArea {
         function roundSize(value: real) : real {
             return SpectacleCore.videoPlatform.isRecording ? dprCeil(value + (strokeWidth + 1 / contextWindow.devicePixelRatio)) : dprRound(value + strokeWidth)
         }
-        pathHints: ShapePath.PathLinear
-        dashSvgPath: SpectacleCore.videoPlatform.isRecording ? svgPath : ""
+        readonly property color frameColor: Settings.useLightMaskColor ? "black" : "white"
+        cornerRadius: dprRound(4)
+        dashSvgPath: svgPath
         visible: !SelectionEditor.selection.empty
             && Geometry.rectIntersects(Qt.rect(x,y,width,height), Qt.rect(0,0,parent.width, parent.height))
         enabled: root.document?.tool.isNoTool || SpectacleCore.videoMode
         strokeWidth: dprRound(1)
-        strokeColor: if (enabled) {
-            // A neutral frame keeps the captured content visually dominant.
-            return Settings.useLightMaskColor ? "black" : "white"
-        } else if (Settings.useLightMaskColor) {
-            return "black"
-        } else {
-            return "white"
-        }
-        dashColor: SpectacleCore.videoPlatform.isRecording ? palette.active.base : strokeColor
+        strokeColor: SpectacleCore.videoPlatform.isRecording ? frameColor : "transparent"
+        dashColor: SpectacleCore.videoPlatform.isRecording ? palette.active.base : frameColor
         // We need to be a bit careful about staying out of the recorded area
         x: roundPos(SelectionEditor.selection.x - root.viewportRect.x)
         y: roundPos(SelectionEditor.selection.y - root.viewportRect.y)
@@ -246,9 +255,9 @@ MouseArea {
             visible: enabled && selectionRectangle.visible
                 && SelectionEditor.dragLocation === SelectionEditor.None
                 && Geometry.rectIntersects(Qt.rect(x,y,width,height), root.viewportRect)
-            fillColor: selectionRectangle.strokeColor
-            strokeColor: Settings.useLightMaskColor ? "white" : "black"
-            strokeWidth: dprRound(1)
+            fillColor: selectionRectangle.frameColor
+            strokeColor: Qt.alpha(Settings.useLightMaskColor ? "white" : "black", 0.4)
+            strokeWidth: 1 / contextWindow.devicePixelRatio
         }
 
         SelectionHandle {
@@ -300,7 +309,7 @@ MouseArea {
             let menuVisible = ExportMenu.visible
             menuVisible |= OptionsMenu.visible
             menuVisible |= HelpMenu.visible
-            menuVisible |= ScreenshotModeMenu.visible
+            menuVisible |= screenshotModeButton.menu.visible
             menuVisible |= RecordingModeMenu.visible
             let pressed = SelectionEditor.dragLocation || annotationsLoader.item?.anyPressed
             return !SpectacleCore.videoPlatform.isRecording && !pressed
@@ -570,11 +579,8 @@ MouseArea {
                     active: visible
                     sourceComponent: SpectacleCore.videoMode ? videoToolBarComponent : imageMainToolBarComponent
                 }
-                QQC.ToolSeparator {
-                    visible: mtbImageVideoContentLoader.visible
-                    height: QmlUtils.iconTextButtonHeight
-                }
                 ScreenshotModeMenuButton {
+                    id: screenshotModeButton
                     focusPolicy: Qt.NoFocus
                 }
                 RecordingModeMenuButton {
@@ -615,7 +621,7 @@ MouseArea {
         Component {
             id: imageMainToolBarComponent
             ButtonGrid {
-                spacing: parent.parent.spacing
+                spacing: 0
                 ToolBarSizeLabel {}
                 ToolButton {
                     display: TtToolButton.TextBesideIcon
@@ -649,6 +655,7 @@ MouseArea {
                     action: OcrAction {}
                 }
                  
+                Item { implicitWidth: Kirigami.Units.mediumSpacing; implicitHeight: 1 }
                 ExportMenuButton {
                     focusPolicy: Qt.NoFocus
                 }
@@ -657,7 +664,7 @@ MouseArea {
         Component {
             id: imageFinalizerToolBarComponent
             ButtonGrid {
-                spacing: parent.parent.spacing
+                spacing: 0
                 ToolBarSizeLabel { color: Kos.AppTheme.mutedText }
                 ToolButton {
                     objectName: "nkshotCaptureCancel"
@@ -665,9 +672,9 @@ MouseArea {
                     display: QQC.AbstractButton.IconOnly
                     action: CancelAction {}
                 }
-                QQC.ToolSeparator { height: 24 }
                 ToolButton { visible: action.enabled; action: CopyImageAction {} }
                 ToolButton { visible: action.enabled; action: SaveAction {} }
+                Item { implicitWidth: Kirigami.Units.mediumSpacing; implicitHeight: 1 }
                 ToolButton {
                     id: captureMoreButton
                     display: QQC.AbstractButton.IconOnly
@@ -692,7 +699,7 @@ MouseArea {
                         CaptureMenuItem {
                             text: i18nc("@action", "New Screenshot")
                             icon.name: "camera-photo"
-                            onTriggered: Qt.callLater(function() { ScreenshotModeMenu.popup(captureMoreButton) })
+                            onTriggered: Qt.callLater(function() { screenshotModeButton.menu.popup(captureMoreButton) })
                         }
                         CaptureMenuItem {
                             text: i18nc("@action", "New Recording")
@@ -707,6 +714,7 @@ MouseArea {
                         }
                     }
                 }
+                Item { implicitWidth: Kirigami.Units.mediumSpacing; implicitHeight: 1 }
                 ToolButton {
                     objectName: "nkshotCaptureDone"
                     visible: action.enabled
@@ -719,7 +727,7 @@ MouseArea {
         Component {
             id: videoToolBarComponent
             ButtonGrid {
-                spacing: parent.parent.spacing
+                spacing: 0
                 ToolBarSizeLabel {}
                 ToolButton {
                     display: TtToolButton.TextBesideIcon

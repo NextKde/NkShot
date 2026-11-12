@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
-QQC.Popup {
+Kos.LiquidDialog {
     id: root
     objectName: "nkshotCombinePopup"
     property bool horizontal: false
@@ -13,28 +13,11 @@ QQC.Popup {
     signal chooseImages(bool keepAllPixels, bool horizontal)
     width: Math.min(380, parent.width - 32)
     anchors.centerIn: parent
-    modal: true
+    sourceItem: parent
     focus: true
-    padding: 20
-    palette.text: Kos.AppTheme.paletteText
-    palette.windowText: Kos.AppTheme.paletteText
-    palette.buttonText: Kos.AppTheme.paletteText
-    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 18; elevation: 0.5 }
-
-    component Choice: QQC.Button {
-        id: control
-        Layout.fillWidth: true
-        Layout.preferredWidth: 1
-        implicitHeight: 36
-        checkable: true
-        autoExclusive: true
-        palette.buttonText: checked ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
-        background: Kos.KosSurface {
-            fillColor: control.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-            radius: 10; elevation: 0; strokeWidth: 0
-            hovered: control.hovered; pressed: control.down; focused: control.visualFocus
-        }
-    }
+    // Keep the title and actions in the content layout, including in compact windows.
+    header: null
+    footer: null
     contentItem: ColumnLayout {
         spacing: 14
         QQC.Label {
@@ -50,38 +33,28 @@ QQC.Popup {
             color: Kos.AppTheme.mutedText
         }
         QQC.Label { text: i18nc("@label", "Direction"); color: Kos.AppTheme.paletteText }
-        RowLayout {
+        Kos.LiquidSegmentedControl {
+            objectName: "nkshotCombineDirection"
             Layout.fillWidth: true
-            spacing: 6
-            Choice {
-                objectName: "nkshotCombineVertical"
-                text: i18nc("@option", "Vertical")
-                checked: !root.horizontal
-                onClicked: root.horizontal = false
-            }
-            Choice {
-                objectName: "nkshotCombineHorizontal"
-                text: i18nc("@option", "Horizontal")
-                checked: root.horizontal
-                onClicked: root.horizontal = true
-            }
+            implicitHeight: 28
+            opacity: 1
+            textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+            mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
+            labels: [i18nc("@option", "Vertical"), i18nc("@option", "Horizontal")]
+            currentIndex: root.horizontal ? 1 : 0
+            onSelectionRequested: index => root.horizontal = index === 1
         }
         QQC.Label { text: i18nc("@label", "Join method"); color: Kos.AppTheme.paletteText }
-        RowLayout {
+        Kos.LiquidSegmentedControl {
+            objectName: "nkshotCombineMethod"
             Layout.fillWidth: true
-            spacing: 6
-            Choice {
-                objectName: "nkshotCombineMatch"
-                text: i18nc("@option", "Match overlap")
-                checked: !root.keepAllPixels
-                onClicked: root.keepAllPixels = false
-            }
-            Choice {
-                objectName: "nkshotCombineStack"
-                text: i18nc("@option", "Keep all pixels")
-                checked: root.keepAllPixels
-                onClicked: root.keepAllPixels = true
-            }
+            implicitHeight: 28
+            opacity: 1
+            textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+            mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
+            labels: [i18nc("@option", "Match overlap"), i18nc("@option", "Keep all pixels")]
+            currentIndex: root.keepAllPixels ? 1 : 0
+            onSelectionRequested: index => root.keepAllPixels = index === 1
         }
         QQC.Label {
             objectName: "nkshotCombineMethodHint"
@@ -101,34 +74,24 @@ QQC.Popup {
             wrapMode: Text.Wrap
             color: Kos.AppTheme.mutedText
         }
+        // Dialog actions are right-aligned throughout: Cancel precedes the primary action.
         RowLayout {
-            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignRight
             spacing: 8
-            QQC.Button {
-                id: cancelButton
+            Kos.LiquidActionButton {
                 objectName: "nkshotCombineCancel"
                 text: i18nc("@action", "Cancel")
-                implicitHeight: 36
-                leftPadding: 14; rightPadding: 14
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: cancelButton.hovered; pressed: cancelButton.down; focused: cancelButton.visualFocus
-                }
+                implicitHeight: root.actionHeight
+                materialForm: true
                 onClicked: root.close()
             }
-            Item { Layout.fillWidth: true }
-            QQC.Button {
-                id: chooseButton
+            Kos.LiquidActionButton {
                 objectName: "nkshotCombineChoose"
                 text: i18nc("@action", "Choose images…")
                 enabled: !root.busy
-                implicitHeight: 36
-                leftPadding: 14; rightPadding: 14
-                palette.buttonText: Kos.AppTheme.accentText
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: chooseButton.hovered; pressed: chooseButton.down; focused: chooseButton.visualFocus
-                }
+                implicitHeight: root.actionHeight
+                materialForm: true
+                highlighted: true
                 onClicked: {
                     root.close()
                     root.chooseImages(root.keepAllPixels, root.horizontal)

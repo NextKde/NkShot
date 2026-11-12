@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
@@ -11,19 +12,29 @@ Item {
     property int phase: scrollWindow.phase
     property bool inspectPixels: false
     property bool showSeams: true
-    component ActionButton: QQC.Button {
+    readonly property int maximumContentWidth: 520
+    readonly property int overlayMargin: 16
+    readonly property int panelPadding: 14
+    component ActionButton: Kos.LiquidActionButton {
         property bool primary: false
         Keys.onReturnPressed: if (enabled) clicked()
         Keys.onEnterPressed: if (enabled) clicked()
-        implicitHeight: 36
-        leftPadding: 16; rightPadding: 16
-        palette.buttonText: primary ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
-        background: Kos.KosSurface {
-            fillColor: parent.primary ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-            radius: 10; elevation: 0; strokeWidth: 0
-            focused: parent.visualFocus; hovered: parent.hovered; pressed: parent.down
-            opacity: parent.enabled ? 1 : 0.35
-        }
+        implicitHeight: 30
+        materialForm: true
+        highlighted: primary
+        focusRingColor: "transparent"
+        font.pixelSize: 13
+    }
+    component CaptureSelect: Kos.LiquidSelect {
+        implicitHeight: 30
+        materialForm: true
+        popupBorderWidth: 0
+        appearanceMode: Kos.AppTheme.dark ? "dark" : "light"
+        accentColor: Kos.AppTheme.accent
+        focusRingColor: "transparent"
+        opacity: 1
+        textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+        mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
     }
     Rectangle {
         anchors.fill: parent
@@ -34,7 +45,7 @@ Item {
         visible: root.phase !== 1
         spacing: 12
         RowLayout {
-            QQC.Label { text: i18nc("@title", "Manual scrolling capture"); font.pixelSize: 18; font.bold: true; color: Kos.AppTheme.paletteText }
+            QQC.Label { text: i18nc("@title", "Manual scrolling capture"); font.pixelSize: 17; font.weight: Font.DemiBold; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
             QQC.Label { text: i18nc("@info", "Preview"); font.pixelSize: 11; color: Kos.AppTheme.mutedText }
         }
@@ -45,37 +56,25 @@ Item {
                     + " · " + i18ncp("@info", "%1 frame", "%1 frames", scrollWindow.frameCount)
             color: Kos.AppTheme.mutedText; wrapMode: Text.Wrap
         }
-        QQC.ComboBox {
+        CaptureSelect {
             id: outputPicker
-            implicitHeight: 36
-            palette.text: Kos.AppTheme.paletteText
-            palette.buttonText: Kos.AppTheme.paletteText
-            palette.base: Kos.AppTheme.contentBackground
-            palette.window: Kos.AppTheme.contentBackground
-            background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0}
-            contentItem: QQC.Label {text: outputPicker.displayText; color: Kos.AppTheme.paletteText; leftPadding: 12; verticalAlignment: Text.AlignVCenter; opacity: outputPicker.enabled ? 1 : 0.45}
-            indicator: QQC.Label {x: outputPicker.width-width-12; y: (outputPicker.height-height)/2; text: "⌄"; color: Kos.AppTheme.mutedText}
             objectName: "nkshotScrollOutput"
             visible: root.phase === 0
             Layout.fillWidth: true
             model: scrollWindow.outputs
             currentIndex: scrollWindow.outputIndex
             enabled: scrollWindow.available
-            onActivated: scrollWindow.outputIndex = currentIndex
+            onActivated: index => scrollWindow.outputIndex = index
             Accessible.name: i18nc("@label", "Display to capture")
         }
-        QQC.ComboBox {
+        CaptureSelect {
             id: directionPicker
             objectName: "nkshotScrollDirection"
             visible: root.phase === 0
             Layout.fillWidth: true
-            implicitHeight: 36
             model: [i18nc("@option", "Vertical · scroll down"), i18nc("@option", "Horizontal · scroll right")]
             currentIndex: scrollWindow.horizontal ? 1 : 0
-            onActivated: scrollWindow.horizontal = currentIndex === 1
-            background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0; focused: directionPicker.visualFocus}
-            contentItem: QQC.Label {text: directionPicker.displayText; color: Kos.AppTheme.paletteText; leftPadding: 12; rightPadding: 30; verticalAlignment: Text.AlignVCenter}
-            indicator: QQC.Label {x: directionPicker.width-width-12; y: (directionPicker.height-height)/2; text: "⌄"; color: Kos.AppTheme.mutedText}
+            onActivated: index => scrollWindow.horizontal = index === 1
             Accessible.name: i18nc("@label", "Manual scrolling direction")
         }
         QQC.ScrollView {
@@ -91,7 +90,7 @@ Item {
                 Accessible.role: Accessible.StaticText
             }
         }
-        QQC.CheckBox {
+        PopupCheckBox {
             objectName: "nkshotScrollCollect"
             visible: root.phase === 2
             Layout.fillWidth: true
@@ -111,7 +110,7 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 QQC.Label { text: i18nc("@label", "Alignment preview"); color: Kos.AppTheme.mutedText; Layout.fillWidth: true }
-                QQC.ToolButton {
+                ActionButton {
                     objectName: "nkshotScrollInspectPixels"
                     palette.buttonText: Kos.AppTheme.paletteText
                     palette.text: Kos.AppTheme.paletteText
@@ -120,7 +119,7 @@ Item {
                     enabled: scrollWindow.previewSize.width > 0
                     onClicked: root.inspectPixels = !root.inspectPixels
                 }
-                QQC.CheckBox {
+                PopupCheckBox {
                     objectName: "nkshotScrollShowSeams"
                     palette.buttonText: Kos.AppTheme.paletteText
                     palette.text: Kos.AppTheme.paletteText
@@ -134,12 +133,13 @@ Item {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 Layout.minimumHeight: 100
                 color: Kos.AppTheme.contentSecondaryBackground
-                radius: 10
+                radius: 12
                 clip: true
                 Flickable {
                     id: previewViewport
                     objectName: "nkshotScrollPreviewViewport"
-                    anchors.fill: parent; anchors.margins: 8
+                    // A square image viewport starts beyond the card's 12 px corners.
+                    anchors.fill: parent; anchors.margins: parent.radius
                     contentWidth: previewImage.width; contentHeight: previewImage.height
                     boundsBehavior: Flickable.StopAtBounds
                     clip: true
@@ -204,7 +204,7 @@ Item {
                                 y: scrollWindow.horizontal ? 0 : modelData * previewImage.previewScale - 1
                                 width: scrollWindow.horizontal ? 2 : previewImage.width
                                 height: scrollWindow.horizontal ? previewImage.height : 2
-                                color: "#e59a31"
+                                color: Kos.AppTheme.warning
                             }
                         }
                     }
@@ -296,14 +296,22 @@ Item {
         onCanceled: drawing = false
         // Dim only outside the chosen region, leaving its real desktop pixels
         // unobscured. This is a transparent overlay, not a captured image preview.
-        Rectangle {anchors.fill: parent; color: "#66000000"; visible: selector.selectionRect.width<=0 || selector.selectionRect.height<=0}
-        Item {
+        Shape {
             anchors.fill: parent
-            visible: selector.selectionRect.width>0 && selector.selectionRect.height>0
-            Rectangle {x: 0; y: 0; width: parent.width; height: selector.selectionRect.y; color: "#66000000"}
-            Rectangle {x: 0; y: selector.selectionRect.y+selector.selectionRect.height; width: parent.width; height: parent.height-y; color: "#66000000"}
-            Rectangle {x: 0; y: selector.selectionRect.y; width: selector.selectionRect.x; height: selector.selectionRect.height; color: "#66000000"}
-            Rectangle {x: selector.selectionRect.x+selector.selectionRect.width; y: selector.selectionRect.y; width: parent.width-x; height: selector.selectionRect.height; color: "#66000000"}
+            ShapePath {
+                strokeWidth: -1
+                fillColor: Qt.alpha("black", 0.4)
+                fillRule: ShapePath.OddEvenFill
+                PathSvg {
+                    path: {
+                        const r = selector.selectionRect
+                        const outer = "M 0 0 H " + selector.width + " V " + selector.height + " H 0 Z"
+                        return r.width > 0 && r.height > 0
+                            ? outer + " M " + r.x + " " + r.y + " h " + r.width + " v " + r.height + " h " + -r.width + " Z"
+                            : outer
+                    }
+                }
+            }
         }
         Rectangle {
             id: selection
@@ -311,15 +319,25 @@ Item {
             width: Math.abs(selector.end.x - selector.origin.x); height: Math.abs(selector.end.y - selector.origin.y)
             color: "transparent"; border.color: "#ffffff"; border.width: 2
             visible: width > 0 && height > 0
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -1
+                color: "transparent"
+                border.color: "black"
+                border.width: 1
+            }
         }
-        Kos.KosSurface {
+        Item {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom; anchors.bottomMargin: 24
-            width: Math.min(parent.width-32,520); height: 64
-            radius: 14; fillColor: Kos.AppTheme.contentBackground; elevation: 0.5
+            width: Math.min(parent.width - 2 * root.overlayMargin, root.maximumContentWidth)
+            implicitHeight: selectorActions.implicitHeight + 2 * root.panelPadding
+            height: implicitHeight
+            Kos.LiquidPanelSurface { anchors.fill: parent; cornerRadius: 14; tintColor: Kos.AppTheme.contentBackground }
             MouseArea {anchors.fill: parent}
             RowLayout {
-                anchors.fill: parent; anchors.margins: 14; spacing: 10
+                id: selectorActions
+                anchors.fill: parent; anchors.margins: root.panelPadding; spacing: 10
                 ActionButton {objectName: "nkshotScrollSelectorCancel"; text: i18nc("@action", "Cancel"); onClicked: scrollWindow.cancelPreview()}
                 QQC.Label {
                     Layout.fillWidth: true; Layout.minimumWidth: 0
@@ -338,18 +356,20 @@ Item {
                 }
             }
         }
-        Rectangle {
+        Item {
             anchors.horizontalCenter: parent.horizontalCenter; y: 24
-            width: Math.min(parent.width - 32, 460); height: hint.implicitHeight + 24
-            radius: 12; color: "#ee202126"
+            width: Math.min(parent.width - 2 * root.overlayMargin, root.maximumContentWidth)
+            implicitHeight: hint.implicitHeight + 2 * root.panelPadding
+            height: implicitHeight
+            Kos.LiquidPanelSurface { anchors.fill: parent; cornerRadius: 14; tintColor: Kos.AppTheme.contentBackground }
             QQC.Label {
                 id: hint
-                anchors.centerIn: parent; width: parent.width - 28
+                anchors.centerIn: parent; width: parent.width - 2 * root.panelPadding
                 text: selector.pixelWidth>0 && selector.pixelHeight>0 && !selector.regionValid
                     ? (scrollWindow.horizontal ? i18nc("@info", "Use a region at least 25 px wide and 8 px tall, at most 8192 px per side and 16 MP.")
                         : i18nc("@info", "Use a region at least 8 px wide and 25 px tall, at most 8192 px per side and 16 MP."))
                     : scrollWindow.phase === 1 ? scrollWindow.statusText : i18nc("@info", "Drag a region, or use arrows to move.\nAlt + arrows resize; Shift adjusts faster.")
-                wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; color: "white"
+                wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; color: Kos.AppTheme.paletteText
             }
         }
     }

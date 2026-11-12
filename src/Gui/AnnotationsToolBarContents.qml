@@ -21,6 +21,11 @@ ButtonGrid {
     property alias checkedButton: toolGroup.checkedButton
     property bool isFullscreenCapture: false
 
+    function rounded(value) {
+        const dpr = Screen.devicePixelRatio || 1
+        return Math.round(value * dpr) / dpr
+    }
+
     readonly property AnnotationTool tool: root.editorDocument.tool
     readonly property int toolType: tool?.type ?? AnnotationTool.NoTool
 
@@ -30,7 +35,7 @@ ButtonGrid {
         sourceComponent: UndoRedoGroup {
             editorDocument: root.editorDocument
             animationsEnabled: root.animationsEnabled
-            buttonHeight: QmlUtils.iconTextButtonHeight
+            buttonHeight: QmlUtils.toolbarButtonHeight
             height: flow === Grid.LeftToRight ? buttonHeight : implicitHeight
             width: flow === Grid.TopToBottom ? buttonHeight : implicitWidth
             buttonFocusPolicy: root.buttonFocusPolicy
@@ -75,28 +80,15 @@ ButtonGrid {
         }
         Binding on y {
             value: tooltip.target ? // target check needed to prevent warnings
-                dprRound((tooltip.target.height - tooltip.height) / 2) : 0
+                root.rounded((tooltip.target.height - tooltip.height) / 2) : 0
             when: root.flow === Grid.TopToBottom && tooltip.target
             restoreMode: Binding.RestoreBindingOrValue
         }
     }
 
-    component ToolButton: QQC.ToolButton {
+    component ToolButton: TtToolButton {
         id: button
-        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
-        property string symbol: ""
-        icon.width: 18
-        icon.height: 18
-        opacity: enabled ? 1 : 0.38
-        icon.color: palette.buttonText
-        contentItem: SymbolLabel {
-            symbol: button.symbol
-            text: button.text
-            display: button.display
-            color: button.palette.buttonText
-            iconSize: 18
-            font: button.font
-        }
+        QQC.ToolTip.visible: false
         property string extraHelp: ""
         property bool secondary: false
         property bool needsBaseImage: false
@@ -108,27 +100,20 @@ ButtonGrid {
             onActivated: button.clicked()
         }
         visible: (!root.essentialsOnly || !secondary) && (!root.annotationOnly || !needsBaseImage)
-        implicitHeight: root.paletteMode ? 36 : QmlUtils.iconTextButtonHeight
-        implicitWidth: root.paletteMode ? 36 : implicitContentWidth + leftPadding + rightPadding
-        background: Kos.KosSurface {
-            fillColor: button.checked ? Kos.AppTheme.controlBackground
-                : button.hovered ? Kos.AppTheme.contentSecondaryBackground : "transparent"
-            radius: 10
-            elevation: 0
-            strokeWidth: 0
-            hovered: button.hovered
-            pressed: button.down
-            focused: button.visualFocus
-            showInnerHighlight: false
-        }
+        implicitWidth: root.paletteMode ? QmlUtils.toolbarButtonHeight
+            : implicitContentWidth + leftPadding + rightPadding
         focusPolicy: root.buttonFocusPolicy
         display: root.displayMode
         checkable: true
         containmentMask: Item {
             parent: button
-            readonly property rect rect: root.flow === Grid.TopToBottom ?
-                Qt.rect(-root.x, -root.spacing / 2, parent.width + root.x * 2, parent.height + root.spacing)
-                : Qt.rect(-root.spacing / 2, -root.y, parent.width + root.spacing, parent.height + root.y * 2)
+            // A palette lives inside layouts; its position is not an outer hit margin.
+            readonly property rect rect: root.paletteMode
+                ? Qt.rect(-root.spacing / 2, -root.spacing / 2,
+                    parent.width + root.spacing, parent.height + root.spacing)
+                : root.flow === Grid.TopToBottom
+                    ? Qt.rect(-root.x, -root.spacing / 2, parent.width + root.x * 2, parent.height + root.spacing)
+                    : Qt.rect(-root.spacing / 2, -root.y, parent.width + root.spacing, parent.height + root.y * 2)
             x: rect.x
             y: rect.y
             width: rect.width
@@ -272,15 +257,12 @@ ButtonGrid {
         checked: root.toolType === AnnotationTool.NumberTool
         onClicked: root.tool.type = AnnotationTool.NumberTool
     }
-    component ExtraMenuItem: SymbolMenuItem {
-        implicitHeight: 32
-    }
+    component ExtraMenuItem: GlassMenuItem {}
     TtToolButton {
         id: extraToolsButton
         objectName: "nkshotMoreToolsButton"
         Accessible.role: Accessible.ButtonMenu
         visible: root.essentialsOnly
-        implicitHeight: 36
         display: QQC.AbstractButton.IconOnly
         readonly property var secondaryTools: [AnnotationTool.HighlighterTool, AnnotationTool.LineTool, AnnotationTool.EllipseTool]
             .concat(root.annotationOnly ? [] : [AnnotationTool.BlurTool]).concat([AnnotationTool.NumberTool])
@@ -296,23 +278,10 @@ ButtonGrid {
         text: selectedIndex >= 0 ? secondaryNames[selectedIndex] : i18nc("@action", "More tools")
         symbol: selectedIndex >= 0 ? secondaryIcons[selectedIndex] : "view-more-symbolic"
         onClicked: extraToolsMenu.popup()
-        QQC.Menu {
+        GlassMenu {
             id: extraToolsMenu
             width: 220
-                    palette.windowText: Kos.AppTheme.paletteText
-                    palette.text: Kos.AppTheme.paletteText
-                    palette.buttonText: Kos.AppTheme.paletteText
-                    palette.base: Kos.AppTheme.contentBackground
-                    palette.button: Kos.AppTheme.controlBackground
-                    palette.light: Kos.AppTheme.border
-                    palette.mid: Kos.AppTheme.border
             objectName: "nkshotExtraToolsMenu"
-            padding: 6
-            background: Kos.KosSurface {
-                fillColor: Kos.AppTheme.contentBackground
-                radius: 14
-                elevation: 0.5
-            }
             y: -height - 8
             ExtraMenuItem {
                 objectName: "nkshotExtraPan"
@@ -327,9 +296,6 @@ ButtonGrid {
             }
             QQC.MenuSeparator { visible: root.showNoneButton; height: visible ? implicitHeight : 0 }
             ExtraMenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                 objectName: "nkshotExtraHighlighter"
                 text: i18nc("@action", "Highlighter")
                 icon.name: "draw-highlight"
@@ -338,9 +304,6 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.HighlighterTool
             }
             ExtraMenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                 objectName: "nkshotExtraLine"
                 text: i18nc("@action", "Line")
                 icon.name: "draw-line"
@@ -349,9 +312,6 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.LineTool
             }
             ExtraMenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                 objectName: "nkshotExtraEllipse"
                 text: i18nc("@action", "Ellipse")
                 icon.name: "draw-ellipse"
@@ -380,9 +340,6 @@ ButtonGrid {
                 }
             }
             ExtraMenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                 objectName: "nkshotExtraBlur"
                 visible: !root.annotationOnly
                 height: visible ? implicitHeight : 0
@@ -393,9 +350,6 @@ ButtonGrid {
                 onTriggered: root.tool.type = AnnotationTool.BlurTool
             }
             ExtraMenuItem {
-                        opacity: enabled ? 1 : 0.38
-                        icon.color: palette.buttonText
-
                 objectName: "nkshotExtraNumber"
                 text: i18nc("@action", "Number")
                 icon.name: "draw-number"

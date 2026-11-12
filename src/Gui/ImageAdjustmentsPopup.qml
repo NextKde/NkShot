@@ -4,12 +4,11 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
-QQC.Popup {
+Kos.LiquidDialog {
     id: root
     objectName: "nkshotImageAdjustmentsPopup"
     property var previewModel
     property bool submitted: false
-    signal accepted()
     signal cancelled()
     readonly property bool wideLayout: width >= 650
     function updatePreview() {
@@ -24,52 +23,30 @@ QQC.Popup {
     width: Math.min(780, parent.width - 32)
     height: Math.min(wideLayout ? 440 : 540, parent.height - 32)
     anchors.centerIn: parent
-    modal: true
+    sourceItem: parent
     focus: true
-    padding: 20
-    palette.text: Kos.AppTheme.paletteText
-    palette.windowText: Kos.AppTheme.paletteText
-    palette.buttonText: Kos.AppTheme.paletteText
-    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 18; elevation: 0.5 }
+    header: null
+    footer: null
     component Adjustment: ColumnLayout {
         id: control
         required property string title
         required property string controlName
-        property alias value: slider.value
+        property int value: 0
         Layout.fillWidth: true
         spacing: 4
         RowLayout {
             Layout.fillWidth: true
             QQC.Label { Layout.fillWidth: true; text: control.title; color: Kos.AppTheme.paletteText }
-            QQC.Label { text: (slider.value > 0 ? "+" : "") + Math.round(slider.value); color: Kos.AppTheme.mutedText }
+            QQC.Label { text: (control.value > 0 ? "+" : "") + control.value; color: Kos.AppTheme.mutedText }
         }
-        QQC.Slider {
-            id: slider
+        onValueChanged: root.schedulePreview()
+        PopupSlider {
             objectName: control.controlName
             Layout.fillWidth: true
-            from: -100; to: 100; stepSize: 1; value: 0
-            snapMode: QQC.Slider.SnapAlways
+            value: (control.value + 100) / 200
+            wheelStep: 1 / 200
             Accessible.name: control.title
-            onValueChanged: root.schedulePreview()
-            palette.highlight: Kos.AppTheme.accent
-            implicitHeight: 28
-            background: Rectangle {
-                x: slider.leftPadding
-                y: slider.topPadding + slider.availableHeight / 2 - height / 2
-                width: slider.availableWidth
-                height: 4
-                radius: 2
-                color: Kos.AppTheme.controlBackground
-                Rectangle { width: slider.visualPosition * parent.width; height: parent.height; radius: 2; color: Kos.AppTheme.accent }
-            }
-            handle: Rectangle {
-                x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
-                y: slider.topPadding + slider.availableHeight / 2 - height / 2
-                width: 18; height: 18; radius: 9
-                color: slider.pressed ? Kos.AppTheme.accent : Kos.AppTheme.contentBackground
-                border.width: slider.visualFocus ? 2 : 1
-                border.color: slider.visualFocus || slider.pressed ? Kos.AppTheme.accent : Kos.AppTheme.mutedText
-            }
+            onPreviewChanged: value => control.value = Math.round(value * 200 - 100)
         }
     }
     contentItem: ColumnLayout {
@@ -83,8 +60,8 @@ QQC.Popup {
             clip: true
             contentWidth: availableWidth
             contentHeight: body.implicitHeight
-            rightPadding: !mirrored && bar.visible ? bar.width + 4 : 0
-            leftPadding: mirrored && bar.visible ? bar.width + 4 : 0
+            rightPadding: mirrored ? 0 : 14
+            leftPadding: mirrored ? 14 : 0
             QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
             QQC.ScrollBar.vertical: QQC.ScrollBar {
                 id: bar
@@ -93,6 +70,9 @@ QQC.Popup {
                 x: scroll.mirrored ? 0 : scroll.width - width
                 y: scroll.topPadding
                 height: scroll.availableHeight
+                implicitWidth: 10
+                leftPadding: 2
+                background: Item {}
                 policy: body.implicitHeight > scroll.availableHeight ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
             }
             GridLayout {
@@ -106,8 +86,8 @@ QQC.Popup {
                     Layout.preferredWidth: root.wideLayout ? 400 : 320
                     Layout.preferredHeight: root.wideLayout ? 310 : 150
                     Layout.alignment: Qt.AlignTop
-                    radius: 12
-                    color: Kos.AppTheme.contentSecondaryBackground
+                    radius: 14
+                    color: Kos.AppTheme.controlBackground
                     clip: true
                     Image {
                         id: preview
@@ -147,13 +127,13 @@ QQC.Popup {
                     Adjustment { id: brightness; title: i18nc("@label", "Brightness"); controlName: "nkshotImageAdjustmentBrightness" }
                     Adjustment { id: contrast; title: i18nc("@label", "Contrast"); controlName: "nkshotImageAdjustmentContrast" }
                     Adjustment { id: saturation; title: i18nc("@label", "Saturation"); controlName: "nkshotImageAdjustmentSaturation" }
-                    QQC.Button {
-                        id: reset
+                    Kos.LiquidActionButton {
+                        implicitHeight: 28
+                        materialForm: true
                         objectName: "nkshotImageAdjustmentsReset"
                         text: i18nc("@action", "Reset")
                         enabled: brightness.value !== 0 || contrast.value !== 0 || saturation.value !== 0
                         onClicked: root.resetValues()
-                        background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0; focused: reset.visualFocus }
                     }
                 }
             }
@@ -168,28 +148,26 @@ QQC.Popup {
             color: Kos.AppTheme.paletteText
         }
         RowLayout {
-            Layout.fillWidth: true
-            QQC.Button {
-                id: cancel
+            Layout.alignment: Qt.AlignRight
+            spacing: 8
+            Kos.LiquidActionButton {
                 objectName: "nkshotImageAdjustmentsCancel"
                 text: i18nc("@action", "Cancel")
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
+                implicitHeight: root.actionHeight
+                materialForm: true
                 onClicked: root.close()
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; focused: cancel.visualFocus }
             }
-            Item { Layout.fillWidth: true }
-            QQC.Button {
-                id: create
+            Kos.LiquidActionButton {
                 objectName: "nkshotImageAdjustmentsCreate"
                 text: i18nc("@action", "Create copy")
                 enabled: root.previewModel && root.previewModel.ready
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
-                palette.buttonText: Kos.AppTheme.accentText
+                implicitHeight: root.actionHeight
+                materialForm: true
+                highlighted: true
                 onClicked: {
                     root.updatePreview()
                     if (root.previewModel && root.previewModel.ready) { root.submitted = true; root.accepted(); root.close() }
                 }
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; focused: create.visualFocus }
             }
         }
     }

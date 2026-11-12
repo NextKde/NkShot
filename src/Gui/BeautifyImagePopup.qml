@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
-QQC.Popup {
+Kos.LiquidDialog {
     id: root
     objectName: "nkshotBeautifyPopup"
     property int styleIndex: 2
@@ -26,13 +26,10 @@ QQC.Popup {
     width: Math.min(780, parent.width - 32)
     height: Math.min(wideLayout ? 480 : 580, parent.height - 32)
     anchors.centerIn: parent
-    modal: true
+    sourceItem: parent
     focus: true
-    padding: 20
-    palette.text: Kos.AppTheme.paletteText
-    palette.windowText: Kos.AppTheme.paletteText
-    palette.buttonText: Kos.AppTheme.paletteText
-    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 18; elevation: 0.5 }
+    header: null
+    footer: null
     contentItem: ColumnLayout {
         spacing: 12
         QQC.Label { text: i18nc("@title", "Style a sharing copy"); font.pixelSize: 17; font.bold: true; color: Kos.AppTheme.paletteText }
@@ -68,7 +65,7 @@ QQC.Popup {
                     Layout.preferredWidth: root.wideLayout ? 400 : 320
                     Layout.preferredHeight: root.wideLayout ? 320 : 150
                     Layout.alignment: Qt.AlignTop
-                    radius: 12
+                    radius: 14
                     color: Kos.AppTheme.contentSecondaryBackground
                     clip: true
                     Image {
@@ -107,41 +104,38 @@ QQC.Popup {
                     wrapMode: Text.Wrap
                     color: Kos.AppTheme.mutedText
                 }
-                RowLayout {
+                Kos.LiquidSegmentedControl {
+                    objectName: "nkshotPresentationStyle"
                     Layout.fillWidth: true
-                    Repeater {
-                        model: [i18nc("@option", "Light"), i18nc("@option", "Dark"), i18nc("@option", "Aurora")]
-                        delegate: QQC.Button {
-                            id: styleButton
-                            required property int index
-                            required property string modelData
-                            objectName: "nkshotPresentationStyle" + index
-                            Layout.fillWidth: true
-                            implicitHeight: 34
-                            text: modelData
-                            checkable: true
-                            autoExclusive: true
-                            palette.buttonText: root.styleIndex === index ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
-                            checked: root.styleIndex === index
-                            onClicked: root.styleIndex = index
-                            background: Kos.KosSurface {
-                                fillColor: root.styleIndex === styleButton.index ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-                                radius: 9; elevation: 0; strokeWidth: 0
-                                focused: styleButton.visualFocus; hovered: styleButton.hovered; pressed: styleButton.down
-                            }
-                        }
-                    }
+                    implicitHeight: 28
+                    opacity: 1
+                    textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                    mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
+                    labels: [i18nc("@option", "Light"), i18nc("@option", "Dark"), i18nc("@option", "Aurora")]
+                    currentIndex: root.styleIndex
+                    onSelectionRequested: index => root.styleIndex = index
                 }
                 RowLayout {
                     Layout.fillWidth: true
                     QQC.Label { text: i18nc("@label", "Padding (px)"); color: Kos.AppTheme.paletteText; Layout.fillWidth: true }
-                    QQC.SpinBox {
+                    Kos.LiquidTextField {
                         id: paddingInput
                         objectName: "nkshotPresentationPadding"
-                        from: 0; to: 240; value: 48; editable: true
-                        onValueChanged: root.schedulePreview()
+                        Layout.preferredWidth: 80
+                        implicitHeight: 28
+                        specificationForm: true
+                        property int value: 48
+                        text: String(value)
+                        validator: IntValidator { bottom: 0; top: 240 }
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        maximumLength: 3
+                        onTextEdited: { if (acceptableInput) value = Number(text) }
+                        onEditingFinished: text = String(value)
+                        onActiveFocusChanged: { if (!activeFocus) text = String(value) }
+                        onValueChanged: { text = String(value); root.schedulePreview() }
+                        color: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                        opacity: 1
                         Accessible.name: i18nc("@label", "Background padding in pixels")
-                        background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0 }
                     }
                 }
                 QQC.Label {
@@ -151,21 +145,32 @@ QQC.Popup {
                     wrapMode: Text.Wrap
                     color: Kos.AppTheme.mutedText
                 }
-                QQC.TextField {
+                Kos.LiquidTextField {
                     id: watermark
                     objectName: "nkshotPresentationWatermark"
                     Layout.fillWidth: true
-                    implicitHeight: 36
+                    implicitHeight: 28
+                    specificationForm: true
                     maximumLength: 120
                     onTextChanged: root.schedulePreview()
                     placeholderText: i18nc("@info:placeholder", "Watermark text (optional)")
                     Accessible.name: i18nc("@label", "Optional watermark text")
-                    color: Kos.AppTheme.paletteText
-                    background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0 }
+                    color: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                    opacity: 1
                 }
-                Kos.KosCheckBox {
+                Kos.LiquidCheckBox {
                     id: rounded
                     objectName: "nkshotPresentationRounded"
+                    implicitHeight: 28
+                    opacity: 1
+                    // Override the upstream label to keep disabled text readable without fading the material.
+                    contentItem: QQC.Label {
+                        text: rounded.text
+                        font: rounded.font
+                        leftPadding: rounded.indicator.width + rounded.spacing
+                        verticalAlignment: Text.AlignVCenter
+                        color: rounded.enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                    }
                     onCheckedChanged: root.schedulePreview()
                     text: i18nc("@option:check", "Round image corners")
                     checked: true
@@ -182,30 +187,28 @@ QQC.Popup {
             wrapMode: Text.Wrap
             color: Kos.AppTheme.paletteText
         }
+        // Dialog actions are right-aligned throughout: Cancel precedes the primary action.
         RowLayout {
-            Layout.fillWidth: true
-            QQC.Button {
-                id: cancel
+            Layout.alignment: Qt.AlignRight
+            spacing: 8
+            Kos.LiquidActionButton {
                 objectName: "nkshotBeautifyCancel"
                 text: i18nc("@action", "Cancel")
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
+                implicitHeight: root.actionHeight
+                materialForm: true
                 onClicked: root.close()
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0; focused: cancel.visualFocus }
             }
-            Item { Layout.fillWidth: true }
-            QQC.Button {
-                id: create
+            Kos.LiquidActionButton {
                 objectName: "nkshotBeautifyCreate"
-                enabled: root.validSize && root.previewModel && root.previewModel.ready && !root.previewModel.error.length
-                opacity: enabled ? 1 : 0.4
+                enabled: paddingInput.acceptableInput && root.validSize && root.previewModel && root.previewModel.ready && !root.previewModel.error.length
                 text: i18nc("@action", "Create copy")
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
-                palette.buttonText: Kos.AppTheme.accentText
+                implicitHeight: root.actionHeight
+                materialForm: true
+                highlighted: true
                 onClicked: {
                     root.updatePreview()
                     if (root.previewModel.ready && !root.previewModel.error.length && contextWindow.createPresentationCopy()) root.close()
                 }
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; strokeWidth: 0; focused: create.visualFocus }
             }
         }
     }

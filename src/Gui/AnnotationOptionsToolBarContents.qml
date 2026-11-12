@@ -59,16 +59,20 @@ Grid {
     }
 
     component PropertyCheckBox: Kos.KosCheckBox {
+        implicitHeight: QmlUtils.toolbarButtonHeight
         implicitWidth: root.verticalLayout ? Math.max(96, implicitContentWidth + leftPadding + rightPadding) : implicitContentWidth + leftPadding + rightPadding
     }
 
     component PropertySpinBox: QQC.SpinBox {
-        implicitHeight: 32
+        implicitHeight: QmlUtils.toolbarButtonHeight
+        Kirigami.Theme.inherit: false
+        Kirigami.Theme.textColor: Kos.AppTheme.paletteText
+        Kirigami.Theme.backgroundColor: Kos.AppTheme.fieldSurface
         background: Kos.KosSurface {
             fillColor: Kos.AppTheme.fieldSurface
             strokeColor: parent.activeFocus ? Kos.AppTheme.accent : Kos.AppTheme.border
             strokeWidth: 1
-            radius: 8
+            radius: 6
             elevation: 0
             showInnerHighlight: false
         }

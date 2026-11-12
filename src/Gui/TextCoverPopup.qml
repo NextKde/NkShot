@@ -3,24 +3,24 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
-QQC.Popup {
+Kos.LiquidDialog {
     id: root
     objectName: "nkshotTextCoverPopup"
     property var session
     property bool submitted: false
-    signal accepted()
     signal cancelled()
     readonly property bool wideLayout: width >= 650
     width: Math.min(780, parent.width - 32)
     height: Math.min(wideLayout ? 500 : 600, parent.height - 32)
     anchors.centerIn: parent
-    modal: true; focus: true; padding: 20
-    palette.text: Kos.AppTheme.paletteText
-    palette.windowText: Kos.AppTheme.paletteText
-    palette.buttonText: Kos.AppTheme.paletteText
+    sourceItem: parent
+    focus: true
+    header: null
+    footer: null
+    readonly property int matchRowHeight: 28
+    readonly property int visibleMatchRows: 6
     onOpened: {submitted = false; query.text = ""}
     onClosed: {query.text = ""; if (!submitted) cancelled()}
-    background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 18; elevation: 0.5}
     function findMatches() {if (session && session.ready && query.text.trim().length) session.search(query.text)}
     function revealInScroll(item, scrollView) {
         const viewport = scrollView.contentItem
@@ -53,14 +53,18 @@ QQC.Popup {
             Layout.fillWidth: true; Layout.fillHeight: true
             clip: true
             contentWidth: availableWidth; contentHeight: body.implicitHeight
-            rightPadding: !mirrored && bar.visible ? bar.width + 4 : 0
-            leftPadding: mirrored && bar.visible ? bar.width + 4 : 0
+            // Reserve a stable gutter so wrapping cannot toggle the scrollbar's width.
+            rightPadding: mirrored ? 0 : 14
+            leftPadding: mirrored ? 14 : 0
             QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
             QQC.ScrollBar.vertical: QQC.ScrollBar {
                 id: bar
                 objectName: "nkshotTextCoverScrollbar"
                 parent: scroll; x: scroll.mirrored ? 0 : scroll.width - width
                 y: scroll.topPadding; height: scroll.availableHeight
+                implicitWidth: 10
+                leftPadding: 2
+                background: Item {}
                 policy: body.implicitHeight > scroll.availableHeight ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
             }
             GridLayout {
@@ -73,7 +77,7 @@ QQC.Popup {
                     Layout.preferredWidth: root.wideLayout ? 400 : 320
                     Layout.preferredHeight: root.wideLayout ? 330 : 160
                     Layout.alignment: Qt.AlignTop
-                    radius: 12; color: Kos.AppTheme.contentSecondaryBackground
+                    radius: 14; color: Kos.AppTheme.controlBackground
                     clip: true
                     Image {
                         id: preview
@@ -97,6 +101,7 @@ QQC.Popup {
                                         y: (preview.height - preview.paintedHeight) / 2 + modelData.y / root.session.sourceSize.height * preview.paintedHeight
                                         width: modelData.width / root.session.sourceSize.width * preview.paintedWidth
                                         height: modelData.height / root.session.sourceSize.height * preview.paintedHeight
+                                        // Match the exported copy's opaque black privacy covers, independent of theme.
                                         color: "black"
                                     }
                                 }
@@ -120,25 +125,32 @@ QQC.Popup {
                         text: i18nc("@info", "Search locally, then choose the matches to cover. The separate copy has a white background and opaque black covers; your edit stays unchanged.")
                         wrapMode: Text.Wrap; color: Kos.AppTheme.mutedText
                     }
-                    QQC.TextField {
+                    Kos.LiquidTextField {
                         id: query
                         objectName: "nkshotTextCoverQuery"
                         Layout.fillWidth: true
+                        implicitHeight: 28
+                        topPadding: 4
+                        bottomPadding: 4
+                        leftPadding: 12
+                        rightPadding: 12
+                        specificationForm: true
+                        opacity: 1
+                        color: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
                         maximumLength: 256
                         placeholderText: i18nc("@info:placeholder", "Text to cover")
                         Accessible.name: i18nc("@label", "Find text to cover")
                         enabled: root.session && root.session.ready
                         onTextChanged: if (root.session) root.session.clearMatches()
                         onAccepted: root.findMatches()
-                        background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0}
                     }
-                    QQC.Button {
-                        id: findButton
+                    Kos.LiquidActionButton {
+                        implicitHeight: 28
+                        materialForm: true
                         objectName: "nkshotTextCoverFind"
                         text: i18nc("@action", "Find")
                         enabled: root.session && root.session.ready && query.text.trim().length > 0
                         onClicked: root.findMatches()
-                        background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0; focused: findButton.visualFocus}
                     }
                     QQC.BusyIndicator {visible: root.session && root.session.busy; running: visible; Layout.preferredHeight: 30; Layout.preferredWidth: 30}
                     QQC.Label {
@@ -159,13 +171,14 @@ QQC.Popup {
                         id: matchesScroll
                         objectName: "nkshotTextCoverMatchesScroll"
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(180, matchRows.implicitHeight)
+                        Layout.preferredHeight: Math.min(root.visibleMatchRows * root.matchRowHeight
+                            + (root.visibleMatchRows - 1) * matchRows.spacing, matchRows.implicitHeight)
                         visible: root.session && root.session.matchCount > 0
                         contentWidth: availableWidth
                         contentHeight: matchRows.implicitHeight
                         clip: true
-                        rightPadding: !mirrored && matchesBar.visible ? matchesBar.width + 4 : 0
-                        leftPadding: mirrored && matchesBar.visible ? matchesBar.width + 4 : 0
+                        rightPadding: mirrored ? 0 : 14
+                        leftPadding: mirrored ? 14 : 0
                         QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
                         QQC.ScrollBar.vertical: QQC.ScrollBar {
                             id: matchesBar
@@ -174,6 +187,9 @@ QQC.Popup {
                             x: matchesScroll.mirrored ? 0 : matchesScroll.width - width
                             y: matchesScroll.topPadding
                             height: matchesScroll.availableHeight
+                            implicitWidth: 10
+                            leftPadding: 2
+                            background: Item {}
                             policy: matchRows.implicitHeight > matchesScroll.availableHeight ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
                         }
                         ColumnLayout {
@@ -182,14 +198,16 @@ QQC.Popup {
                             spacing: 6
                             Repeater {
                                 model: root.session ? root.session.candidates : []
-                                delegate: QQC.CheckBox {
+                                delegate: PopupCheckBox {
                                     id: matchBox
                                     required property int index
                                     required property var modelData
                                     objectName: "nkshotTextCoverMatch_" + index
                                     Layout.fillWidth: true
-                                    implicitHeight: Math.max(34, (contentItem ? contentItem.implicitHeight : 0) + 10)
-                                    padding: 5
+                                    implicitHeight: root.matchRowHeight
+                                    text: modelData.text
+                                    QQC.ToolTip.visible: hovered && contentItem.truncated
+                                    QQC.ToolTip.text: text
                                     checked: {
                                         const selected = root.session ? root.session.selectedCount : 0
                                         return root.session && root.session.isSelected(index)
@@ -197,33 +215,9 @@ QQC.Popup {
                                     Accessible.name: modelData.text
                                     onActiveFocusChanged: if (activeFocus) root.revealMatch(matchBox)
                                     onToggled: root.session.setSelected(index, checked)
-                                    indicator: Rectangle {
-                                        x: matchBox.leftPadding
-                                        y: (matchBox.height - height) / 2
-                                        width: 18; height: 18; radius: 5
-                                        color: matchBox.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-                                        border.width: matchBox.checked ? 0 : 1
-                                        border.color: Kos.AppTheme.border
-                                        QQC.Label {
-                                            anchors.centerIn: parent
-                                            visible: matchBox.checked
-                                            text: "✓"
-                                            color: Kos.AppTheme.accentText
-                                            font.pixelSize: 13
-                                            font.bold: true
-                                        }
-                                    }
-                                    contentItem: QQC.Label {
-                                        leftPadding: 26
-                                        text: matchBox.modelData.text; textFormat: Text.PlainText
-                                        wrapMode: Text.Wrap; color: Kos.AppTheme.paletteText
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
                                     background: Rectangle {
-                                        radius: 7
-                                        color: matchBox.hovered ? Kos.AppTheme.controlBackground : "transparent"
-                                        border.width: matchBox.visualFocus ? 2 : 0
-                                        border.color: Kos.AppTheme.accent
+                                        radius: height / 2
+                                        color: matchBox.hovered || matchBox.activeFocus ? Kos.AppTheme.controlBackground : "transparent"
                                     }
                                 }
                             }
@@ -233,25 +227,23 @@ QQC.Popup {
             }
         }
         RowLayout {
-            Layout.fillWidth: true
-            QQC.Button {
-                id: cancel
+            Layout.alignment: Qt.AlignRight
+            spacing: 8
+            Kos.LiquidActionButton {
                 objectName: "nkshotTextCoverCancel"
                 text: i18nc("@action", "Cancel")
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
+                implicitHeight: root.actionHeight
+                materialForm: true
                 onClicked: root.close()
-                background: Kos.KosSurface {fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; focused: cancel.visualFocus}
             }
-            Item {Layout.fillWidth: true}
-            QQC.Button {
-                id: create
+            Kos.LiquidActionButton {
                 objectName: "nkshotTextCoverCreate"
                 text: i18nc("@action", "Create copy")
                 enabled: root.session && root.session.ready && !root.session.busy && root.session.selectedCount > 0
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
-                palette.buttonText: Kos.AppTheme.accentText
+                implicitHeight: root.actionHeight
+                materialForm: true
+                highlighted: true
                 onClicked: root.accepted()
-                background: Kos.KosSurface {fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; focused: create.visualFocus}
             }
         }
     }

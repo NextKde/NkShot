@@ -9,63 +9,98 @@ import org.kde.kquickimageeditor
 QQC.Pane {
     id: root
     padding: 12
+    // The image inset equals the card radius, so its inner radius is max(14 - 14, 0) = 0.
+    readonly property real canvasRadius: 14
+    readonly property real canvasInset: canvasRadius
     property real zoom: 0
     readonly property var document: copyEditor.document
     readonly property real fitZoom: document.canvasRect.width > 0 && document.canvasRect.height > 0
-        && canvas.width > 24 && canvas.height > 24
-        ? Math.min(1, (canvas.width - 24) / document.canvasRect.width, (canvas.height - 24) / document.canvasRect.height) : 1
+        && canvas.width > 2 * canvasInset && canvas.height > 2 * canvasInset
+        ? Math.min(1, (canvas.width - 2 * canvasInset) / document.canvasRect.width,
+                        (canvas.height - 2 * canvasInset) / document.canvasRect.height) : 1
     readonly property real viewZoom: zoom > 0 ? zoom : fitZoom
     palette.text: Kos.AppTheme.paletteText
     palette.buttonText: Kos.AppTheme.paletteText
     palette.windowText: Kos.AppTheme.paletteText
     background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
     function commitOptions() { root.forceActiveFocus(); options.flushPendingChanges() }
-    component ActionButton: QQC.Button {
-        id: button
+    component ActionButton: Kos.LiquidActionButton {
         property bool primary: false
-        implicitHeight: 36
-        leftPadding: 12; rightPadding: 12
-        font: Qt.application.font
-        contentItem: QQC.Label { text: button.text; font: button.font; color: button.primary ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-        background: Kos.KosSurface {
-            fillColor: button.primary ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-            radius: 10; elevation: 0; strokeWidth: 0
-            hovered: button.hovered; pressed: button.down; focused: button.visualFocus
+        materialForm: true
+        implicitHeight: 30
+        implicitWidth: iconOnly ? implicitHeight : Math.max(implicitHeight, implicitContentWidth + leftPadding + rightPadding)
+        highlighted: primary
+        font.pixelSize: Kos.AppTheme.compactControlFontSize
+        reduceMotion: Settings.reduceUiMotion
+    }
+    // Shared capsule for unequal-width Save and disclosure actions. The library's
+    // action group currently only supports equal-width icons and 6px solid corners.
+    component SaveSegment: ActionButton {
+        id: segment
+        property bool trailing: false
+        primary: true
+        background: Item {
+            clip: true
+            Rectangle {
+                x: segment.trailing ? -radius : 0
+                width: parent.width + radius
+                height: parent.height
+                radius: height / 2
+                color: Kos.AppTheme.accent
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: Kos.AppTheme.paletteText
+                    opacity: segment.down ? 0.13 : segment.hovered ? 0.07 : 0
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    radius: parent.radius - 2
+                    color: "transparent"
+                    border.width: 2
+                    border.color: Kos.AppTheme.focusRing
+                    visible: segment.visualFocus
+                }
+            }
         }
     }
     ColumnLayout {
         enabled: !copyEditor.editToolsBlocked
         anchors.fill: parent
-        spacing: 10
+        spacing: 12
         RowLayout {
             Layout.fillWidth: true
-            QQC.Label { visible: root.width >= 480; text: copyEditor.annotationMode ? i18nc("@title", "Video annotations") : i18nc("@title", "Edit copy"); font.bold: true; color: Kos.AppTheme.paletteText }
+            spacing: 8
+            QQC.Label { visible: root.width >= 480; text: copyEditor.annotationMode ? i18nc("@title", "Video annotations") : i18nc("@title", "Edit copy"); font.pixelSize: 17; font.weight: Font.DemiBold; color: Kos.AppTheme.paletteText }
             Item { Layout.fillWidth: true }
-            UndoRedoGroup { enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; editorDocument: root.document; buttonHeight: 36; animationsEnabled: false }
+            UndoRedoGroup { enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; editorDocument: root.document; buttonHeight: 30; animationsEnabled: false }
             ActionButton { objectName: "nkshotCopyEditorCopy"; enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; visible: !copyEditor.annotationMode; text: i18nc("@action", "Copy"); onClicked: { root.commitOptions(); copyEditor.copyImage() } }
             RowLayout {
-                spacing: 1
+                spacing: 0
                 visible: !copyEditor.annotationMode
-                ActionButton { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; text: i18nc("@action", "Save…"); primary: true; onClicked: { root.commitOptions(); copyEditor.saveAs() } }
-                ActionButton {
+                SaveSegment { objectName: "nkshotCopyEditorSave"; enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; text: i18nc("@action", "Save…"); onClicked: { root.commitOptions(); copyEditor.saveAs() } }
+                SaveSegment {
                     id: exportMenuButton
                     objectName: "nkshotCopyEditorSaveOptions"
                     enabled: !copyEditor.comparing
-                    primary: true
-                    text: "⌄"
-                    Layout.preferredWidth: 28
-                    leftPadding: 4; rightPadding: 4
+                    trailing: true
+                    iconOnly: true
+                    iconName: "chevron"
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 1
+                        height: parent.height - 2 * 8
+                        color: Qt.alpha(Kos.AppTheme.accentText, 0.35)
+                    }
                     Accessible.name: i18nc("@action", "More save formats")
                     onClicked: saveOptions.popup(exportMenuButton, exportMenuButton.width - saveOptions.width, exportMenuButton.height + 4)
-                    QQC.Menu {
+                    GlassMenu {
                         id: saveOptions
                         objectName: "nkshotCopyEditorSaveMenu"
                         width: Math.min(260, root.width - 32)
-                        padding: 6
-                        palette.text: Kos.AppTheme.paletteText
-                        palette.windowText: Kos.AppTheme.paletteText
-                        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0.5 }
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             objectName: "nkshotCopyEditorExportAction"
                             text: i18nc("@action", "Export JPEG / WebP…")
                             onTriggered: exportPopup.open()
@@ -79,24 +114,19 @@ QQC.Pane {
                 objectName: "nkshotCopyEditorMore"
                 visible: !copyEditor.annotationMode
                 enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked
-                text: "⋯"
-                Layout.preferredWidth: 30
-                leftPadding: 4; rightPadding: 4
+                iconOnly: true
+                iconName: "more"
                 Accessible.name: i18nc("@action", "More image tools")
                 onClicked: imageTools.popup(moreButton, moreButton.width - imageTools.width, moreButton.height + 4)
-                QQC.Menu {
+                GlassMenu {
                     id: imageTools
                     width: Math.min(260, root.width - 32)
-                    padding: 6
-                    palette.text: Kos.AppTheme.paletteText
-                    palette.windowText: Kos.AppTheme.paletteText
-                    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0.5 }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotTextCoverAction"
                         text: i18nc("@action", "Find and cover text…")
                         onTriggered: { root.commitOptions(); if (copyEditor.beginTextCover()) textCoverPopup.open() }
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotImageAdjustmentsAction"
                         text: i18nc("@action", "Adjust light and color…")
                         onTriggered: { root.commitOptions(); if (copyEditor.beginAdjustments()) adjustmentsPopup.open() }
@@ -119,14 +149,14 @@ QQC.Pane {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: Kos.AppTheme.contentBackground
-            radius: 12
+            radius: root.canvasRadius
             clip: true
             Flickable {
                 id: view
                 objectName: "nkshotCopyEditorViewport"
                 anchors.fill: parent
-                contentWidth: Math.max(width, editor.width * root.viewZoom + 24)
-                contentHeight: Math.max(height, editor.height * root.viewZoom + 24)
+                contentWidth: Math.max(width, editor.width * root.viewZoom + 2 * root.canvasInset)
+                contentHeight: Math.max(height, editor.height * root.viewZoom + 2 * root.canvasInset)
                 interactive: !copyEditor.comparing && root.document.tool.type === AnnotationTool.NoTool
                 boundsBehavior: Flickable.StopAtBounds
                 QQC.ScrollBar.vertical: QQC.ScrollBar { }
@@ -136,8 +166,8 @@ QQC.Pane {
                     editorDocument: root.document
                     width: root.document.canvasRect.width
                     height: root.document.canvasRect.height
-                    x: Math.max(12, (view.contentWidth-width*scale)/2)
-                    y: Math.max(12, (view.contentHeight-height*scale)/2)
+                    x: Math.max(root.canvasInset, (view.contentWidth-width*scale)/2)
+                    y: Math.max(root.canvasInset, (view.contentHeight-height*scale)/2)
                     scale: root.viewZoom
                     transformOrigin: Item.TopLeft
                     Keys.forwardTo: crop
@@ -171,6 +201,7 @@ QQC.Pane {
                 anchors.fill: parent
                 visible: copyEditor.comparing
                 color: Kos.AppTheme.contentBackground
+                radius: parent.radius
                 // Independent full-input Fit. Never reuse the cropped document's
                 // canvas geometry, scale or pan for the before-editing image.
                 ImageOverlayPreview {
@@ -178,14 +209,16 @@ QQC.Pane {
                     anchors.fill: parent
                     image: copyEditor.originalImage
                     readonly property real fit: copyEditor.originalSize.width > 0 && copyEditor.originalSize.height > 0
-                        ? Math.max(0, Math.min((width - 24) / copyEditor.originalSize.width, (height - comparisonLabels.height - 32) / copyEditor.originalSize.height)) : 0
+                        ? Math.max(0, Math.min((width - 2 * root.canvasInset) / copyEditor.originalSize.width,
+                            (height - comparisonLabels.height - 3 * root.canvasInset) / copyEditor.originalSize.height)) : 0
                     displayRect: Qt.rect((width - copyEditor.originalSize.width * fit) / 2,
-                        comparisonLabels.height + 20 + (height - comparisonLabels.height - 32 - copyEditor.originalSize.height * fit) / 2,
+                        comparisonLabels.height + 2 * root.canvasInset
+                            + (height - comparisonLabels.height - 3 * root.canvasInset - copyEditor.originalSize.height * fit) / 2,
                         copyEditor.originalSize.width * fit, copyEditor.originalSize.height * fit)
                 }
                 Column {
                     id: comparisonLabels
-                    x: 12; y: 10; width: parent.width - 24
+                    x: root.canvasInset; y: root.canvasInset; width: parent.width - 2 * root.canvasInset
                     spacing: 4
                     QQC.Label {
                         objectName: "nkshotCopyEditorBeforeLabel"
@@ -222,7 +255,7 @@ QQC.Pane {
                 QQC.ToolTip.text: i18nc("@info", "Reset zoom to 100% (Ctrl+1). Ctrl+wheel zooms; middle-drag pans.")
                 onClicked: navigation.zoomTo(1)
             }
-            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; text: "+"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: navigation.step(1.25) }
+            ActionButton { objectName: "nkshotCopyEditorZoomIn"; enabled: !copyEditor.comparing && !copyEditor.editToolsBlocked; iconOnly: true; iconName: "plus"; Accessible.name: i18nc("@action", "Zoom in"); onClicked: navigation.step(1.25) }
             ActionButton {
                 id: compareButton
                 objectName: "nkshotCopyEditorCompare"
@@ -267,6 +300,7 @@ QQC.Pane {
             editorDocument: root.document
             annotationOnly: copyEditor.annotationMode
             essentialsOnly: true
+            displayMode: QQC.AbstractButton.IconOnly
             paletteMode: true
             showUndoRedo: false
             showNoneButton: true
@@ -310,11 +344,11 @@ QQC.Pane {
         }
     }
     Rectangle {
+        parent: root
         anchors.fill: parent
         z: 1500
         visible: copyEditor.coverReviewPending
         color: Kos.AppTheme.contentBackground
-        radius: 12
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
         ColumnLayout {
             anchors.centerIn: parent
@@ -323,7 +357,7 @@ QQC.Pane {
             QQC.Label {
                 Layout.fillWidth: true
                 text: i18nc("@title", "Original paused")
-                font.pixelSize: 22; font.bold: true
+                font.pixelSize: 17; font.weight: Font.DemiBold
                 horizontalAlignment: Text.AlignHCenter
                 color: Kos.AppTheme.paletteText
             }

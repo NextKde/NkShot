@@ -88,22 +88,20 @@ ListView {
         }
         z: -index
         width: root.width
-        padding: 10
-        leftPadding: 12
-        rightPadding: 6
+        padding: 12
         background: Kos.KosSurface {
             radius: 12
-            fillColor: Kos.AppTheme.contentBackground
-            strokeColor: Kos.AppTheme.border
-            elevation: 0.3
+            fillColor: Kos.AppTheme.contentSecondaryBackground
+            strokeWidth: 0
+            elevation: 0
+            showInnerHighlight: false
         }
         contentItem: RowLayout {
             spacing: 8
             Kirigami.Icon {
-                Layout.preferredWidth: 18
-                Layout.preferredHeight: 18
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: 5
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 20
+                Layout.alignment: Qt.AlignVCenter
                 source: delegate.model.type === InlineMessageModel.Error ? "dialog-error"
                     : delegate.model.type === InlineMessageModel.Warning ? "dialog-warning" : "dialog-information"
             }
@@ -114,12 +112,15 @@ ListView {
                 textFormat: Text.RichText
                 wrapMode: Text.Wrap
                 text: delegate.model.text.replace(/<a /g, '<a style="color: '
-                    + (Kos.AppTheme.dark ? "#8cc8ff" : "#0066cc") + ';" ')
+                    + Kos.AppTheme.accent + ';" ')
                 onLinkActivated: (link) => Qt.openUrlExternally(link)
             }
             RowLayout {
                 spacing: 0
-                Layout.alignment: Qt.AlignTop
+                Layout.alignment: Qt.AlignVCenter
+                // Optically align the glyphs while retaining 28px button targets.
+                Layout.leftMargin: delegate.mirrored ? -4 : 0
+                Layout.rightMargin: delegate.mirrored ? 0 : -4
                 NotificationButton {
                     objectName: "nkshotNotificationFolder" + delegate.index
                     visible: delegate.localFile
@@ -143,30 +144,33 @@ ListView {
             }
         }
     }
-    component NotificationButton: QQC.ToolButton {
+    component NotificationButton: Kos.LiquidActionButton {
+        id: button
         implicitWidth: 28
         implicitHeight: 28
+        materialForm: true
+        flat: true
+        iconOnly: true
+        reduceMotion: Settings.reduceUiMotion
         // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
         property string symbol: ""
         icon.width: 16
         icon.height: 16
-        icon.color: Kos.AppTheme.paletteText
+        icon.color: textColor
         display: QQC.AbstractButton.IconOnly
-        contentItem: SymbolLabel {
-            symbol: parent.symbol
-            text: parent.text
-            display: parent.display
-            color: Kos.AppTheme.paletteText
-            iconSize: 16
-            font: parent.font
+        contentItem: Item {
+            implicitWidth: glyph.implicitWidth
+            implicitHeight: glyph.implicitHeight
+            SymbolLabel {
+                id: glyph
+                anchors.centerIn: parent
+                width: implicitWidth
+                height: implicitHeight
+                control: button
+                symbol: button.symbol
+            }
         }
         QQC.ToolTip.text: text
         QQC.ToolTip.visible: hovered || (activeFocus && !down)
-        background: Rectangle {
-            radius: 7
-            color: parent.hovered || parent.down ? Kos.AppTheme.controlBackground : "transparent"
-            border.width: parent.visualFocus ? 2 : 0
-            border.color: Kos.AppTheme.accent
-        }
     }
 }

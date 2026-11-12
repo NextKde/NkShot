@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 import org.kde.kirigami as Kirigami
@@ -70,7 +71,18 @@ QQC.Popup {
     focus: true
     font: Kirigami.Theme.defaultFont
     closePolicy: QQC.Popup.CloseOnEscape
-    background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 16; elevation: 0}
+    background: Kos.LiquidPanelSurface {
+        objectName: "nkshotClipPanelSurface"
+        cornerRadius: 14
+        backdrop: panelBackdrop
+        Kos.LiquidBackdrop {
+            id: panelBackdrop
+            sourceItem: root.parent
+            registerAsDefault: false
+            active: root.visible && !Kos.AppTheme.reduceTransparency && GraphicsInfo.api !== GraphicsInfo.Software
+            blur: 0.85
+        }
+    }
     onOpened: {
         detailsVisible = false
         editingPrivacy = false
@@ -116,27 +128,20 @@ QQC.Popup {
             }
         }
     }
-    component SolidButton: QQC.Button {
-        id: button
-        implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
-        leftPadding: 12
-        rightPadding: 12
-        font: root.font
-        contentItem: QQC.Label {
-            text: button.text
-            font: button.font
-            color: button.highlighted ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-        }
-        background: Rectangle {
-            radius: 9
-            color: button.highlighted ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-            opacity: button.down ? 0.72 : button.hovered ? 0.9 : 1
-            border.width: button.visualFocus ? 2 : 0
-            border.color: Kos.AppTheme.accent
-        }
-        opacity: enabled ? 1 : 0.45
+    component SolidButton: Kos.LiquidActionButton {
+        implicitHeight: 28
+        materialForm: true
+    }
+    component PopupSelect: Kos.LiquidSelect {
+        implicitHeight: 28
+        materialForm: true
+        popupBorderWidth: 0
+        appearanceMode: Kos.AppTheme.dark ? "dark" : "light"
+        accentColor: Kos.AppTheme.accent
+        focusRingColor: Kos.AppTheme.focusRing
+        opacity: 1
+        textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+        mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
     }
     component TimeField: QQC.SpinBox {
         id: field
@@ -145,7 +150,7 @@ QQC.Popup {
         to: Math.max(0, Math.floor(root.job.durationMs / 10))
         stepSize: 10
         implicitWidth: 82
-        implicitHeight: Math.max(30, (contentItem ? contentItem.implicitHeight : 0) + 10)
+        implicitHeight: 28
         leftPadding: 8
         rightPadding: 8
         font: root.font
@@ -153,13 +158,14 @@ QQC.Popup {
         textFromValue: function(value, locale) { return Number(value / 100).toLocaleString(locale, 'f', 2) }
         valueFromText: function(text, locale) { return Math.round(Number.fromLocaleString(locale, text) * 100) }
         validator: DoubleValidator {bottom: 0; top: root.job.durationMs / 1000; decimals: 2}
-        // Keep keyboard Up/Down fine adjustment without large form spinners.
+        // Fine adjustment uses only the wheel or Up/Down keys; no pointer spinners.
+        wheelEnabled: true
         up.indicator: Item {implicitWidth: 0; implicitHeight: 0}
         down.indicator: Item {implicitWidth: 0; implicitHeight: 0}
         contentItem: TextInput {
             text: field.displayText
             font: field.font
-            color: Kos.AppTheme.paletteText
+            color: field.enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
             selectionColor: Kos.AppTheme.accent
             selectedTextColor: Kos.AppTheme.accentText
             horizontalAlignment: Text.AlignHCenter
@@ -172,9 +178,7 @@ QQC.Popup {
         }
         background: Rectangle {
             color: Kos.AppTheme.controlBackground
-            radius: 7
-            border.width: field.activeFocus ? 1 : 0
-            border.color: Kos.AppTheme.accent
+            radius: height / 2
         }
         onValueModified: root.stopPreview()
     }
@@ -186,28 +190,19 @@ QQC.Popup {
                 Layout.fillWidth: true
                 text: i18nc("@title", "Export a clip")
                 font.family: root.font.family
-                font.pointSize: root.font.pointSize * 1.12
-                font.bold: true
+                font.pixelSize: 17
+                font.weight: Font.DemiBold
                 color: Kos.AppTheme.paletteText
             }
-            QQC.ComboBox {
+            PopupSelect {
                 id: formatChoice
                 objectName: "nkshotClipFormat"
                 model: ["MP4", "GIF"]
                 currentIndex: root.gif ? 1 : 0
                 enabled: !contextWindow.choosingClipOutput
-                implicitHeight: Math.max(30, (contentItem ? contentItem.implicitHeight : 0) + 10)
                 implicitWidth: 78
-                leftPadding: mirrored ? 24 : 10
-                rightPadding: mirrored ? 10 : 24
-                font: root.font
-                palette.text: Kos.AppTheme.paletteText
-                palette.buttonText: Kos.AppTheme.paletteText
-                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
-                contentItem: QQC.Label {text: formatChoice.displayText; font: formatChoice.font; color: Kos.AppTheme.paletteText; verticalAlignment: Text.AlignVCenter}
-                indicator: QQC.Label {text: "⌄"; color: Kos.AppTheme.mutedText; x: formatChoice.mirrored ? 8 : formatChoice.width - width - 8; anchors.verticalCenter: parent.verticalCenter}
                 Accessible.name: i18nc("@label", "Clip output format")
-                onActivated: {root.stopPreview(); root.job.outputFormat = currentIndex === 1 ? "gif" : "mp4"}
+                onActivated: index => {root.stopPreview(); root.job.outputFormat = index === 1 ? "gif" : "mp4"}
             }
         }
         RowLayout {
@@ -216,20 +211,14 @@ QQC.Popup {
             SolidButton {
                 id: previewButton
                 objectName: "nkshotClipPreview"
-                implicitWidth: 34
-                Layout.preferredWidth: 34
-                text: ""
+                implicitWidth: 28
+                Layout.preferredWidth: 28
+                iconOnly: true
+                iconName: root.previewing ? "pause" : "play"
                 enabled: root.validRange && !root.locked
                 Accessible.name: root.previewing ? i18nc("@action", "Pause preview") : i18nc("@action", "Play selected range")
                 QQC.ToolTip.visible: hovered
                 QQC.ToolTip.text: Accessible.name
-                contentItem: Text {
-                    text: root.previewing ? "Ⅱ" : "▶"
-                    color: Kos.AppTheme.paletteText
-                    font: root.font
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
                 onClicked: {
                     if (root.previewing) root.stopPreview()
                     else {root.player.pause(); root.player.setPosition(root.startMs); root.previewing = true; root.player.play()}
@@ -248,40 +237,51 @@ QQC.Popup {
                 second.onMoved: {root.stopPreview(); endTime.value = Math.max(Math.round(second.value), startTime.value + 10)}
                 enabled: root.job.ready && !root.locked
                 Accessible.name: i18nc("@label", "Clip time range")
-                implicitHeight: 34
-                leftPadding: 6
-                rightPadding: 6
-                background: Rectangle {
-                    x: range.leftPadding
-                    y: range.topPadding + (range.availableHeight - height) / 2
-                    width: range.availableWidth
-                    height: 10
-                    radius: 5
-                    color: Kos.AppTheme.controlBackground
-                    Rectangle {
-                        x: Math.min(range.first.visualPosition, range.second.visualPosition) * parent.width
-                        width: Math.abs(range.second.visualPosition - range.first.visualPosition) * parent.width
+                implicitHeight: 28
+                padding: 0
+                // RangeSlider owns both hit targets and keyboard navigation. Two clipped
+                // LiquidSlider forms draw the selected interval with the same metrics as adjustments.
+                background: Item {
+                    readonly property real midpoint: 16 + (range.first.visualPosition + range.second.visualPosition) / 2 * (width - 32)
+                    Item {
+                        width: parent.midpoint
                         height: parent.height
-                        radius: 5
-                        color: Kos.AppTheme.accent
-                        opacity: 0.55
+                        clip: true
+                        PopupSlider {
+                            width: range.availableWidth
+                            height: range.availableHeight
+                            rotation: 180
+                            value: 1 - range.first.visualPosition
+                            enabled: false
+                            activeFocusOnTab: false
+                            Accessible.ignored: true
+                        }
+                    }
+                    Item {
+                        x: parent.midpoint
+                        width: parent.width - x
+                        height: parent.height
+                        clip: true
+                        PopupSlider {
+                            x: -parent.x
+                            width: range.availableWidth
+                            height: range.availableHeight
+                            value: range.second.visualPosition
+                            enabled: false
+                            activeFocusOnTab: false
+                            Accessible.ignored: true
+                        }
                     }
                 }
-                first.handle: Rectangle {
-                    x: range.leftPadding + range.first.visualPosition * (range.availableWidth - width)
-                    y: range.topPadding + (range.availableHeight - height) / 2
-                    width: 10; height: 26; radius: 5
-                    color: Kos.AppTheme.accent
-                    border.color: Kos.AppTheme.paletteText
-                    border.width: range.first.pressed || range.activeFocus ? 1 : 0
+                first.handle: Item {
+                    x: range.first.visualPosition * (range.availableWidth - width)
+                    implicitWidth: 32
+                    implicitHeight: 28
                 }
-                second.handle: Rectangle {
-                    x: range.leftPadding + range.second.visualPosition * (range.availableWidth - width)
-                    y: range.topPadding + (range.availableHeight - height) / 2
-                    width: 10; height: 26; radius: 5
-                    color: Kos.AppTheme.accent
-                    border.color: Kos.AppTheme.paletteText
-                    border.width: range.second.pressed || range.activeFocus ? 1 : 0
+                second.handle: Item {
+                    x: range.second.visualPosition * (range.availableWidth - width)
+                    implicitWidth: 32
+                    implicitHeight: 28
                 }
             }
         }
@@ -331,14 +331,17 @@ QQC.Popup {
             contentHeight: detailContents.implicitHeight
             QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
             // Keep the scrollbar out of action hit areas, including Clear.
-            rightPadding: !mirrored && detailBar.visible ? detailBar.width + 4 : 0
-            leftPadding: mirrored && detailBar.visible ? detailBar.width + 4 : 0
+            rightPadding: mirrored ? 0 : 14
+            leftPadding: mirrored ? 14 : 0
             QQC.ScrollBar.vertical: QQC.ScrollBar {
                 id: detailBar
                 parent: detailScroll
                 x: detailScroll.mirrored ? 0 : detailScroll.width - width
                 y: detailScroll.topPadding
                 height: detailScroll.availableHeight
+                implicitWidth: 10
+                leftPadding: 2
+                background: Item {}
                 objectName: "nkshotClipDetailScrollbar"
                 policy: detailContents.implicitHeight > detailScroll.height ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
             }
@@ -350,7 +353,7 @@ QQC.Popup {
             Layout.fillWidth: true
             spacing: 10
             QQC.Label {text: i18nc("@label", "Export speed"); font: root.font; color: Kos.AppTheme.paletteText}
-            QQC.ComboBox {
+            PopupSelect {
                 id: exportSpeedChoice
                 objectName: "nkshotClipExportSpeed"
                 Layout.fillWidth: true
@@ -358,13 +361,8 @@ QQC.Popup {
                 readonly property var values: [1, 1.5, 2]
                 currentIndex: Math.max(0, values.indexOf(root.job.exportSpeed))
                 enabled: root.job.ready && !root.locked
-                implicitHeight: 32
-                font: root.font
-                palette.text: Kos.AppTheme.paletteText
-                palette.buttonText: Kos.AppTheme.paletteText
-                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
                 Accessible.name: i18nc("@label", "Exported video speed")
-                onActivated: {root.stopPreview(); root.job.exportSpeed = values[currentIndex]}
+                onActivated: index => {root.stopPreview(); root.job.exportSpeed = values[index]}
             }
         }
         QQC.Label {
@@ -384,7 +382,7 @@ QQC.Popup {
             visible: !root.gif
             spacing: 10
             QQC.Label {text: i18nc("@label", "Output size"); font: root.font; color: Kos.AppTheme.paletteText}
-            QQC.ComboBox {
+            PopupSelect {
                 id: resolutionChoice
                 objectName: "nkshotClipResolution"
                 Layout.fillWidth: true
@@ -392,13 +390,8 @@ QQC.Popup {
                 readonly property var values: ["original", "1080p", "720p"]
                 currentIndex: Math.max(0, values.indexOf(root.job.outputResolution))
                 enabled: root.job.ready && !root.locked
-                implicitHeight: 32
-                font: root.font
-                palette.text: Kos.AppTheme.paletteText
-                palette.buttonText: Kos.AppTheme.paletteText
-                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
                 Accessible.name: i18nc("@label", "MP4 export maximum edge size")
-                onActivated: {root.stopPreview(); root.job.outputResolution = values[currentIndex]}
+                onActivated: index => {root.stopPreview(); root.job.outputResolution = values[index]}
             }
         }
         QQC.Label {
@@ -416,7 +409,7 @@ QQC.Popup {
             visible: root.detailsVisible
             spacing: 10
             QQC.Label {text: i18nc("@label", "Frame"); font: root.font; color: Kos.AppTheme.paletteText}
-            QQC.ComboBox {
+            PopupSelect {
                 id: cropChoice
                 objectName: "nkshotClipCropAspect"
                 Layout.fillWidth: true
@@ -424,13 +417,8 @@ QQC.Popup {
                 readonly property var values: ["original", "square", "portrait", "wide", "free"]
                 currentIndex: Math.max(0, values.indexOf(root.job.cropAspect))
                 enabled: root.job.ready && root.job.cropAvailable && !root.locked
-                implicitHeight: 32
-                font: root.font
-                palette.text: Kos.AppTheme.paletteText
-                palette.buttonText: Kos.AppTheme.paletteText
-                background: Rectangle {color: Kos.AppTheme.controlBackground; radius: 8}
                 Accessible.name: i18nc("@label", "Video export crop aspect")
-                onActivated: {root.stopPreview(); root.editingPrivacy = false; root.job.cropAspect = values[currentIndex]}
+                onActivated: index => {root.stopPreview(); root.editingPrivacy = false; root.job.cropAspect = values[index]}
             }
             SolidButton {
                 objectName: "nkshotClipCenterCrop"
@@ -442,7 +430,7 @@ QQC.Popup {
         RowLayout {
             Layout.fillWidth: true
             visible: root.detailsVisible
-            QQC.CheckBox {
+            PopupCheckBox {
                 id: privacyCover
                 objectName: "nkshotClipPrivacyEnabled"
                 Layout.fillWidth: true
@@ -455,14 +443,6 @@ QQC.Popup {
                     root.stopPreview(); root.job.privacyEnabled = checked
                     root.editingPrivacy = root.job.privacyEnabled
                     if(root.editingPrivacy) root.detailsVisible = false
-                }
-                indicator: Rectangle {
-                    x: privacyCover.leftPadding; y: (privacyCover.height-height)/2
-                    width: 18; height: 18; radius: 5
-                    color: privacyCover.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-                    border.color: privacyCover.checked ? Kos.AppTheme.accent : Kos.AppTheme.border
-                    opacity: privacyCover.enabled ? 1 : 0.5
-                    QQC.Label {anchors.centerIn: parent; text: "✓"; visible: privacyCover.checked; color: Kos.AppTheme.accentText}
                 }
             }
             SolidButton {
@@ -490,7 +470,7 @@ QQC.Popup {
             font: root.font
             color: Kos.AppTheme.mutedText
         }
-        QQC.CheckBox {
+        PopupCheckBox {
             id: includeAudio
             objectName: "nkshotClipIncludeAudio"
             Layout.fillWidth: true
@@ -501,15 +481,6 @@ QQC.Popup {
             font: root.font
             palette.windowText: Kos.AppTheme.paletteText
             onToggled: root.job.includeAudio = checked
-            indicator: Rectangle {
-                x: includeAudio.leftPadding
-                y: (includeAudio.height - height) / 2
-                width: 18; height: 18; radius: 5
-                color: includeAudio.checked ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-                border.color: includeAudio.checked ? Kos.AppTheme.accent : Kos.AppTheme.border
-                opacity: includeAudio.enabled ? 1 : 0.5
-                QQC.Label {anchors.centerIn: parent; text: "✓"; visible: includeAudio.checked; color: Kos.AppTheme.accentText}
-            }
         }
         RowLayout {
             Layout.fillWidth: true
@@ -556,41 +527,15 @@ QQC.Popup {
             Layout.fillWidth: true
             visible: root.job.privacyEnabled && root.editingPrivacy && !root.detailsVisible
             spacing: 8
-            QQC.ComboBox {
+            PopupSelect {
                 id: coverChoice
                 objectName: "nkshotClipPrivacySelection"
                 Layout.fillWidth: true
-                implicitHeight: 32
-                model: root.job.privacyRegionCount
+                model: Array.from({length: root.job.privacyRegionCount}, (_, index) =>
+                    i18nc("@label", "Cover %1 of %2", index + 1, root.job.privacyRegionCount))
                 currentIndex: root.activePrivacyIndex
-                displayText: i18nc("@label", "Cover %1 of %2", root.activePrivacyIndex + 1, root.job.privacyRegionCount)
                 enabled: !root.locked && root.job.privacyRegionCount > 0
-                onActivated: {root.stopPreview(); root.activePrivacyIndex = currentIndex}
-                background: Rectangle {radius: 8; color: Kos.AppTheme.controlBackground; border.width: coverChoice.visualFocus ? 2 : 0; border.color: Kos.AppTheme.accent}
-                contentItem: QQC.Label {text: coverChoice.displayText; leftPadding: 10; rightPadding: 26; verticalAlignment: Text.AlignVCenter; color: Kos.AppTheme.paletteText}
-                indicator: QQC.Label {text: "⌄"; x: coverChoice.width - width - 10; anchors.verticalCenter: parent.verticalCenter; color: Kos.AppTheme.mutedText}
-                delegate: QQC.ItemDelegate {
-                    required property int index
-                    width: coverChoice.width; height: 32
-                    text: i18nc("@item", "Cover %1", index + 1)
-                    highlighted: coverChoice.highlightedIndex === index
-                    contentItem: QQC.Label {text: parent.text; color: Kos.AppTheme.paletteText; leftPadding: 8; verticalAlignment: Text.AlignVCenter}
-                    background: Rectangle {radius: 7; color: parent.highlighted ? Kos.AppTheme.controlBackground : "transparent"}
-                }
-                popup: QQC.Popup {
-                    y: coverChoice.height + 4
-                    width: coverChoice.width
-                    padding: 4
-                    implicitHeight: Math.min(264, (contentItem ? contentItem.implicitHeight : 0) + 8)
-                    contentItem: ListView {
-                        implicitHeight: contentHeight
-                        model: coverChoice.popup.visible ? coverChoice.delegateModel : null
-                        currentIndex: coverChoice.highlightedIndex
-                        clip: true
-                        QQC.ScrollBar.vertical: QQC.ScrollBar {}
-                    }
-                    background: Rectangle {color: Kos.AppTheme.contentBackground; radius: 10; border.width: 1; border.color: Kos.AppTheme.border}
-                }
+                onActivated: index => {root.stopPreview(); root.activePrivacyIndex = index}
                 Accessible.name: i18nc("@label", "Privacy cover to adjust")
             }
             SolidButton {
@@ -621,7 +566,30 @@ QQC.Popup {
             visible: root.job.busy
             indeterminate: !root.job.ready
             value: root.job.progress
-            palette.highlight: Kos.AppTheme.accent
+            implicitHeight: 4
+            padding: 0
+            background: Rectangle { radius: 2; color: Kos.AppTheme.controlBackground }
+            contentItem: Item {
+                clip: true
+                Rectangle {
+                    id: progressFill
+                    width: exportProgress.indeterminate ? parent.width / 3 : parent.width * exportProgress.visualPosition
+                    height: parent.height
+                    radius: 2
+                    color: Kos.AppTheme.accent
+                    SequentialAnimation on x {
+                        running: exportProgress.visible && exportProgress.indeterminate
+                        loops: Animation.Infinite
+                        NumberAnimation { from: -progressFill.width; to: exportProgress.availableWidth; duration: 1200 }
+                    }
+                    Binding {
+                        target: progressFill
+                        property: "x"
+                        value: 0
+                        when: !exportProgress.indeterminate
+                    }
+                }
+            }
         }
         QQC.Label {
             objectName: "nkshotClipStatus"
@@ -636,16 +604,17 @@ QQC.Popup {
             color: Kos.AppTheme.paletteText
         }
         RowLayout {
-            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignRight
             spacing: 8
             SolidButton {
                 objectName: "nkshotClipCancel"
+                implicitHeight: 30
                 text: root.job.outputUrl.toString().length ? i18nc("@action", "Done") : i18nc("@action", "Cancel")
                 onClicked: root.close()
             }
-            Item {Layout.fillWidth: true}
             SolidButton {
                 objectName: "nkshotClipExport"
+                implicitHeight: 30
                 text: i18nc("@action", "Export…")
                 highlighted: true
                 enabled: root.validRange && !root.locked

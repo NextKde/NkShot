@@ -246,6 +246,10 @@ qt_target_qml_sources(spectacle
     Gui/ExportMenuButton.qml
     Gui/FloatingBackground.qml
     Gui/FloatingToolBar.qml
+    Gui/GlassMenu.qml
+    Gui/GlassMenuItem.qml
+    Gui/ModeButton.qml
+    Gui/SceenshotModeMenu.qml
     Gui/Handle.qml
     Gui/HelpMenuButton.qml
     Gui/InlineMessageList.qml
@@ -287,6 +291,8 @@ qt_target_qml_sources(spectacle
     Gui/OcrText.qml
     Gui/ScrollCapture.qml
     Gui/ImageViewportNavigation.qml
+    Gui/PopupCheckBox.qml
+    Gui/PopupSlider.qml
     Gui/TextCoverPopup.qml
     Gui/ImageAdjustmentsPopup.qml
     Gui/ImageExportPopup.qml

@@ -23,7 +23,8 @@ T.Pane {
     palette.light: Kos.AppTheme.border
     palette.mid: Kos.AppTheme.border
     // Same canonical material used by NextKde apps, with no compositor blur request.
-    property real radius: Kirigami.Units.largeSpacing * 2
+    // Match LiquidPanelSurface's default, including joined-panel fallback corners.
+    property real radius: 14
     property real topLeftRadius: radius
     property real topRightRadius: radius
     property real bottomLeftRadius: radius
@@ -58,13 +59,13 @@ T.Pane {
             anchors.fill: parent
             visible: !root.uniformCorners || GraphicsInfo.api === GraphicsInfo.Software || !Settings.useLiquidMaterial
             color: root.palette.window
-            border.color: Qt.alpha(root.palette.windowText, 0.16)
             radius: root.radius
             corners.topLeftRadius: root.topLeftRadius
             corners.topRightRadius: root.topRightRadius
             corners.bottomLeftRadius: root.bottomLeftRadius
             corners.bottomRightRadius: root.bottomRightRadius
-            border.width: contextWindow.dprRound(1)
+            border.width: 0
+            shadow.color: Qt.rgba(0, 0, 0, 0.16)
         }
     }
 }

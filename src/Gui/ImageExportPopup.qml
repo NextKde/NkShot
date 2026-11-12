@@ -5,7 +5,7 @@ import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
 // Sharing choices only. The owner supplies capabilities and the save-dialog action.
-QQC.Popup {
+Kos.LiquidDialog {
     id: root
     objectName: "nkshotImageExportPopup"
     property bool jpegAvailable: false
@@ -16,17 +16,14 @@ QQC.Popup {
     readonly property var formats: jpegAvailable ? (webpAvailable ? [0, 1] : [0]) : (webpAvailable ? [1] : [])
     width: Math.min(360, parent.width - 32)
     anchors.centerIn: parent
-    modal: true
+    sourceItem: parent
     focus: true
-    padding: 20
-    palette.text: Kos.AppTheme.paletteText
-    palette.windowText: Kos.AppTheme.paletteText
-    palette.buttonText: Kos.AppTheme.paletteText
+    header: null
+    footer: null
     onOpened: {
         errorMessage = ""
         if (formats.indexOf(format) < 0) format = formats.length ? formats[0] : 0
     }
-    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 18; elevation: 0.5 }
     contentItem: ColumnLayout {
         spacing: 14
         QQC.Label {
@@ -34,29 +31,47 @@ QQC.Popup {
             font.pixelSize: 17; font.bold: true
             color: Kos.AppTheme.paletteText
         }
-        QQC.ComboBox {
+        Kos.LiquidSelect {
             objectName: "nkshotImageExportFormat"
             Layout.fillWidth: true
+            implicitHeight: 28
+            materialForm: true
+            popupBorderWidth: 0
+            appearanceMode: Kos.AppTheme.dark ? "dark" : "light"
+            accentColor: Kos.AppTheme.accent
+            focusRingColor: Kos.AppTheme.focusRing
+            // Upstream selects dim their whole surface; dialogs express disability with text.
+            opacity: 1
+            textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+            mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
             model: root.formats.map(value => value === 0 ? "JPEG" : i18nc("@item", "WebP · Lossless"))
             currentIndex: root.formats.indexOf(root.format)
             enabled: root.formats.length > 1
             Accessible.name: i18nc("@label", "Sharing image format")
-            onActivated: {root.format = root.formats[currentIndex]; root.errorMessage = ""}
-            background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0 }
+            onActivated: index => { root.format = root.formats[index]; root.errorMessage = "" }
         }
         RowLayout {
             Layout.fillWidth: true
             visible: root.format === 0 && root.jpegAvailable
             QQC.Label { text: i18nc("@label", "Quality"); color: Kos.AppTheme.paletteText }
-            QQC.ComboBox {
+            Kos.LiquidSelect {
                 id: quality
                 objectName: "nkshotImageExportQuality"
                 Layout.fillWidth: true
+                implicitHeight: 28
+                materialForm: true
+                popupBorderWidth: 0
+                appearanceMode: Kos.AppTheme.dark ? "dark" : "light"
+                accentColor: Kos.AppTheme.accent
+                focusRingColor: Kos.AppTheme.focusRing
+                opacity: 1
+                textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
                 readonly property var values: [90, 95, 80]
                 model: [i18nc("@item", "High · 90"), i18nc("@item", "Highest · 95"), i18nc("@item", "Smaller · 80")]
                 currentIndex: 0
+                onActivated: index => currentIndex = index
                 Accessible.name: i18nc("@label", "JPEG quality")
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0 }
             }
         }
         QQC.Label {
@@ -83,30 +98,29 @@ QQC.Popup {
             wrapMode: Text.Wrap
             color: Kos.AppTheme.paletteText
         }
+        // Dialog actions are right-aligned throughout: Cancel precedes the primary action.
         RowLayout {
-            Layout.fillWidth: true
-            QQC.Button {
-                id: cancel
+            Layout.alignment: Qt.AlignRight
+            spacing: 8
+            Kos.LiquidActionButton {
                 objectName: "nkshotImageExportCancel"
                 text: i18nc("@action", "Cancel")
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
+                implicitHeight: root.actionHeight
+                materialForm: true
                 onClicked: root.close()
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; focused: cancel.visualFocus }
             }
-            Item { Layout.fillWidth: true }
-            QQC.Button {
-                id: proceed
+            Kos.LiquidActionButton {
                 objectName: "nkshotImageExportContinue"
                 text: i18nc("@action", "Continue…")
                 enabled: root.formats.indexOf(root.format) >= 0 && typeof root.exportCallback === "function"
-                implicitHeight: 34; leftPadding: 14; rightPadding: 14
-                palette.buttonText: Kos.AppTheme.accentText
+                implicitHeight: root.actionHeight
+                materialForm: true
+                highlighted: true
                 onClicked: {
                     root.errorMessage = ""
                     if (root.exportCallback(root.format, root.format === 0 ? quality.values[quality.currentIndex] : 100)) root.close()
                     else if (!root.errorMessage.length) root.errorMessage = i18nc("@info", "The export dialog could not be opened. Try again.")
                 }
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; focused: proceed.visualFocus }
             }
         }
     }

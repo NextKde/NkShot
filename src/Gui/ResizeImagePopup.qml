@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 
-QQC.Popup {
+Kos.LiquidDialog {
     id: root
     objectName: "nkshotResizePopup"
     property size sourceSize: Qt.size(0, 0)
@@ -15,14 +15,11 @@ QQC.Popup {
     signal createCopy(int pixelWidth, int quarterTurns, bool mirror)
     width: Math.min(360, parent.width - 32)
     anchors.centerIn: parent
-    palette.text: Kos.AppTheme.paletteText
-    palette.windowText: Kos.AppTheme.paletteText
-    palette.buttonText: Kos.AppTheme.paletteText
-    modal: true
+    sourceItem: parent
     focus: true
-    padding: 20
+    header: null
+    footer: null
     onOpened: { quarterTurns = 0; horizontalMirror = false; widthInput.value = Math.min(8192, Math.max(1, sourceSize.width)) }
-    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 18; elevation: 0.5 }
     contentItem: ColumnLayout {
         spacing: 14
         QQC.Label {
@@ -40,35 +37,23 @@ QQC.Popup {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            QQC.Button {
-                id: rotateButton
+            Kos.LiquidActionButton {
                 objectName: "nkshotCopyRotate"
                 Layout.fillWidth: true
-                implicitHeight: 36
+                implicitHeight: 28
+                materialForm: true
                 text: i18nc("@action", "Rotate 90°")
-                font: Qt.application.font
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: rotateButton.hovered; pressed: rotateButton.down; focused: rotateButton.visualFocus
-                }
                 onClicked: { root.quarterTurns = (root.quarterTurns + 1) % 4; widthInput.value = Math.min(8192, root.orientedSize.width) }
             }
-            QQC.Button {
-                id: mirrorButton
+            Kos.LiquidActionButton {
                 objectName: "nkshotCopyMirror"
                 Layout.fillWidth: true
-                implicitHeight: 36
+                implicitHeight: 28
+                materialForm: true
                 text: i18nc("@action", "Mirror")
-                font: Qt.application.font
                 checkable: true
                 checked: root.horizontalMirror
                 onClicked: root.horizontalMirror = !root.horizontalMirror
-                background: Kos.KosSurface {
-                    fillColor: root.horizontalMirror ? Kos.AppTheme.accent : Kos.AppTheme.controlBackground
-                    radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: mirrorButton.hovered; pressed: mirrorButton.down; focused: mirrorButton.visualFocus
-                }
-                palette.buttonText: root.horizontalMirror ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
                 Accessible.description: i18nc("@info", "Mirror horizontally after rotation")
             }
         }
@@ -82,15 +67,24 @@ QQC.Popup {
         RowLayout {
             Layout.fillWidth: true
             QQC.Label { text: i18nc("@label", "Width (px)"); color: Kos.AppTheme.paletteText; Layout.fillWidth: true }
-            QQC.SpinBox {
+            Kos.LiquidTextField {
                 id: widthInput
                 objectName: "nkshotResizeWidth"
-                from: 1
-                to: 8192
-                editable: true
+                Layout.preferredWidth: 100
+                implicitHeight: 28
+                specificationForm: true
+                property int value: 1
+                text: String(value)
+                validator: IntValidator { bottom: 1; top: 8192 }
+                inputMethodHints: Qt.ImhDigitsOnly
+                maximumLength: 4
+                onTextEdited: { if (acceptableInput) value = Number(text) }
+                onValueChanged: text = String(value)
+                onEditingFinished: text = String(value)
+                onActiveFocusChanged: { if (!activeFocus) text = String(value) }
+                color: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                opacity: 1
                 Accessible.name: i18nc("@label", "Copy width in pixels")
-                palette.text: Kos.AppTheme.paletteText
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 9; elevation: 0 }
             }
         }
         QQC.Label {
@@ -105,33 +99,23 @@ QQC.Popup {
             wrapMode: Text.Wrap
             color: Kos.AppTheme.paletteText
         }
+        // Dialog actions are right-aligned throughout: Cancel precedes the primary action.
         RowLayout {
             Layout.alignment: Qt.AlignRight
-            QQC.Button {
-                id: cancelButton
+            spacing: 8
+            Kos.LiquidActionButton {
                 text: i18nc("@action", "Cancel")
-                implicitHeight: 34
-                leftPadding: 14
-                rightPadding: 14
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: cancelButton.hovered; pressed: cancelButton.down; focused: cancelButton.visualFocus
-                }
+                implicitHeight: root.actionHeight
+                materialForm: true
                 onClicked: root.close()
             }
-            QQC.Button {
-                id: createButton
+            Kos.LiquidActionButton {
                 objectName: "nkshotResizeCreate"
                 text: i18nc("@action", "Create copy")
-                enabled: root.sourceSize.width > 0 && root.outputHeight <= 32000 && root.outputHeight * widthInput.value <= 40000000
-                palette.buttonText: Kos.AppTheme.accentText
-                leftPadding: 14
-                rightPadding: 14
-                implicitHeight: 34
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; strokeWidth: 0
-                    hovered: createButton.hovered; pressed: createButton.down; focused: createButton.visualFocus
-                }
+                enabled: widthInput.acceptableInput && root.sourceSize.width > 0 && root.outputHeight <= 32000 && root.outputHeight * widthInput.value <= 40000000
+                implicitHeight: root.actionHeight
+                materialForm: true
+                highlighted: true
                 onClicked: { root.createCopy(widthInput.value, root.quarterTurns, root.horizontalMirror); root.close() }
             }
         }

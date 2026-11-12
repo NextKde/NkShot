@@ -6,7 +6,7 @@ import QtQuick
 import QtQuick.Controls
 import org.kde.spectacle.private
 
-Menu {
+GlassMenu {
     id: root
     Instantiator {
         id: instantiator

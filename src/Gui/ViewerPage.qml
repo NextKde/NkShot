@@ -20,12 +20,15 @@ import org.kde.kquickimageeditor
  */
 EmptyPage {
     id: root
-    component TaskMenu: QQC.Menu {
+    readonly property Kos.LiquidBackdrop contentBackdrop: editorBackdrop
+    component TaskMenu: GlassMenu {
         property bool imageOnly: true
         width: Math.min(260, root.width - 32)
         palette: moreMenu.palette
+    }
+    component MenuSeparator: QQC.MenuSeparator {
         padding: 6
-        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5 }
+        contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border }
     }
     focus: true
     palette.windowText: Kos.AppTheme.paletteText
@@ -53,28 +56,35 @@ EmptyPage {
 
     // Primary actions stay visible; the original secondary actions remain
     // available in More rather than competing with the image being edited.
-    component ViewerButton: TtToolButton {
+    component ViewerButton: Kos.LiquidActionButton {
+        id: button
         property bool primaryAction: false
-        icon.width: 18
-        icon.height: 18
-        palette.buttonText: primaryAction ? Kos.AppTheme.accentText : Kos.AppTheme.paletteText
-        implicitHeight: 36
-        implicitWidth: Math.max(40, implicitContentWidth + 24)
-        leftPadding: 12
-        rightPadding: 12
+        property string symbol: ""
+        materialForm: true
+        implicitHeight: QmlUtils.toolbarButtonHeight
+        implicitWidth: iconOnly ? implicitHeight
+            : Math.max(QmlUtils.toolbarButtonHeight, implicitContentWidth + leftPadding + rightPadding)
+        iconOnly: display === QQC.AbstractButton.IconOnly
+        iconSize: QmlUtils.toolbarIconSize
+        icon.width: iconSize
+        icon.height: iconSize
+        icon.color: textColor
+        highlighted: primaryAction
+        leftPadding: iconOnly ? 0 : 12
+        rightPadding: leftPadding
+        reduceMotion: Settings.reduceUiMotion
         display: root.width < 720 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
-        background: Kos.KosSurface {
-            fillColor: parent.primaryAction ? Kos.AppTheme.accent : parent.checked ? Kos.AppTheme.controlBackground
-                : parent.hovered ? Kos.AppTheme.contentSecondaryBackground : "transparent"
-            strokeColor: "transparent"
-            strokeWidth: 0
-            radius: 10
-            elevation: 0
-            hovered: parent.hovered
-            pressed: parent.down
-            focused: parent.visualFocus
-            showInnerHighlight: false
+        contentItem: SymbolLabel {
+            control: button
+            symbol: button.symbol
+                || (button.action && button.action.symbol !== undefined ? button.action.symbol : "")
+                || button.icon.name
+            color: button.textColor
+            iconSize: button.iconSize
         }
+        QQC.ToolTip.text: text
+        QQC.ToolTip.visible: (hovered || pressed) && iconOnly
+        QQC.ToolTip.delay: Kirigami.Units.toolTipDelay
     }
 
     header: QQC.ToolBar {
@@ -86,16 +96,7 @@ EmptyPage {
         rightPadding: 12
         topPadding: 10
         bottomPadding: 10
-        background: Rectangle {
-            color: Kos.AppTheme.contentSecondaryBackground
-            Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                height: 1
-                color: Kos.AppTheme.border
-            }
-        }
+        background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
         contentItem: RowLayout {
             spacing: 6
             ViewerButton {
@@ -124,7 +125,7 @@ EmptyPage {
                     visible: !SpectacleCore.videoMode
                     text: Math.round(SpectacleCore.annotationDocument.canvasRect.width) + " × "
                         + Math.round(SpectacleCore.annotationDocument.canvasRect.height)
-                    font.pixelSize: 11
+                    font.pixelSize: 12
                     color: Kos.AppTheme.mutedText
                 }
             }
@@ -132,7 +133,7 @@ EmptyPage {
             UndoRedoGroup {
                 editorDocument: SpectacleCore.annotationDocument
                 visible: contextWindow.annotating
-                buttonHeight: 36
+                buttonHeight: QmlUtils.toolbarButtonHeight
                 animationsEnabled: !Settings.reduceUiMotion
             }
             ViewerButton {
@@ -152,42 +153,32 @@ EmptyPage {
                 display: QQC.AbstractButton.IconOnly
                 Accessible.role: Accessible.ButtonMenu
                 onClicked: moreMenu.popup(moreButton, moreButton.width - moreMenu.width, moreButton.height + 6)
-                QQC.Menu {
+                GlassMenu {
                     id: moreMenu
                     objectName: "nkshotMoreMenu"
                     width: Math.min(240, root.width - 32)
-                    padding: 6
                     y: moreButton.height + 6
-                    palette.windowText: Kos.AppTheme.paletteText
-                    palette.text: Kos.AppTheme.paletteText
-                    palette.buttonText: Kos.AppTheme.paletteText
-                    palette.base: Kos.AppTheme.contentBackground
-                    palette.button: Kos.AppTheme.controlBackground
-                    palette.light: Kos.AppTheme.border
-                    palette.mid: Kos.AppTheme.border
-                    delegate: SymbolMenuItem {
+                    delegate: GlassMenuItem {
                         objectName: subMenu ? "nkshotTask_" + subMenu.objectName : ""
                         visible: !subMenu || !subMenu.imageOnly || !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
-                        opacity: enabled ? 1 : 0.38
                         icon.color: palette.buttonText
                     }
-                    background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5 }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotOpenMediaAction"
                         text: i18nc("@action", "Open…")
                         icon.name: "document-open"
                         enabled: contextWindow.canOpenMedia
                         onTriggered: contextWindow.openMedia()
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotRecentMediaAction"
                         text: i18nc("@action", "Recent files…")
                         icon.name: "document-open-recent"
                         enabled: contextWindow.canOpenMedia
                         onTriggered: recentPopup.open()
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotClipboardImageAction"
                         text: i18nc("@action", "Edit clipboard image…")
                         icon.name: "edit-paste"
@@ -200,17 +191,17 @@ EmptyPage {
                         imageOnly: false
                         title: SpectacleCore.videoMode ? i18nc("@action:menu", "Recording file") : i18nc("@action:menu", "Share a copy")
                         icon.name: "document-share"
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             action: SaveAsAction {}
                             icon.color: palette.buttonText
                         }
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             visible: SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
                             action: CopyLocationAction {}
                             icon.color: palette.buttonText
                         }
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
                             text: i18nc("@action", "Export")
@@ -218,8 +209,8 @@ EmptyPage {
                             icon.color: palette.buttonText
                             onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
                         }
-                        QQC.MenuSeparator { visible: !SpectacleCore.videoMode; height: visible ? implicitHeight : 0 }
-                        SymbolMenuItem {
+                        MenuSeparator { visible: !SpectacleCore.videoMode; height: visible ? implicitHeight : 0 }
+                        GlassMenuItem {
                             objectName: "nkshotBeautifyImageAction"
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
@@ -229,7 +220,7 @@ EmptyPage {
                             enabled: !contextWindow.resizingImage
                             onTriggered: { if (contextWindow.beginPresentationPreview()) beautifyPopup.open() }
                         }
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             objectName: "nkshotResizeImageAction"
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
@@ -246,15 +237,15 @@ EmptyPage {
                         title: i18nc("@action:menu", "Read from image")
                         icon.name: "document-scan"
                         property var languages: SpectacleCore.ocrAvailable ? SpectacleCore.ocrAvailableLanguages() : ({})
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             action: OcrAction {}
                             text: i18nc("@action", "Extract text")
                             icon.color: palette.buttonText
                         }
-                        QQC.MenuSeparator {}
+                        MenuSeparator {}
                         Instantiator {
                             model: Object.keys(ocrLanguageMenu.languages).filter(function(code) { return code !== "osd" }).sort()
-                            delegate: SymbolMenuItem {
+                            delegate: GlassMenuItem {
                                 required property string modelData
                                 objectName: "nkshotOcrLanguage_" + modelData
                                 text: ocrLanguageMenu.languages[modelData]
@@ -264,8 +255,8 @@ EmptyPage {
                             onObjectAdded: (index, object) => ocrLanguageMenu.insertItem(index + 2, object)
                             onObjectRemoved: (index, object) => ocrLanguageMenu.removeItem(object)
                         }
-                        QQC.MenuSeparator {}
-                        SymbolMenuItem {
+                        MenuSeparator {}
+                        GlassMenuItem {
                             objectName: "nkshotScanCodeAction"
                             text: contextWindow.scanningCode ? i18nc("@info", "Reading code…") : i18nc("@action", "Read QR or barcode")
                             icon.name: "view-barcode-qr"
@@ -283,7 +274,7 @@ EmptyPage {
                             color: Kos.AppTheme.mutedText
                         }
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotCombineImagesAction"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -298,7 +289,7 @@ EmptyPage {
                         imageOnly: false
                         title: i18nc("@action:menu", "Pins and notes")
                         icon.name: "window-pin"
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotPinImageAction"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -307,7 +298,7 @@ EmptyPage {
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.pinImage()
                     }
-                        SymbolMenuItem {
+                        GlassMenuItem {
                             objectName: "nkshotQuickNoteAction"
                             text: i18nc("@action", "Quick note…")
                             icon.name: "document-edit"
@@ -315,15 +306,15 @@ EmptyPage {
                             onTriggered: contextWindow.openQuickNote()
                         }
                     }
-                    QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
-                    SymbolMenuItem {
+                    MenuSeparator {}
+                    GlassMenuItem {
                         objectName: "nkshotColorPickerAction"
                         text: i18nc("@action", "Pick a color…")
                         icon.name: "color-picker"
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.openColorPicker()
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         objectName: "nkshotScrollPreviewEntry"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -331,15 +322,14 @@ EmptyPage {
                         icon.name: "view-fullscreen"
                         onTriggered: contextWindow.openScrollPreview()
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
-                        opacity: enabled ? 1 : 0.38
                         text: i18nc("@action", "New Recording")
                         icon.name: "media-record"
                         icon.color: palette.buttonText
                         onTriggered: Qt.callLater(function() { RecordingModeMenu.popup(moreButton) })
                     }
-                    SymbolMenuItem {
+                    GlassMenuItem {
                         text: i18nc("@action", "Options")
                         icon.name: "configure"
                         icon.color: palette.buttonText
@@ -373,10 +363,10 @@ EmptyPage {
         anchors.bottomMargin: 16
         visible: contextWindow.annotating && !SpectacleCore.videoMode
         z: 2
-        leftPadding: 10
-        rightPadding: 10
-        topPadding: 7
-        bottomPadding: 7
+        leftPadding: 8
+        rightPadding: 8
+        topPadding: 6
+        bottomPadding: 6
         contentItem: RowLayout {
             spacing: 6
             AnnotationsToolBarContents {
@@ -395,9 +385,7 @@ EmptyPage {
             QQC.ToolSeparator { Layout.preferredHeight: 24 }
             ViewerButton {
                 id: propertiesButton
-                implicitWidth: 36
-                leftPadding: 8
-                rightPadding: 8
+                implicitWidth: QmlUtils.toolbarButtonHeight
                 display: QQC.AbstractButton.IconOnly
                 text: i18nc("@action", "Tool properties")
                 icon.name: "configure"
@@ -413,20 +401,27 @@ EmptyPage {
                     palette.light: Kos.AppTheme.border
                     palette.mid: Kos.AppTheme.border
                     objectName: "nkshotPropertiesPopup"
-                    width: Math.min(root.width - 32, Math.max(300, propertyContents.implicitWidth + 32))
-                    height: Math.min(root.height - 120, propertyContents.implicitHeight + 72)
-                    x: Math.max(16 - propertiesButton.mapToItem(root, 0, 0).x, propertiesButton.width - width)
-                    y: -height - 12
-                    padding: 16
+                    readonly property real edgeMargin: 16
+                    readonly property real anchorGap: 12
+                    width: Math.min(root.availableWidth - 2 * edgeMargin,
+                        Math.max(propertiesHeading.implicitWidth, propertyContents.implicitWidth) + leftPadding + rightPadding)
+                    height: Math.min(propertiesButton.mapToItem(root.contentItem, 0, 0).y - edgeMargin - anchorGap,
+                        propertiesHeading.implicitHeight + propertiesLayout.spacing + propertyContents.implicitHeight + topPadding + bottomPadding)
+                    x: Math.max(edgeMargin - propertiesButton.mapToItem(root.contentItem, 0, 0).x, propertiesButton.width - width)
+                    y: -height - anchorGap
+                    padding: 12
                     onClosed: propertyContents.flushPendingChanges()
-                    background: Kos.KosSurface {
-                        fillColor: Kos.AppTheme.contentBackground
-                        radius: 18
-                        elevation: 0.5
+                    background: Kos.LiquidPanelSurface {
+                        backdrop: editorBackdrop
+                        reduceTransparency: Kos.AppTheme.reduceTransparency || !Settings.useLiquidMaterial
+                        tintColor: Kos.AppTheme.contentBackground
+                        cornerRadius: 14
                     }
                     contentItem: ColumnLayout {
-                        spacing: 10
+                        id: propertiesLayout
+                        spacing: 12
                         RowLayout {
+                            id: propertiesHeading
                             Layout.fillWidth: true
                             QQC.Label {
                                 Layout.fillWidth: true
@@ -436,8 +431,7 @@ EmptyPage {
                             }
                             ViewerButton {
                                 objectName: "nkshotCloseProperties"
-                                implicitWidth: 28
-                                implicitHeight: 28
+                                implicitWidth: QmlUtils.toolbarButtonHeight
                                 leftPadding: 4
                                 rightPadding: 4
                                 display: QQC.AbstractButton.IconOnly
@@ -460,27 +454,14 @@ EmptyPage {
                 }
             }
         }
-        background: Item {
-            readonly property bool useGlass: editorBackdrop.active && !Kos.AppTheme.reduceTransparency
-            Kos.LiquidPanelSurface {
-                objectName: "nkshotEditorMaterial"
-                anchors.fill: parent
-                visible: parent.useGlass
-                backdrop: editorBackdrop
-                cornerRadius: 18
-                tintColor: Kos.AppTheme.contentBackground
-                darkAppearance: Kos.AppTheme.dark
-                materialOpacity: 0.95
-            }
-            Kos.KosSurface {
-                anchors.fill: parent
-                visible: !parent.useGlass
-                fillColor: Kos.AppTheme.contentBackground
-                radius: 18
-                elevation: 0.5
-                strokeColor: Kos.AppTheme.border
-                showInnerHighlight: false
-            }
+        background: Kos.LiquidPanelSurface {
+            objectName: "nkshotEditorMaterial"
+            backdrop: editorBackdrop
+            reduceTransparency: Kos.AppTheme.reduceTransparency || !Settings.useLiquidMaterial
+            cornerRadius: 14
+            tintColor: Kos.AppTheme.contentBackground
+            darkAppearance: Kos.AppTheme.dark
+            materialOpacity: 0.95
         }
     }
 
@@ -551,7 +532,7 @@ EmptyPage {
             topPadding: 10
             bottomPadding: 10
             background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
-            contentHeight: QmlUtils.iconTextButtonHeight
+            contentHeight: QmlUtils.toolbarButtonHeight
             contentItem: RowLayout {
                 spacing: Kirigami.Units.mediumSpacing
                 Item { Layout.fillWidth: true }
@@ -559,8 +540,7 @@ EmptyPage {
                     id: zoomControls
                     spacing: 2
                     ViewerButton {
-                        implicitHeight: 28
-                        implicitWidth: 28
+                        implicitWidth: QmlUtils.toolbarButtonHeight
                         leftPadding: 6
                         rightPadding: 6
                         display: QQC.AbstractButton.IconOnly
@@ -571,7 +551,6 @@ EmptyPage {
                     }
                     ViewerButton {
                         id: zoomButton
-                        implicitHeight: 28
                         implicitWidth: 64
                         display: QQC.AbstractButton.TextOnly
                         text: Math.round(contentLoader.item.currentZoom * 100) + "%"
@@ -579,13 +558,13 @@ EmptyPage {
                         onClicked: zoomPopup.open()
                         QQC.Popup {
                             id: zoomPopup
-                    palette.windowText: Kos.AppTheme.paletteText
-                    palette.text: Kos.AppTheme.paletteText
-                    palette.buttonText: Kos.AppTheme.paletteText
-                    palette.base: Kos.AppTheme.contentBackground
-                    palette.button: Kos.AppTheme.controlBackground
-                    palette.light: Kos.AppTheme.border
-                    palette.mid: Kos.AppTheme.border
+                            palette.windowText: Kos.AppTheme.paletteText
+                            palette.text: Kos.AppTheme.paletteText
+                            palette.buttonText: Kos.AppTheme.paletteText
+                            palette.base: Kos.AppTheme.contentBackground
+                            palette.button: Kos.AppTheme.controlBackground
+                            palette.light: Kos.AppTheme.border
+                            palette.mid: Kos.AppTheme.border
                             objectName: "nkshotZoomPopup"
                             x: zoomButton.width - width
                             y: -height - 8
@@ -596,37 +575,59 @@ EmptyPage {
                                 elevation: 0.5
                             }
                             contentItem: ColumnLayout {
-                                QQC.Button {
+                                spacing: 8
+                                Kos.LiquidActionButton {
                                     text: i18nc("@action", "Fit to view")
+                                    implicitHeight: QmlUtils.toolbarButtonHeight
+                                    materialForm: true
                                     Layout.fillWidth: true
                                     onClicked: {
                                         contentLoader.item.zoomToPercent(Math.min(1, contentLoader.item.fitZoom))
                                         zoomPopup.close()
                                     }
                                 }
-                                QQC.Button {
+                                Kos.LiquidActionButton {
                                     text: i18nc("@action", "Actual size")
+                                    implicitHeight: QmlUtils.toolbarButtonHeight
+                                    materialForm: true
                                     Layout.fillWidth: true
                                     onClicked: { contentLoader.item.zoomToPercent(1); zoomPopup.close() }
                                 }
-                                QQC.SpinBox {
-                                    id: zoomEditor
-                                    editable: true
-                                    from: Math.ceil(contentLoader.item.minZoom * 100)
-                                    to: Math.floor(contentLoader.item.maxZoom * 100)
-                                    stepSize: 25
-                                    value: Math.round(contentLoader.item.currentZoom * 100)
-                                    Accessible.name: i18nc("@label", "Custom zoom percentage")
-                                    textFromValue: (value, locale) => Number(value).toLocaleString(locale, 'f', 0) + locale.percent
-                                    valueFromText: (text, locale) => Number.fromLocaleString(locale, text.replace(/\D/g, ''))
-                                    onValueModified: contentLoader.item.zoomToPercent(value / 100)
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Kos.LiquidTextField {
+                                        id: zoomEditor
+                                        objectName: "nkshotZoomInput"
+                                        Layout.fillWidth: true
+                                        implicitHeight: QmlUtils.toolbarButtonHeight
+                                        specificationForm: true
+                                        horizontalAlignment: TextInput.AlignHCenter
+                                        inputMethodHints: Qt.ImhDigitsOnly
+                                        readonly property var numberLocale: Qt.locale()
+                                        validator: IntValidator {
+                                            bottom: Math.ceil(contentLoader.item.minZoom * 100)
+                                            top: Math.floor(contentLoader.item.maxZoom * 100)
+                                            locale: zoomEditor.numberLocale.name
+                                        }
+                                        Binding on text {
+                                            when: !zoomEditor.activeFocus
+                                            value: Number(Math.round(contentLoader.item.currentZoom * 100)).toLocaleString(zoomEditor.numberLocale, 'f', 0)
+                                        }
+                                        onEditingFinished: {
+                                            if (acceptableInput)
+                                                contentLoader.item.zoomToPercent(Number.fromLocaleString(numberLocale, text) / 100)
+                                            text = Number(Math.round(contentLoader.item.currentZoom * 100)).toLocaleString(numberLocale, 'f', 0)
+                                        }
+                                        Accessible.name: i18nc("@label", "Custom zoom percentage")
+                                    }
+                                    QQC.Label { text: zoomEditor.numberLocale.percent; color: Kos.AppTheme.mutedText }
                                 }
                             }
                         }
                     }
                     ViewerButton {
-                        implicitHeight: 28
-                        implicitWidth: 28
+                        implicitWidth: QmlUtils.toolbarButtonHeight
                         leftPadding: 6
                         rightPadding: 6
                         display: QQC.AbstractButton.IconOnly
@@ -674,7 +675,7 @@ EmptyPage {
         onActivated: contextWindow.showPreferencesDialog()
     }
 
-    RecentMediaPopup { id: recentPopup; parent: QQC.Overlay.overlay }
+    RecentMediaPopup { id: recentPopup; parent: QQC.Overlay.overlay; sceneSource: root }
 
     MediaDropTarget {
         id: mediaDrop

@@ -20,8 +20,8 @@ Shape {
     // Use a rounded physically even size so that straight edges don't look fuzzy
     // HACK: using visualWidth/visualHeight to work around Qt 6.7 binding loops with handling width
     // and height in this component. There seems to be some kind of bug in Qt 6.7.
-    property real visualWidth: dprRoundEven(18)
-    property real visualHeight: dprRoundEven(18)
+    property real visualWidth: dprRoundEven(12)
+    property real visualHeight: dprRoundEven(12)
     readonly property real radiusX: (visualWidth - strokeWidth) / 2
     readonly property real radiusY: (visualHeight - strokeWidth) / 2
     readonly property real centerX: visualWidth / 2

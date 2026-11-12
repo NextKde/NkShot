@@ -6,12 +6,33 @@ import Kos.Ui as Kos
 
 QQC.Pane {
     id: root
+    // This decorated utility window keeps a compact 16px content inset.
     padding: 16
     font: Qt.application.font
     palette.windowText: Kos.AppTheme.paletteText
     palette.text: Kos.AppTheme.paletteText
     palette.buttonText: Kos.AppTheme.paletteText
     background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
+
+    component ActionButton: Kos.LiquidActionButton {
+        id: button
+        implicitHeight: 30
+        // Measure the caption independently of SymbolLabel's allocated width.
+        implicitWidth: iconOnly ? implicitHeight : Math.max(implicitHeight,
+            captionMetrics.advanceWidth(text) + (icon.name.length && display !== QQC.AbstractButton.TextOnly ? 20 : 0)
+            + leftPadding + rightPadding)
+        FontMetrics { id: captionMetrics; font: button.font }
+        materialForm: true
+        iconOnly: display === QQC.AbstractButton.IconOnly
+        font.pixelSize: 13
+        // Utility-window actions use feedback from the surface, without a focus ring.
+        focusRingColor: "transparent"
+        contentItem: SymbolLabel { control: parent; color: parent.textColor }
+        QQC.ToolTip.text: text
+        QQC.ToolTip.visible: hovered
+        Accessible.name: text
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 12
@@ -26,51 +47,32 @@ QQC.Pane {
                 font.weight: Font.DemiBold
                 color: Kos.AppTheme.paletteText
             }
-            QQC.ToolButton {
-                contentItem: SymbolLabel { control: parent }
+            ActionButton {
                 id: copyButton
                 objectName: "nkshotOcrCopy"
                 property bool copied: false
                 text: copied ? i18nc("@info", "Copied") : ocrWindow.translation.translatedText.length ? i18nc("@action", "Copy original") : i18nc("@action", "Copy all")
                 icon.name: copied ? "dialog-ok" : "edit-copy"
-                icon.color: Kos.AppTheme.paletteText
                 display: root.width < 520 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
-                QQC.ToolTip.text: text
-                QQC.ToolTip.visible: hovered
-                Accessible.name: text
                 onClicked: ocrWindow.copyText()
                 Connections {
                     target: ocrWindow
                     function onTextCopied() { copyButton.copied = true; feedback.restart() }
                 }
                 Timer { id: feedback; interval: 1800; onTriggered: copyButton.copied = false }
-                background: Kos.KosSurface {
-                    fillColor: Kos.AppTheme.controlBackground
-                    radius: 10
-                    elevation: 0
-                    strokeWidth: 0
-                }
             }
-            QQC.ToolButton {
-                contentItem: SymbolLabel { control: parent }
+            ActionButton {
                 objectName: "nkshotOcrSave"
                 text: i18nc("@action", "Save text as…")
                 icon.name: "document-save-as"
-                icon.color: Kos.AppTheme.paletteText
                 display: QQC.AbstractButton.IconOnly
-                QQC.ToolTip.text: text
-                QQC.ToolTip.visible: hovered
                 onClicked: ocrWindow.saveAs()
             }
-            QQC.ToolButton {
-                contentItem: SymbolLabel { control: parent }
+            ActionButton {
                 objectName: "nkshotOcrClose"
                 text: i18nc("@action", "Close")
                 icon.name: "dialog-close"
-                icon.color: Kos.AppTheme.paletteText
                 display: QQC.AbstractButton.IconOnly
-                QQC.ToolTip.text: text
-                QQC.ToolTip.visible: hovered
                 onClicked: ocrWindow.close()
             }
         }
@@ -97,20 +99,30 @@ QQC.Pane {
         RowLayout {
             visible: ocrWindow.translationEnabled
             Layout.fillWidth: true
-            QQC.ComboBox {
+            Kos.LiquidSelect {
                 id: direction
                 objectName: "nkshotTranslationDirection"
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
+                implicitHeight: 30
+                materialForm: true
+                popupBorderWidth: 0
+                appearanceMode: Kos.AppTheme.dark ? "dark" : "light"
+                accentColor: Kos.AppTheme.accent
+                focusRingColor: "transparent"
+                opacity: 1
+                textColor: enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
+                mutedTextColor: enabled ? Kos.AppTheme.mutedText : Kos.AppTheme.disabledText
                 model: [i18nc("@item", "English → Chinese"), i18nc("@item", "Chinese → English")]
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0 }
                 Accessible.name: i18nc("@label", "Translation direction")
-                onActivated: ocrWindow.translation.cancel()
+                onActivated: index => {
+                    currentIndex = index
+                    ocrWindow.translation.cancel()
+                }
             }
-            QQC.Button {
+            ActionButton {
                 objectName: "nkshotTranslate"
-                palette.buttonText: Kos.AppTheme.accentText
-                background: Kos.KosSurface { fillColor: Kos.AppTheme.accent; radius: 10; elevation: 0; strokeWidth: 0 }
+                highlighted: true
                 text: ocrWindow.translation.busy ? i18nc("@action", "Cancel") : i18nc("@action", "Translate")
                 onClicked: {
                     if (ocrWindow.translation.busy) ocrWindow.translation.cancel()
@@ -128,15 +140,13 @@ QQC.Pane {
             color: Kos.AppTheme.mutedText
             font.pixelSize: 12
         }
-        QQC.ToolButton {
+        ActionButton {
             objectName: "nkshotTranslationSetup"
             readonly property url guideUrl: "https://github.com/NextKde/NkShot/blob/main/docs/local-translation.md"
             visible: ocrWindow.translationEnabled && !ocrWindow.translation.busy
                 && ocrWindow.translation.status.length > 0 && ocrWindow.translation.translatedText.length === 0
             text: i18nc("@action", "Set up offline translation")
-            palette.buttonText: Kos.AppTheme.paletteText
             onClicked: Qt.openUrlExternally(guideUrl)
-            background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0 }
         }
         GridLayout {
             Layout.fillWidth: true
@@ -170,9 +180,9 @@ QQC.Pane {
                         color: Kos.AppTheme.paletteText
                         selectedTextColor: Kos.AppTheme.accentText
                         selectionColor: Kos.AppTheme.accent
-                        font.pixelSize: 15
-                        padding: 14
-                        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0 }
+                        font.pixelSize: 13
+                        padding: 12
+                        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 8; elevation: 0; strokeWidth: 0 }
                     }
                 }
             }
@@ -187,11 +197,10 @@ QQC.Pane {
                     id: translationHeader
                     Layout.fillWidth: true
                     QQC.Label { text: i18nc("@label", "Translation"); color: Kos.AppTheme.mutedText; Layout.fillWidth: true }
-                    QQC.ToolButton {
+                    ActionButton {
                         objectName: "nkshotCopyTranslation"
-                        opacity: enabled ? 1 : 0.4
-                        background: Kos.KosSurface { fillColor: Kos.AppTheme.controlBackground; radius: 10; elevation: 0; strokeWidth: 0 }
                         text: i18nc("@action", "Copy translation")
+                        icon.name: "edit-copy"
                         enabled: ocrWindow.translation.translatedText.length > 0
                         onClicked: ocrWindow.copyTranslation()
                     }
@@ -210,9 +219,9 @@ QQC.Pane {
                         color: Kos.AppTheme.paletteText
                         selectedTextColor: Kos.AppTheme.accentText
                         selectionColor: Kos.AppTheme.accent
-                        font.pixelSize: 15
-                        padding: 14
-                        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0 }
+                        font.pixelSize: 13
+                        padding: 12
+                        background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 8; elevation: 0; strokeWidth: 0 }
                     }
                 }
             }

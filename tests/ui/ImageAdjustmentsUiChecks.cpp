@@ -44,16 +44,39 @@ bool ImageAdjustmentsUiChecks::run(QApplication &app,ImageCopyEditor *raw,const 
         const auto point=target->mapToScene(QPointF(target->width()/2,target->height()/2)).toPoint();
         if(!QRect(QPoint(),editor->size()).contains(point))return false;
         QTest::mouseClick(editor,Qt::LeftButton,Qt::NoModifier,point);QTest::qWait(80);return true;};
-    auto open=[&]{editor->requestActivate();QTest::qWait(80);
-        if(!click(QStringLiteral("nkshotCopyEditorMore"))||!click(QStringLiteral("nkshotImageAdjustmentsAction")))return false;
-        return QTest::qWaitFor([&]{return editor->adjustmentBlocked()&&visible(QStringLiteral("nkshotImageAdjustmentsCreate"))&&preview->ready();},2000);};
+    auto open = [&] {
+        editor->requestActivate();
+        QTest::qWait(80);
+        if (!click(QStringLiteral("nkshotCopyEditorMore")) || !click(QStringLiteral("nkshotImageAdjustmentsAction")))
+            return false;
+        return QTest::qWaitFor(
+            [&] {
+                auto popup = editor->contentItem()->findChild<QObject *>(QStringLiteral("nkshotImageAdjustmentsPopup"));
+                return popup && popup->property("opened").toBool() && editor->adjustmentBlocked() && visible(QStringLiteral("nkshotImageAdjustmentsCreate"))
+                    && preview->ready();
+            },
+            2000);
+    };
     auto zero=[&]{const auto a=preview->options();return a.brightness==0&&a.contrast==0&&a.saturation==0;};
-    auto change=[&](const QString &name){auto slider=item(name);if(!slider)return false;expose(slider);
-        const auto old=slider->property("value").toInt();
+    auto change = [&](const QString &name) {
+        auto slider = item(name);
+        if (!slider)
+            return false;
+        expose(slider);
+        const auto old = slider->property("value").toDouble();
         QTest::mouseClick(editor,Qt::LeftButton,Qt::NoModifier,slider->mapToScene(QPointF(slider->width()*(name.contains(QStringLiteral("Brightness"))?.42:name.contains(QStringLiteral("Contrast"))?.56:.62),slider->height()/2)).toPoint());
-        slider->forceActiveFocus();const auto clicked=slider->property("value").toInt();
-        QTest::keyClick(editor,Qt::Key_Right);QTest::qWait(180);
-        return clicked!=old&&slider->property("value").toInt()>clicked;};
+        if (!QTest::qWaitFor(
+                [&] {
+                    return slider->property("value").toDouble() != old;
+                },
+                1000))
+            return false;
+        slider->forceActiveFocus();
+        const auto clicked = slider->property("value").toDouble();
+        QTest::keyClick(editor, Qt::Key_Right);
+        QTest::qWait(180);
+        return clicked != old && slider->property("value").toDouble() > clicked;
+    };
     if(!open()||!zero())return fail(QStringLiteral("Actual adjustments menu did not open/reset"));
     if(!change(QStringLiteral("nkshotImageAdjustmentBrightness")))return fail(QStringLiteral("Brightness mouse/keyboard adjustment failed"));
     app.clipboard()->setText(QStringLiteral("adjustment-shortcut-sentinel"));
@@ -63,8 +86,14 @@ bool ImageAdjustmentsUiChecks::run(QApplication &app,ImageCopyEditor *raw,const 
     if(!click(QStringLiteral("nkshotImageAdjustmentsReset"))||!zero()||!unchanged())return fail(QStringLiteral("Adjustment Reset changed source or retained values"));
     if(!change(QStringLiteral("nkshotImageAdjustmentContrast"))||!click(QStringLiteral("nkshotImageAdjustmentsCancel")))return fail(QStringLiteral("Adjustment Cancel workflow failed"));
     if(!QTest::qWaitFor([&]{return !editor->adjustmentBlocked();},1000)||!unchanged()||!open()||!zero())return fail(QStringLiteral("Cancel/reopen did not restore clean preview"));
-    QTest::keyClick(editor,Qt::Key_Escape);QTest::qWait(120);
-    if(editor->adjustmentBlocked()||!unchanged()||!open()||!zero())return fail(QStringLiteral("Escape/reopen failed"));
+    QTest::keyClick(editor, Qt::Key_Escape);
+    if (!QTest::qWaitFor(
+            [&] {
+                return !editor->adjustmentBlocked();
+            },
+            1000)
+        || !unchanged() || !open() || !zero())
+        return fail(QStringLiteral("Escape/reopen failed"));
     for(const auto &name:{QStringLiteral("nkshotImageAdjustmentBrightness"),QStringLiteral("nkshotImageAdjustmentContrast"),QStringLiteral("nkshotImageAdjustmentSaturation")})
         if(!change(name))return fail(QStringLiteral("Slider input failed: ")+name);
     const auto expected=NkShot::Imaging::adjustedCopy(before,preview->options());
@@ -88,7 +117,13 @@ bool ImageAdjustmentsUiChecks::run(QApplication &app,ImageCopyEditor *raw,const 
     if(pin->snapshot()!=expected||pin->snapshot().devicePixelRatio()!=expected.devicePixelRatio()||!unchanged())return fail(QStringLiteral("Adjusted pin differs from full-resolution snapshot or mutated editor"));
     pin->grabWindow().save(prefix+QStringLiteral(".adjusted-copy.png"));pin->close();
     if(!QTest::qWaitFor([&]{return pin.isNull();},1500))return fail(QStringLiteral("Adjusted pin failed to close"));
-    if(editor->adjustmentBlocked()||!unchanged())return fail(QStringLiteral("Adjustment session remained blocked or changed source"));
+    if (!QTest::qWaitFor(
+            [&] {
+                return !editor->adjustmentBlocked();
+            },
+            1000)
+        || !unchanged())
+        return fail(QStringLiteral("Adjustment session remained blocked or changed source"));
     qInfo()<<"109 actual menu/sliders/reset/cancel/Escape/shortcut protection/async duplicate guard/exact copy passed";
     return true;
 }

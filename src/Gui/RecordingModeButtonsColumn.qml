@@ -13,13 +13,12 @@ ColumnLayout {
     spacing: Kirigami.Units.mediumSpacing
     Repeater {
         model: RecordingModeModel
-        delegate: QQC.Button {
+        delegate: ModeButton {
             id: button
             Layout.fillWidth: true
-            leftPadding: Kirigami.Units.mediumSpacing + QmlUtils.fontMetrics.descent
-            rightPadding: Kirigami.Units.mediumSpacing + QmlUtils.fontMetrics.descent
-            topPadding: Kirigami.Units.mediumSpacing
-            bottomPadding: Kirigami.Units.mediumSpacing
+            icon.name: model.recordingMode === VideoPlatform.Region ? "transform-crop"
+                : model.recordingMode === VideoPlatform.Window ? "draw-rectangle"
+                : "view-fullscreen"
             text: model.display
             onClicked: SpectacleCore.startRecording(model.recordingMode, Settings.videoIncludePointer, Settings.recordingStartDelay, Settings.recordingAutoStopSeconds)
         }
