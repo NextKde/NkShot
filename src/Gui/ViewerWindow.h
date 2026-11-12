@@ -127,6 +127,7 @@ private:
     QPointer<QQuickWindow> m_quickNote;
     QPointer<QQuickWindow> m_scrollPreview;
     QPointer<QObject> m_combineDialog;
+    QPointer<QQuickWindow> m_combineReview;
     VideoClipJob *m_clipJob = nullptr;
     QPointer<QObject> m_clipSaveDialog;
     QPointer<ImageCopyEditor> m_videoAnnotationEditor;

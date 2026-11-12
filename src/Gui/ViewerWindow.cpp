@@ -18,6 +18,7 @@
 #include "ScrollCaptureWindow.h"
 #include "PinnedImageWindow.h"
 #include "ImageCopyEditor.h"
+#include "ImageCombineWindow.h"
 #include "PresentationPreview.h"
 #include "QuickNoteWindow.h"
 #include "ColorPickerWindow.h"
@@ -25,14 +26,10 @@
 #include "Imaging/ImageTransforms.h"
 #include "Imaging/CodeScanner.h"
 #include "OcrManager.h"
-#include "Imaging/VerticalStitcher.h"
 #include "Media/VideoClipJob.h"
 #include <QFileDialog>
-#include <QImageReader>
 #include <QFutureWatcher>
 #include <QtConcurrentRun>
-#include <QCollator>
-#include <algorithm>
 #include <KQuickImageEditor/AnnotationDocument>
 
 #include "Config.h"
@@ -276,6 +273,9 @@ void ViewerWindow::createImageCopy(std::function<QImage(const QImage &)> transfo
 
 void ViewerWindow::combineImages(bool stackWithoutOverlap, bool horizontal)
 {
+    if (m_combineReview) {
+        m_combineReview->showNormal(); m_combineReview->requestActivate(); return;
+    }
     if (m_combiningImages) return;
     if (auto existing = qobject_cast<QFileDialog *>(m_combineDialog.data())) {
         existing->raise(); existing->activateWindow(); return;
@@ -284,99 +284,45 @@ void ViewerWindow::combineImages(bool stackWithoutOverlap, bool horizontal)
     m_combineDialog = dialog;
     dialog->setObjectName(QStringLiteral("nkshotCombineDialog"));
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(horizontal
-        ? (stackWithoutOverlap
-            ? i18nc("@title:window", "Stack images — retain all content, left to right by filename")
-            : i18nc("@title:window", "Combine overlapping screenshots — left to right by filename"))
-        : stackWithoutOverlap
-        ? i18nc("@title:window", "Stack images — retain all content, top to bottom by filename")
-        : i18nc("@title:window", "Combine overlapping screenshots — top to bottom by filename"));
+    dialog->setWindowTitle(i18nc("@title:window", "Choose images to review and combine"));
     dialog->setFileMode(QFileDialog::ExistingFiles);
     dialog->setNameFilter(i18nc("@item:inlistbox", "Images (*.png *.jpg *.jpeg *.webp *.bmp)"));
     dialog->winId();
     dialog->windowHandle()->setTransientParent(this);
     connect(dialog, &QFileDialog::accepted, this, [this, dialog, stackWithoutOverlap, horizontal] {
-        auto paths = dialog->selectedFiles();
+        const auto paths = dialog->selectedFiles();
         if (paths.size() < 2 || paths.size() > 16) {
             InlineMessageModel::instance()->push(InlineMessageModel::Warning,
-                horizontal ? i18nc("@info", "Choose 2–16 images. Number their filenames from left to right.")
-                    : i18nc("@info", "Choose 2–16 images. Number their filenames from top to bottom."));
+                i18nc("@info", "Choose 2–16 images. You can review and adjust their order before creating the copy."));
             return;
         }
-        QCollator order(QLocale(QLocale::English, QLocale::UnitedStates));
-        order.setNumericMode(true);
-        std::sort(paths.begin(), paths.end(), [&order](const QString &a, const QString &b) {
-            const auto compared = order.compare(QFileInfo(a).fileName(), QFileInfo(b).fileName());
-            return compared == 0 ? a < b : compared < 0;
-        });
-        m_combiningImages = true;
-        Q_EMIT combiningImagesChanged();
-        auto watcher = new QFutureWatcher<NkShot::Imaging::StitchResult>(this);
-        connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, stackWithoutOverlap, horizontal] {
-            const auto result = watcher->result();
-            watcher->deleteLater();
+        auto review = new ImageCombineWindow(paths, stackWithoutOverlap, horizontal, engine());
+        if (review->status() != QQuickView::Ready) {
+            delete review;
+            InlineMessageModel::instance()->push(InlineMessageModel::Error,
+                i18nc("@info", "The image review could not be opened. No source files or edits were changed."));
+            return;
+        }
+        m_combineReview = review;
+        const auto updateBusy = [this, review] {
+            const bool busy = review->busy();
+            if (m_combiningImages == busy) return;
+            m_combiningImages = busy;
+            Q_EMIT combiningImagesChanged();
+        };
+        connect(review, &ImageCombineWindow::busyChanged, this, updateBusy);
+        connect(review, &QObject::destroyed, this, [this] {
+            if (!m_combiningImages) return;
             m_combiningImages = false;
             Q_EMIT combiningImagesChanged();
-            if (result.error != NkShot::Imaging::StitchError::None) {
-                using Error = NkShot::Imaging::StitchError;
-                QString reason;
-                switch (result.error) {
-                case Error::InvalidInput:
-                    reason = stackWithoutOverlap ? i18nc("@info", "An image could not be read. Choose intact image files.")
-                        : horizontal ? i18nc("@info", "An image could not be read or is too narrow. Choose intact images wider than 24 pixels.")
-                        : i18nc("@info", "An image could not be read or is too short. Choose intact images taller than 24 pixels."); break;
-                case Error::IncompatibleFrames:
-                    reason = horizontal ? i18nc("@info", "Images must have the same height, scale and color profile. Use screenshots from the same capture session.")
-                        : i18nc("@info", "Images must have the same width, scale and color profile. Use screenshots from the same capture session."); break;
-                case Error::NoOverlap:
-                    reason = horizontal ? i18nc("@info", "No unchanged overlap was found. Number images left to right and retain at least 24 overlapping pixels. Prefer original PNG screenshots.")
-                        : i18nc("@info", "No unchanged overlap was found. Number images top to bottom and retain at least 24 overlapping pixels. Prefer original PNG screenshots."); break;
-                case Error::AmbiguousOverlap:
-                    reason = i18nc("@info", "Repeated content makes the overlap ambiguous. Choose screenshots with more distinctive overlapping content."); break;
-                case Error::NoProgress:
-                    reason = i18nc("@info", "A repeated image adds no new content. Remove duplicate or fully overlapping screenshots."); break;
-                case Error::TooLarge:
-                    reason = horizontal ? i18nc("@info", "These images exceed the safe size limit. Use fewer or smaller images: 40 megapixels total, at most 32000 pixels wide and 8192 pixels tall.")
-                        : i18nc("@info", "These images exceed the safe size limit. Use fewer or smaller images: 40 megapixels total, at most 8192 pixels wide and 32000 pixels tall."); break;
-                case Error::None: break;
-                }
-                InlineMessageModel::instance()->push(InlineMessageModel::Warning,
-                    reason + QLatin1Char(' ') + i18nc("@info", "No source files or edits were changed."));
-                return;
-            }
-            auto preview = new PinnedImageWindow(result.image, engine());
-            if (preview->status() != QQuickView::Ready) {
-                delete preview;
-                InlineMessageModel::instance()->push(InlineMessageModel::Error,
-                    i18nc("@info", "The combined preview could not be opened. No source files or edits were changed."));
-                return;
-            }
-            preview->setTitle(stackWithoutOverlap ? i18nc("@title:window", "Stacked Image — NkShot") : i18nc("@title:window", "Combined Image — NkShot"));
-            preview->setScreen(screen());
-            preview->show();
-            InlineMessageModel::instance()->push(InlineMessageModel::Saved,
-                i18nc("@info", "Combined image opened in a separate window. Copy or Save As there; the source images and current edit are unchanged."));
         });
-        watcher->setFuture(QtConcurrent::run([paths, stackWithoutOverlap, horizontal] {
-            QList<QImage> frames;
-            qint64 pixels = 0;
-            for (const auto &path : paths) {
-                QImageReader reader(path);
-                const auto size = reader.size();
-                const qint64 count = qint64(size.width()) * size.height();
-                if (!size.isValid() || count < 1)
-                    return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::InvalidInput};
-                if (count > 40000000 - pixels || size.width() > (horizontal ? 32000 : 8192) || size.height() > (horizontal ? 8192 : 32000))
-                    return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::TooLarge};
-                pixels += count;
-                auto image = reader.read();
-                if (image.isNull()) return NkShot::Imaging::StitchResult{{}, {}, NkShot::Imaging::StitchError::InvalidInput};
-                frames.append(image);
-            }
-            if (horizontal)
-                return stackWithoutOverlap ? NkShot::Imaging::stackHorizontal(frames) : NkShot::Imaging::stitchHorizontal(frames);
-            return stackWithoutOverlap ? NkShot::Imaging::stackVertical(frames) : NkShot::Imaging::stitchVertical(frames);
-        }));
+        const QPointer<ViewerWindow> owner(this);
+        const QPointer<ImageCombineWindow> reviewGuard(review);
+        updateBusy();
+        if (!owner || !reviewGuard) { if (reviewGuard) delete review; return; }
+        review->setScreen(screen());
+        review->show();
+        review->requestActivate();
     });
     dialog->open();
 }

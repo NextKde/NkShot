@@ -4,6 +4,7 @@
 #include "RecordingPreparationUiChecks.h"
 #include "RecordingControlsUiChecks.h"
 #include "RecordingAutoStopUiChecks.h"
+#include "ImageCombineUiChecks.h"
 #include "LocalMediaOpenUiChecks.h"
 #include "TranslationUiChecks.h"
 #include "ScrollSessionUiChecks.h"
@@ -2498,6 +2499,10 @@ void installUiCaptureHook(QApplication &application)
                 QTest::keyClicks(filename, QStringLiteral("\"%1\" \"%2\"").arg(bottom, top));
                 QMetaObject::invokeMethod(dialog, "accept");
                 if (!QTest::qWaitFor([&] { return !viewer->combiningImages() && dialog.isNull(); }, 5000)) { application.exit(78); return; }
+                QString reviewFailure;
+                if(!ImageCombineUiChecks::run(application,viewer,{bottom,top},expected,stacking,horizontal,destination,&reviewFailure)) {
+                    qCritical()<<"Combination review"<<reviewFailure;application.exit(78);return;
+                }
                 QPointer<PinnedImageWindow> combined;
                 for (auto window : QGuiApplication::allWindows())
                     if (auto pin = qobject_cast<PinnedImageWindow *>(window)) combined = pin;
@@ -2516,7 +2521,6 @@ void installUiCaptureHook(QApplication &application)
                 // Duplicate frames must reject rather than fabricate a long image.
                 const auto duplicate = files.filePath(QStringLiteral("frame3.png"));
                 if (!slice(0, 360).save(duplicate)) { application.exit(82); return; }
-                const auto beforeWarning = InlineMessageModel::instance()->rowCount();
                 viewer->combineImages(false, horizontal); QTest::qWait(200);
                 dialog = currentDialog();
                 filename = dialog ? dialog->findChild<QLineEdit *>(QStringLiteral("fileNameEdit")) : nullptr;
@@ -2525,13 +2529,10 @@ void installUiCaptureHook(QApplication &application)
                 QTest::keyClicks(filename, QStringLiteral("\"%1\" \"%2\"").arg(top, duplicate));
                 QMetaObject::invokeMethod(dialog, "accept");
                 if (!QTest::qWaitFor([&] { return !viewer->combiningImages() && dialog.isNull(); }, 5000)
-                    || InlineMessageModel::instance()->rowCount() != beforeWarning + 1
-                    || !samePixels(document->renderToImage(), original)) { application.exit(84); return; }
-                for (auto window : QGuiApplication::allWindows())
-                    if (qobject_cast<PinnedImageWindow *>(window)) { application.exit(85); return; }
-                const auto warningText = InlineMessageModel::instance()->data(
-                    InlineMessageModel::instance()->index(beforeWarning, 0), Qt::DisplayRole).toString();
-                if (!warningText.contains(QStringLiteral("repeated image"))) { application.exit(86); return; }
+                    || !ImageCombineUiChecks::checkError(viewer,{top,duplicate},QStringLiteral("overlap"),destination+QStringLiteral(".duplicate"),&reviewFailure)
+                    || !samePixels(document->renderToImage(), original)) {
+                    qCritical()<<"Duplicate review"<<reviewFailure;application.exit(84);return;
+                }
                 if (qEnvironmentVariableIsSet("NKSHOT_TEST_COMBINE_ERRORS")) {
                     const auto wrongWidth = files.filePath(QStringLiteral("frame20-width.png"));
                     const auto missingOverlap = files.filePath(QStringLiteral("frame20-gap.png"));
@@ -2542,10 +2543,10 @@ void installUiCaptureHook(QApplication &application)
                         || !damaged.open(QIODevice::WriteOnly)) { application.exit(87); return; }
                     damaged.write("not an image"); damaged.close();
                     const QList<QPair<QStringList, QString>> errors = {
-                        {{top, wrongWidth}, horizontal ? QStringLiteral("same height") : QStringLiteral("same width")},
-                        {{top, broken}, QStringLiteral("could not be read")},
+                        {{top, wrongWidth}, QStringLiteral("edges")},
+                        {{top, broken}, QStringLiteral("static")},
                         {{top}, QStringLiteral("Choose 2")},
-                        {{top, missingOverlap}, QStringLiteral("No unchanged overlap")},
+                        {{top, missingOverlap}, QStringLiteral("overlap")},
                     };
                     for (const auto &test : errors) {
                         auto messages = InlineMessageModel::instance(); messages->clear();
@@ -2557,8 +2558,12 @@ void installUiCaptureHook(QApplication &application)
                         filename->setFocus(); filename->selectAll(); QTest::keyClicks(filename, quoted.join(QLatin1Char(' ')));
                         QMetaObject::invokeMethod(dialog, "accept");
                         if (!QTest::qWaitFor([&] { return !viewer->combiningImages() && dialog.isNull(); }, 5000)
-                            || messages->rowCount() != 1 || !messages->data(messages->index(0, 0), Qt::DisplayRole).toString().contains(test.second)
                             || !samePixels(document->renderToImage(), original)) { application.exit(89); return; }
+                        if(test.first.size()<2) {
+                            if(messages->rowCount()!=1||!messages->data(messages->index(0,0),Qt::DisplayRole).toString().contains(test.second)) { application.exit(89);return; }
+                        } else if(!ImageCombineUiChecks::checkError(viewer,test.first,test.second,destination+QStringLiteral(".error-%1").arg(test.second),&reviewFailure)) {
+                            qCritical()<<"Combination error review"<<reviewFailure;application.exit(89);return;
+                        }
                         for (auto window : QGuiApplication::allWindows())
                             if (qobject_cast<PinnedImageWindow *>(window)) { application.exit(90); return; }
                     }

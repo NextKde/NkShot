@@ -96,8 +96,8 @@ QQC.Popup {
             objectName: "nkshotCombineOrderHint"
             Layout.fillWidth: true
             text: root.horizontal
-                ? i18nc("@info", "Left → right by filename (1, 2, 10), not selection order. Images must have the same height, scale and color profile.")
-                : i18nc("@info", "Top → bottom by filename (1, 2, 10), not selection order. Images must have the same width, scale and color profile.")
+                ? i18nc("@info", "Starts left → right by filename (1, 2, 10). Review and reorder next. Images need the same height, scale and color profile.")
+                : i18nc("@info", "Starts top → bottom by filename (1, 2, 10). Review and reorder next. Images need the same width, scale and color profile.")
             wrapMode: Text.Wrap
             color: Kos.AppTheme.mutedText
         }

@@ -787,3 +787,22 @@ Evidence suffixes: `.auto-stop-options.png`, `.auto-stop-collapsed.png`,
 `.auto-stop-recording.png`, `.auto-stop-paused.png`, `.auto-stop-finishing.png`.
 These are software-window/control-route checks, not native recording or a claim
 that a media file stops on an exact frame.
+
+## Reviewed image combination (114)
+
+`NKSHOT_TEST_COMBINE=1` now exercises the separate review before the result pin.
+The helper operates actual rows and controls: move down/up, consecutive Alt+arrow
+reorder without refocusing after the model refresh, direction and join method,
+Cancel/reopen, Remove to an invalid single-image remainder, and Choose images
+replacement. Canceling the replacement picker must preserve the existing order,
+options and preview; accepting a valid group recovers in the same review window.
+Create stays disabled for pending/invalid results and produces exact expected
+pixels only after review. Source file hashes, main image/base/undo depth and
+clipboard are checked throughout. Broken input, incompatible dimensions and
+ambiguous overlap remain recoverable review errors, not silent approximations.
+
+Use `NKSHOT_TEST_STACK=1` for edge-to-edge and
+`NKSHOT_TEST_HORIZONTAL=1` for horizontal fixtures. Standard dark and
+compact flags apply. Evidence suffixes include `.review.png`,
+`.review-one-image.png` and `.review-error.png`. These are actual Qt software
+windows and synthetic local image fixtures, not native KDE capture acceptance.

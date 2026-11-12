@@ -232,3 +232,8 @@ set_tests_properties(text_cover_session_test PROPERTIES TIMEOUT 60 ENVIRONMENT "
 ecm_add_test(RecordingAutoStopTest.cpp ../src/RecordingAutoStop.cpp ../src/RecordingAutoStop.h
     TEST_NAME recording_auto_stop_test LINK_LIBRARIES Qt::Test Qt::Core)
 set_tests_properties(recording_auto_stop_test PROPERTIES TIMEOUT 30)
+
+# Reviewed immutable local image composition.
+ecm_add_test(ImageCombineSessionTest.cpp ../src/Gui/ImageCombineSession.cpp ../src/Gui/ImageCombineSession.h ../src/Imaging/VerticalStitcher.cpp
+    TEST_NAME image_combine_session_test LINK_LIBRARIES Qt::Test Qt::Quick Qt::Concurrent)
+set_tests_properties(image_combine_session_test PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

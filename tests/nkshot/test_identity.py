@@ -77,11 +77,16 @@ class IdentityTests(unittest.TestCase):
         for name in ('Vertical', 'Horizontal', 'Match', 'Stack', 'Choose', 'Cancel'):
             self.assertIn('nkshotCombine' + name, popup)
         self.assertIn('autoExclusive: true', popup)
-        self.assertIn('not selection order', popup)
+        self.assertIn('Review and reorder', popup)
         self.assertIn('stackHorizontal', api)
         self.assertIn('stitchHorizontal', api)
-        self.assertIn('same height', core)
-        self.assertIn('32000', core)
+        self.assertIn('ImageCombineWindow', core)
+        session = read('src/Gui/ImageCombineSession.cpp')
+        self.assertIn('32000', session)
+        self.assertIn('O_NOFOLLOW', session)
+        self.assertIn('O_NONBLOCK', session)
+        self.assertIn('stackHorizontal', session)
+        self.assertIn('stitchHorizontal', session)
 
     def test_global_shortcuts_are_opt_in_and_preserve_custom_keys(self):
         core = read('src/SpectacleCore.cpp')
