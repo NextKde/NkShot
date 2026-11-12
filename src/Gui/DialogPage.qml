@@ -25,6 +25,7 @@ EmptyPage {
     component ConfigHelpButtonRow : Row {
         spacing: Kirigami.Units.mediumSpacing
         QQC.Button {
+            contentItem: SymbolLabel { control: parent }
             implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
             leftPadding: 12
             rightPadding: 12
@@ -41,6 +42,7 @@ EmptyPage {
             onClicked: contextWindow.showPreferencesDialog()
         }
         QQC.ToolButton {
+            contentItem: SymbolLabel { control: parent }
             implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
             leftPadding: 12
             rightPadding: 12
@@ -66,35 +68,35 @@ EmptyPage {
                 width: 240
                 padding: 6
                 background: Kos.KosSurface {fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5}
-                QQC.MenuItem {
+                SymbolMenuItem {
                     objectName: "nkshotOpenMediaAction"
                     text: i18nc("@action", "Open…")
                     icon.name: "document-open"
                     enabled: contextWindow.canOpenMedia
                     onTriggered: contextWindow.openMedia()
                 }
-                QQC.MenuItem {
+                SymbolMenuItem {
                     objectName: "nkshotRecentMediaAction"
                     text: i18nc("@action", "Recent files…")
                     icon.name: "document-open-recent"
                     enabled: contextWindow.canOpenMedia
                     onTriggered: recentPopup.open()
                 }
-                QQC.MenuItem {
+                SymbolMenuItem {
                     objectName: "nkshotClipboardImageAction"
                     text: i18nc("@action", "Edit clipboard image…")
                     icon.name: "edit-paste"
                     enabled: contextWindow.canOpenMedia
                     onTriggered: contextWindow.editClipboardImage()
                 }
-                QQC.MenuItem {
+                SymbolMenuItem {
                     objectName: "nkshotStartupColorAction"
                     text: i18nc("@action", "Pick a color…")
                     icon.name: "color-picker"
                     onTriggered: contextWindow.openColorPicker()
                 }
                 QQC.MenuSeparator {}
-                QQC.MenuItem {
+                SymbolMenuItem {
                     text: i18n("Help")
                     icon.name: "help-contents"
                     onTriggered: Qt.callLater(function() { HelpMenu.popup(startupMore) })

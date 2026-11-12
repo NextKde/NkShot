@@ -65,7 +65,7 @@ QQC.Pane {
                         palette.text: Kos.AppTheme.paletteText
                         palette.windowText: Kos.AppTheme.paletteText
                         background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0.5 }
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             objectName: "nkshotCopyEditorExportAction"
                             text: i18nc("@action", "Export JPEG / WebP…")
                             onTriggered: exportPopup.open()
@@ -91,12 +91,12 @@ QQC.Pane {
                     palette.text: Kos.AppTheme.paletteText
                     palette.windowText: Kos.AppTheme.paletteText
                     background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 12; elevation: 0.5 }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotTextCoverAction"
                         text: i18nc("@action", "Find and cover text…")
                         onTriggered: { root.commitOptions(); if (copyEditor.beginTextCover()) textCoverPopup.open() }
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotImageAdjustmentsAction"
                         text: i18nc("@action", "Adjust light and color…")
                         onTriggered: { root.commitOptions(); if (copyEditor.beginAdjustments()) adjustmentsPopup.open() }

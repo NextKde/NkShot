@@ -99,9 +99,9 @@ QQC.Pane {
                 onClicked: textMenu.popup()
                 QQC.Menu {
                     id: textMenu
-                    QQC.MenuItem { objectName: "nkshotPinReadWhole"; text: i18nc("@action", "Read whole image"); onTriggered: { root.cancelArea(); pinnedWindow.extractText() } }
-                    QQC.MenuItem { objectName: "nkshotPinSelectText"; text: i18nc("@action", "Select text on image"); onTriggered: { root.cancelArea(); pinnedWindow.selectTextOnImage() } }
-                    QQC.MenuItem { objectName: "nkshotPinChooseArea"; text: i18nc("@action", "Select an area…"); onTriggered: root.beginArea() }
+                    SymbolMenuItem { objectName: "nkshotPinReadWhole"; text: i18nc("@action", "Read whole image"); onTriggered: { root.cancelArea(); pinnedWindow.extractText() } }
+                    SymbolMenuItem { objectName: "nkshotPinSelectText"; text: i18nc("@action", "Select text on image"); onTriggered: { root.cancelArea(); pinnedWindow.selectTextOnImage() } }
+                    SymbolMenuItem { objectName: "nkshotPinChooseArea"; text: i18nc("@action", "Select an area…"); onTriggered: root.beginArea() }
                 }
                 QQC.BusyIndicator {anchors.centerIn: parent; width: 20; height: 20; running: pinnedWindow.extractingText; visible: running}
             }

@@ -70,6 +70,7 @@ Item {
     Component {
         id: toolButtonComponent
         QQC.ToolButton {
+            contentItem: SymbolLabel { control: parent }
             required property bool isButtonMenu
             required property string iconName
             icon.name: iconName
@@ -79,6 +80,7 @@ Item {
     }
 
     QQC.ToolButton {
+        contentItem: SymbolLabel { control: parent }
         id: iconTextButton
         display: QQC.AbstractButton.TextBesideIcon
         icon.name: "edit-copy"
@@ -92,6 +94,7 @@ Item {
     }
 
     QQC.ToolButton {
+        contentItem: SymbolLabel { control: parent }
         id: iconOnlyButton
         display: QQC.AbstractButton.IconOnly
         icon.name: "edit-copy"

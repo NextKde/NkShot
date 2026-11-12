@@ -4,6 +4,7 @@
 
 import QtQuick
 import QtQuick.Controls as QQC
+import QtQuick.Templates as T
 import Kos.Icons as Symbols
 import "SymbolMap.js" as SymbolMap
 
@@ -14,17 +15,25 @@ import "SymbolMap.js" as SymbolMap
 Item {
     id: root
 
-    property string symbol: ""
-    property string text: ""
-    property int display: QQC.AbstractButton.TextBesideIcon
-    property real spacing: 4
-    property color color: palette.windowText
-    property real iconSize: 16
-    property bool mirrored: false
-    property font font: Qt.application.font
+    // When set, glyph, label, font and layout mode come from the control, so a
+    // call site only needs `contentItem: SymbolLabel { control: parent }` rather
+    // than repeating the same five bindings for every button. Any property set
+    // explicitly at the call site still wins.
+    property T.AbstractButton control: null
 
-    readonly property bool hasIcon: symbol.length > 0 && display !== QQC.AbstractButton.TextOnly
-    readonly property bool hasLabel: text.length > 0 && display !== QQC.AbstractButton.IconOnly
+    property string symbol: control ? control.icon.name : ""
+    property string text: control ? control.text : ""
+    property int display: control ? control.display : T.AbstractButton.TextBesideIcon
+    property real spacing: 4
+    property color color: control
+        ? (control.icon.color.a > 0 ? control.icon.color : control.palette.buttonText)
+        : palette.windowText
+    property real iconSize: control && control.icon.height > 0 ? control.icon.height : 16
+    property bool mirrored: control ? control.mirrored : false
+    property font font: control ? control.font : Qt.application.font
+
+    readonly property bool hasIcon: symbol.length > 0 && display !== T.AbstractButton.TextOnly
+    readonly property bool hasLabel: text.length > 0 && display !== T.AbstractButton.IconOnly
 
     implicitWidth: {
         if (!hasLabel) {

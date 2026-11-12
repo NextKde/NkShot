@@ -252,6 +252,7 @@ qt_target_qml_sources(spectacle
     Gui/Magnifier.qml
     Gui/SymbolLabel.qml
     Gui/SymbolMap.js
+    Gui/SymbolMenuItem.qml
     Gui/NewScreenshotToolButton.qml
     Gui/OcrAction.qml
     Gui/OptionsMenuButton.qml

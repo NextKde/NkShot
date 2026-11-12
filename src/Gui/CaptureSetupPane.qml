@@ -230,6 +230,7 @@ QQC.Pane {
                     onToggled: root.settings.captureOnClick = checked
                 }
                 QQC.ToolButton {
+                    contentItem: SymbolLabel { control: parent }
                     id: advanced
                     icon.color: Kos.AppTheme.paletteText
                     implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
@@ -320,6 +321,7 @@ QQC.Pane {
                     onToggled: root.settings.videoRecordMicrophone = checked
                 }
                 QQC.ToolButton {
+                    contentItem: SymbolLabel { control: parent }
                     id: recordingAdvanced
                     objectName: "nkshotRecordingAdvanced"
                     Layout.fillWidth: true

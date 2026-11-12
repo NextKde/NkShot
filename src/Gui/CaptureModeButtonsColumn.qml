@@ -13,6 +13,7 @@ ColumnLayout {
     Repeater {
         model: CaptureModeModel
         delegate: QQC.DelayButton {
+            contentItem: SymbolLabel { control: parent }
             id: button
             readonly property bool showCancel: Settings.captureMode === model.captureMode && SpectacleCore.captureTimeRemaining > 0
             Layout.fillWidth: true

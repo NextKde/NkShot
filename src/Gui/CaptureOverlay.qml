@@ -102,7 +102,7 @@ MouseArea {
             showInnerHighlight: false
         }
     }
-    component CaptureMenuItem: QQC.MenuItem {
+    component CaptureMenuItem: SymbolMenuItem {
         icon.color: palette.buttonText
         opacity: enabled ? 1 : 0.38
     }

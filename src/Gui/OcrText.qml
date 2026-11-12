@@ -27,6 +27,7 @@ QQC.Pane {
                 color: Kos.AppTheme.paletteText
             }
             QQC.ToolButton {
+                contentItem: SymbolLabel { control: parent }
                 id: copyButton
                 objectName: "nkshotOcrCopy"
                 property bool copied: false
@@ -51,6 +52,7 @@ QQC.Pane {
                 }
             }
             QQC.ToolButton {
+                contentItem: SymbolLabel { control: parent }
                 objectName: "nkshotOcrSave"
                 text: i18nc("@action", "Save text as…")
                 icon.name: "document-save-as"
@@ -61,6 +63,7 @@ QQC.Pane {
                 onClicked: ocrWindow.saveAs()
             }
             QQC.ToolButton {
+                contentItem: SymbolLabel { control: parent }
                 objectName: "nkshotOcrClose"
                 text: i18nc("@action", "Close")
                 icon.name: "dialog-close"

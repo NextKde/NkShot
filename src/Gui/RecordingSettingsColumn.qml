@@ -51,6 +51,7 @@ ColumnLayout {
         onToggled: Settings.videoRecordMicrophone = checked
     }
     QQC.ToolButton {
+        contentItem: SymbolLabel { control: parent }
         id: advanced
         objectName: "nkshotLegacyRecordingAdvanced"
         Layout.fillWidth: true

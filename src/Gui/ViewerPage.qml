@@ -165,7 +165,7 @@ EmptyPage {
                     palette.button: Kos.AppTheme.controlBackground
                     palette.light: Kos.AppTheme.border
                     palette.mid: Kos.AppTheme.border
-                    delegate: QQC.MenuItem {
+                    delegate: SymbolMenuItem {
                         objectName: subMenu ? "nkshotTask_" + subMenu.objectName : ""
                         visible: !subMenu || !subMenu.imageOnly || !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -173,21 +173,21 @@ EmptyPage {
                         icon.color: palette.buttonText
                     }
                     background: Kos.KosSurface { fillColor: Kos.AppTheme.contentBackground; radius: 14; elevation: 0.5 }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotOpenMediaAction"
                         text: i18nc("@action", "Open…")
                         icon.name: "document-open"
                         enabled: contextWindow.canOpenMedia
                         onTriggered: contextWindow.openMedia()
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotRecentMediaAction"
                         text: i18nc("@action", "Recent files…")
                         icon.name: "document-open-recent"
                         enabled: contextWindow.canOpenMedia
                         onTriggered: recentPopup.open()
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotClipboardImageAction"
                         text: i18nc("@action", "Edit clipboard image…")
                         icon.name: "edit-paste"
@@ -200,17 +200,17 @@ EmptyPage {
                         imageOnly: false
                         title: SpectacleCore.videoMode ? i18nc("@action:menu", "Recording file") : i18nc("@action:menu", "Share a copy")
                         icon.name: "document-share"
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             action: SaveAsAction {}
                             icon.color: palette.buttonText
                         }
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             visible: SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
                             action: CopyLocationAction {}
                             icon.color: palette.buttonText
                         }
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
                             text: i18nc("@action", "Export")
@@ -219,7 +219,7 @@ EmptyPage {
                             onTriggered: Qt.callLater(function() { ExportMenu.popup(moreButton) })
                         }
                         QQC.MenuSeparator { visible: !SpectacleCore.videoMode; height: visible ? implicitHeight : 0 }
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             objectName: "nkshotBeautifyImageAction"
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
@@ -229,7 +229,7 @@ EmptyPage {
                             enabled: !contextWindow.resizingImage
                             onTriggered: { if (contextWindow.beginPresentationPreview()) beautifyPopup.open() }
                         }
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             objectName: "nkshotResizeImageAction"
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
@@ -246,7 +246,7 @@ EmptyPage {
                         title: i18nc("@action:menu", "Read from image")
                         icon.name: "document-scan"
                         property var languages: SpectacleCore.ocrAvailable ? SpectacleCore.ocrAvailableLanguages() : ({})
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             action: OcrAction {}
                             text: i18nc("@action", "Extract text")
                             icon.color: palette.buttonText
@@ -254,7 +254,7 @@ EmptyPage {
                         QQC.MenuSeparator {}
                         Instantiator {
                             model: Object.keys(ocrLanguageMenu.languages).filter(function(code) { return code !== "osd" }).sort()
-                            delegate: QQC.MenuItem {
+                            delegate: SymbolMenuItem {
                                 required property string modelData
                                 objectName: "nkshotOcrLanguage_" + modelData
                                 text: ocrLanguageMenu.languages[modelData]
@@ -265,7 +265,7 @@ EmptyPage {
                             onObjectRemoved: (index, object) => ocrLanguageMenu.removeItem(object)
                         }
                         QQC.MenuSeparator {}
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             objectName: "nkshotScanCodeAction"
                             text: contextWindow.scanningCode ? i18nc("@info", "Reading code…") : i18nc("@action", "Read QR or barcode")
                             icon.name: "view-barcode-qr"
@@ -283,7 +283,7 @@ EmptyPage {
                             color: Kos.AppTheme.mutedText
                         }
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotCombineImagesAction"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -298,7 +298,7 @@ EmptyPage {
                         imageOnly: false
                         title: i18nc("@action:menu", "Pins and notes")
                         icon.name: "window-pin"
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotPinImageAction"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -307,7 +307,7 @@ EmptyPage {
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.pinImage()
                     }
-                        QQC.MenuItem {
+                        SymbolMenuItem {
                             objectName: "nkshotQuickNoteAction"
                             text: i18nc("@action", "Quick note…")
                             icon.name: "document-edit"
@@ -316,14 +316,14 @@ EmptyPage {
                         }
                     }
                     QQC.MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: Kos.AppTheme.border } }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotColorPickerAction"
                         text: i18nc("@action", "Pick a color…")
                         icon.name: "color-picker"
                         icon.color: palette.buttonText
                         onTriggered: contextWindow.openColorPicker()
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         objectName: "nkshotScrollPreviewEntry"
                         visible: !SpectacleCore.videoMode
                         height: visible ? implicitHeight : 0
@@ -331,7 +331,7 @@ EmptyPage {
                         icon.name: "view-fullscreen"
                         onTriggered: contextWindow.openScrollPreview()
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
                         opacity: enabled ? 1 : 0.38
                         text: i18nc("@action", "New Recording")
@@ -339,7 +339,7 @@ EmptyPage {
                         icon.color: palette.buttonText
                         onTriggered: Qt.callLater(function() { RecordingModeMenu.popup(moreButton) })
                     }
-                    QQC.MenuItem {
+                    SymbolMenuItem {
                         text: i18nc("@action", "Options")
                         icon.name: "configure"
                         icon.color: palette.buttonText

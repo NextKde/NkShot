@@ -10,8 +10,9 @@ import org.kde.spectacle.private
 QQC.ToolButton {
     id: root
     // Glyph from the pinned Kos.Icons font, named the way Spectacle names it
-    // upstream (freedesktop icon name). When set, the button draws its own
-    // content so the icon stops depending on the system icon theme.
+    // upstream (freedesktop icon name). Falls back to icon.name so buttons that
+    // take their icon from an Action keep working: SymbolMap translates either
+    // form.
     property string symbol: ""
     opacity: enabled ? 1 : 0.38
     icon.color: palette.buttonText
@@ -34,6 +35,8 @@ QQC.ToolButton {
     }
     contentItem: SymbolLabel {
         symbol: root.symbol
+            || (root.action && root.action.symbol !== undefined ? root.action.symbol : "")
+            || root.icon.name
         text: root.text
         display: root.display
         spacing: Kirigami.Units.smallSpacing

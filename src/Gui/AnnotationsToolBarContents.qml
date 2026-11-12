@@ -272,17 +272,8 @@ ButtonGrid {
         checked: root.toolType === AnnotationTool.NumberTool
         onClicked: root.tool.type = AnnotationTool.NumberTool
     }
-    component ExtraMenuItem: QQC.MenuItem {
-        id: menuItem
+    component ExtraMenuItem: SymbolMenuItem {
         implicitHeight: 32
-        indicator: Text {
-            text: "✓"
-            visible: menuItem.checked
-            x: 7
-            y: (menuItem.height - height) / 2
-            color: Kos.AppTheme.paletteText
-            font.pixelSize: 14
-        }
     }
     TtToolButton {
         id: extraToolsButton
