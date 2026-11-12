@@ -21,6 +21,7 @@
 #include <QDBusConnection>
 #include <QDir>
 #include <QIcon>
+#include <QQuickStyle>
 #include <QSessionManager>
 
 #include <KAboutData>
@@ -38,6 +39,12 @@ int main(int argc, char **argv)
 
     QCoreApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QIcon::setFallbackThemeName(u"breeze"_s);
+    // Pin the Quick Controls style instead of inheriting whatever the session
+    // provides. org.kde.desktop is a QStyle renderer: its Button.qml never
+    // assigns contentItem, so Control.contentItem stays null and any view that
+    // reads contentItem.implicitHeight (ours do, for the compact toolbars)
+    // collapses to zero height. org.kde.breeze implements contentItem itself.
+    QQuickStyle::setStyle(u"org.kde.breeze"_s);
     QApplication app(argc, argv);
 #ifdef NKSHOT_ENABLE_UI_CAPTURE
     installUiCaptureHook(app);
