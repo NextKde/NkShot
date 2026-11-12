@@ -7,7 +7,7 @@ import QtQuick.Controls as QQC
 import org.kde.spectacle.private
 
 TtToolButton {
-    icon.name: "camera-photo"
+    symbol: "camera-photo"
     text: i18nc("@action select new screenshot mode", "New Screenshot")
     down: pressed || ScreenshotModeMenu.visible
     Accessible.role: Accessible.ButtonMenu

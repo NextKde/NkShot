@@ -3,6 +3,17 @@
   "revision": "608847c9231121b888f11c4e5f84850ac95deda4",
   "license": "GPL-3.0",
   "files": {
+    "shared/Icons/BatteryIcon.qml": "53b367a25a016bf2a67cd4e18c81232ea4290da33b41bcf4ba63ee5aa38aa681",
+    "shared/Icons/CMakeLists.txt": "ad6ed203c12f089bb4ff1cf32639fea39089920c2af55b9ceb4fb1a7b6749559",
+    "shared/Icons/Icon.qml": "69e8e59b586b037c4c51d5776f799931f276332907718daf3dc410c34ae168e8",
+    "shared/Icons/IconMap.js": "2e2f2976898ff6973f138000438d42eaf43b91c7ccf3460961b85e0a46114a09",
+    "shared/Icons/IconRegistry.qml": "2393367b7c0b033f7fddc3b6b1d9c63760c2c44b4d4bf0c9773cd27b82f903e8",
+    "shared/Icons/LICENSE.Framework7": "61afeee2f1d59f21412901a0015ccbec0315ae4806e3f4fbd167201ebb17b2f8",
+    "shared/Icons/NextKdeIcons.ttf": "e7576ee0b083b1e42270f0be62fdd7004f1d85a37911f3b0493ccc1be4c1689c",
+    "shared/Icons/SignalIcon.qml": "ea145a5f0707a06a47e0f630c45b558ffd4b79d3b3e7069f982378ba83bbb6fd",
+    "shared/Icons/VolumeIcon.qml": "77aa8538a39dcd71e46d5af80926cff2f46eb35eeb62a7aef7481079027be11b",
+    "shared/Icons/provenance.json": "9d80cd962c934ce0c57b70497d194ed0c13c9511b0334c8bf469222ba130c214",
+    "shared/Icons/qmldir": "4f8f0f1f35bb3702f5cb053e2b1d1f4d605a995174f0103c6dc85c6157fecc6f",
     "shared/qml/CMakeLists.txt": "6fa7ccc98fa0132adb6afdc3ea4a297b341ce426160c85d1f3a496e306152554",
     "shared/qml/controls/ColorRampSlider.qml": "5bb10c05c2a81b4c5a8c16a22d08c89a2187aab582a670f9ab55095d4aaa3ff3",
     "shared/qml/controls/ControlForm.qml": "a82b38f85113871d675aa0a5c12b4bde4033195df01d5c67ea2738ae00bff7e4",
@@ -138,5 +149,9 @@
     "shared/qml/i18n/SystemLanguage.mjs": "0f983f477f89842689e74fc34bd76342728c1185e2c6a545312b27ad3d2f88b4",
     "shared/qml/i18n/ZhCatalog.mjs": "cb82f934d1ed848ad7f3aa53a3e109697bdd0697c1afc9b13405f160f4ea7261",
     "shared/qml/i18n/qmldir": "0f357aca18c06d7dbbc00fe5d84d7ebaed28d3ee783df3b356e6e3603ba13eac"
+  },
+  "revisions": {
+    "shared/qml/": "608847c9231121b888f11c4e5f84850ac95deda4",
+    "shared/Icons/": "86a9c66"
   }
 }

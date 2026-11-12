@@ -6,7 +6,7 @@ import QtQuick
 import org.kde.spectacle.private
 
 TtToolButton {
-    icon.name: "configure"
+    symbol: "configure"
     text: i18nc("@action", "Options")
     down: pressed || OptionsMenu.visible
     Accessible.role: Accessible.ButtonMenu

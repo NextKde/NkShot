@@ -124,20 +124,20 @@ ListView {
                     objectName: "nkshotNotificationFolder" + delegate.index
                     visible: delegate.localFile
                     text: i18nc("@action:button", "Open Containing Folder")
-                    icon.name: "document-open-folder"
+                    symbol: "document-open-folder"
                     onClicked: InlineMessageModel.openContainingFolder(delegate.dataString)
                 }
                 NotificationButton {
                     objectName: "nkshotNotificationCopy" + delegate.index
                     visible: delegate.dataString.length > 0
                     text: i18nc("@action:button", "Copy to Clipboard")
-                    icon.name: "edit-copy"
+                    symbol: "edit-copy"
                     onClicked: InlineMessageModel.copyToClipboard(delegate.model.data)
                 }
                 NotificationButton {
                     objectName: "nkshotCloseNotification" + delegate.index
                     text: i18nc("@action:button close inline notification", "Close")
-                    icon.name: "dialog-close"
+                    symbol: "dialog-close"
                     onClicked: InlineMessageModel.pop(delegate.index)
                 }
             }
@@ -146,10 +146,20 @@ ListView {
     component NotificationButton: QQC.ToolButton {
         implicitWidth: 28
         implicitHeight: 28
+        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
+        property string symbol: ""
         icon.width: 16
         icon.height: 16
         icon.color: Kos.AppTheme.paletteText
         display: QQC.AbstractButton.IconOnly
+        contentItem: SymbolLabel {
+            symbol: parent.symbol
+            text: parent.text
+            display: parent.display
+            color: Kos.AppTheme.paletteText
+            iconSize: 16
+            font: parent.font
+        }
         QQC.ToolTip.text: text
         QQC.ToolTip.visible: hovered || (activeFocus && !down)
         background: Rectangle {

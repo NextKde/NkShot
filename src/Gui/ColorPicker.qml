@@ -15,7 +15,17 @@ QQC.Pane {
     component PickerButton: QQC.ToolButton {
         implicitHeight: 36
         opacity: enabled ? 1 : 0.38
+        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
+        property string symbol: ""
         icon.color: Kos.AppTheme.paletteText
+        contentItem: SymbolLabel {
+            symbol: parent.symbol
+            text: parent.text
+            display: parent.display
+            color: Kos.AppTheme.paletteText
+            iconSize: Math.max(parent.icon.height, 16)
+            font: parent.font
+        }
         QQC.ToolTip.visible: hovered
         QQC.ToolTip.text: text
         background: Kos.KosSurface {
@@ -60,7 +70,7 @@ QQC.Pane {
                 anchors.right: parent.right
                 objectName: "nkshotColorClose"
                 text: i18nc("@action", "Close")
-                icon.name: "window-close"
+                symbol: "window-close"
                 display: QQC.AbstractButton.IconOnly
                 onClicked: colorWindow.close()
             }

@@ -9,12 +9,16 @@ import org.kde.spectacle.private
 
 QQC.ToolButton {
     id: root
+    // Glyph from the pinned Kos.Icons font, named the way Spectacle names it
+    // upstream (freedesktop icon name). When set, the button draws its own
+    // content so the icon stops depending on the system icon theme.
+    property string symbol: ""
     opacity: enabled ? 1 : 0.38
     icon.color: palette.buttonText
     implicitHeight: QmlUtils.iconTextButtonHeight
     width: display === QQC.ToolButton.IconOnly ? height : implicitWidth
-    // Keep the native content item, actions, accessibility and keyboard focus.
-    // Only the surrounding capsule is custom drawn.
+    // Keep actions, accessibility and keyboard focus native. Only the
+    // surrounding capsule is custom drawn.
     background: Rectangle {
         radius: Kirigami.Units.mediumSpacing
         color: root.down ? Qt.alpha(root.palette.highlight, 0.28)
@@ -27,6 +31,16 @@ QQC.ToolButton {
         Behavior on color {
             ColorAnimation { duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.shortDuration }
         }
+    }
+    contentItem: SymbolLabel {
+        symbol: root.symbol
+        text: root.text
+        display: root.display
+        spacing: Kirigami.Units.smallSpacing
+        color: root.palette.buttonText
+        iconSize: Math.max(root.icon.height, 16)
+        mirrored: root.mirrored
+        font: root.font
     }
     QQC.ToolTip.text: text
     QQC.ToolTip.visible: (hovered || pressed) && display === QQC.ToolButton.IconOnly

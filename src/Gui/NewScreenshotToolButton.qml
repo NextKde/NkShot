@@ -9,7 +9,7 @@ import org.kde.spectacle.private
 TtToolButton {
     // Can't rely on checked since clicking also toggles checked
     readonly property bool showCancel: SpectacleCore.captureTimeRemaining > 0
-    readonly property real cancelWidth: QmlUtils.getButtonSize(display, cancelText(Settings.captureDelay), icon.name).width
+    readonly property real cancelWidth: QmlUtils.getButtonSize(display, cancelText(Settings.captureDelay), "dialog-cancel").width
 
     function cancelText(seconds) {
         return i18np("Cancel (%1 second)", "Cancel (%1 seconds)", Math.ceil(seconds))
@@ -21,7 +21,7 @@ TtToolButton {
     } else {
         return display === TtToolButton.IconOnly ? height : implicitWidth
     }
-    icon.name: showCancel ? "dialog-cancel" : "list-add"
+    symbol: showCancel ? "dialog-cancel" : "list-add"
     text: showCancel ?
         cancelText(SpectacleCore.captureTimeRemaining / 1000)
         : i18n("New Screenshot")

@@ -21,7 +21,17 @@ QQC.Pane {
     }
     component PinButton: QQC.ToolButton {
         property bool selected: false
+        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
+        property string symbol: ""
         icon.color: Kos.AppTheme.paletteText
+        contentItem: SymbolLabel {
+            symbol: parent.symbol
+            text: parent.text
+            display: parent.display
+            color: Kos.AppTheme.paletteText
+            iconSize: Math.max(parent.icon.height, 16)
+            font: parent.font
+        }
         implicitWidth: display === QQC.AbstractButton.IconOnly ? 32 : implicitContentWidth + leftPadding + rightPadding
         implicitHeight: 36
         QQC.ToolTip.visible: hovered
@@ -41,7 +51,7 @@ QQC.Pane {
             PinButton {
                 objectName: "nkshotPinTop"
                 text: i18nc("@action", "Stay on Top")
-                icon.name: "window-pin"
+                symbol: "window-pin"
                 display: QQC.AbstractButton.IconOnly
                 checkable: true
                 checked: pinnedWindow.stayOnTop
@@ -59,7 +69,7 @@ QQC.Pane {
                 objectName: "nkshotPinCopy"
                 property bool copied: false
                 text: copied ? i18nc("@info", "Copied") : pinnedWindow.textSelectionActive ? i18nc("@action", "Copy image") : i18nc("@action", "Copy")
-                icon.name: copied ? "dialog-ok" : "edit-copy"
+                symbol: copied ? "dialog-ok" : "edit-copy"
                 display: root.width < 500 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
                 Connections {
                     target: pinnedWindow
@@ -76,7 +86,7 @@ QQC.Pane {
                 objectName: "nkshotPinEditCopy"
                 text: i18nc("@action", "Edit a copy…")
                 display: QQC.AbstractButton.IconOnly
-                icon.name: "document-edit"
+                symbol: "document-edit"
                 enabled: pinnedWindow.snapshotSize.width * pinnedWindow.snapshotSize.height <= 40000000
                 onClicked: { root.cancelArea(); pinnedWindow.cancelTextSelection(); pinnedWindow.editCopy() }
             }
@@ -84,7 +94,7 @@ QQC.Pane {
                 objectName: "nkshotPinExtractText"
                 text: pinnedWindow.extractingText ? i18nc("@info", "Reading text…") : i18nc("@action", "Extract text")
                 display: QQC.AbstractButton.IconOnly
-                icon.name: pinnedWindow.extractingText ? "" : "document-scan"
+                symbol: pinnedWindow.extractingText ? "" : "document-scan"
                 enabled: !pinnedWindow.extractingText
                 onClicked: textMenu.popup()
                 QQC.Menu {
@@ -99,14 +109,14 @@ QQC.Pane {
                 objectName: "nkshotPinSave"
                 text: i18nc("@action", "Save As…")
                 display: QQC.AbstractButton.IconOnly
-                icon.name: "document-save-as"
+                symbol: "document-save-as"
                 onClicked: pinnedWindow.saveAs()
             }
             PinButton {
                 objectName: "nkshotPinClose"
                 text: i18nc("@action", "Close")
                 display: QQC.AbstractButton.IconOnly
-                icon.name: "window-close"
+                symbol: "window-close"
                 onClicked: pinnedWindow.close()
             }
         }
@@ -436,7 +446,7 @@ QQC.Pane {
                 objectName: "nkshotPinZoomOut"
                 text: i18nc("@action", "Zoom out")
                 display: QQC.AbstractButton.IconOnly
-                icon.name: "zoom-out"
+                symbol: "zoom-out"
                 implicitHeight: 28
                 enabled: viewport.imageScale > Math.min(viewport.fitScale, 0.1) + 0.001
                 onClicked: viewport.zoomBy(1 / 1.25)
@@ -455,7 +465,7 @@ QQC.Pane {
                 objectName: "nkshotPinZoomIn"
                 text: i18nc("@action", "Zoom in")
                 display: QQC.AbstractButton.IconOnly
-                icon.name: "zoom-in"
+                symbol: "zoom-in"
                 implicitHeight: 28
                 enabled: viewport.imageScale < 4
                 onClicked: viewport.zoomBy(1.25)

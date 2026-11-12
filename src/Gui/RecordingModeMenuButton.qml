@@ -8,7 +8,7 @@ import org.kde.spectacle.private
 
 TtToolButton {
     enabled: SpectacleCore.videoPlatform.supportedRecordingModes !== VideoPlatform.NoRecordingModes
-    icon.name: "camera-video"
+    symbol: "camera-video"
     text: i18nc("@action select new recording mode", "New Recording")
     down: pressed || RecordingModeMenu.visible
     Accessible.role: Accessible.ButtonMenu

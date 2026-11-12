@@ -15,7 +15,17 @@ QQC.Pane {
     Timer {id: previewTimer; interval: 120; onTriggered: root.refresh()}
     component NoteButton: QQC.ToolButton {
         implicitHeight: 36
+        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
+        property string symbol: ""
         icon.color: Kos.AppTheme.paletteText
+        contentItem: SymbolLabel {
+            symbol: parent.symbol
+            text: parent.text
+            display: parent.display
+            color: Kos.AppTheme.paletteText
+            iconSize: Math.max(parent.icon.height, 16)
+            font: parent.font
+        }
         QQC.ToolTip.visible: hovered
         QQC.ToolTip.text: text
         background: Kos.KosSurface {fillColor: parent.hovered ? Kos.AppTheme.controlBackground : "transparent"; radius: 9; elevation: 0; strokeWidth: 0}
@@ -29,7 +39,7 @@ QQC.Pane {
             NoteButton {
                 objectName: "nkshotNoteCopy"
                 text: i18nc("@action","Copy image")
-                icon.name: "edit-copy"
+                symbol: "edit-copy"
                 display: root.width<520?QQC.AbstractButton.IconOnly:QQC.AbstractButton.TextBesideIcon
                 enabled: noteWindow.canExport && !previewTimer.running
                 onClicked: {root.refresh();noteWindow.copyImage()}
@@ -43,7 +53,7 @@ QQC.Pane {
                 background: Kos.KosSurface {fillColor: Kos.AppTheme.accent; radius: 9; elevation: 0; strokeWidth: 0; opacity: pinButton.enabled?1:0.45}
                 onClicked: {root.refresh();noteWindow.pinImage()}
             }
-            NoteButton {objectName: "nkshotNoteClose";text: i18nc("@action","Close");icon.name:"window-close";display:QQC.AbstractButton.IconOnly;onClicked:noteWindow.close()}
+            NoteButton {objectName: "nkshotNoteClose";text: i18nc("@action","Close");symbol:"window-close";display:QQC.AbstractButton.IconOnly;onClicked:noteWindow.close()}
         }
         GridLayout {
             Layout.fillWidth: true

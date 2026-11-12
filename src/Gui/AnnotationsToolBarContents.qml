@@ -83,10 +83,20 @@ ButtonGrid {
 
     component ToolButton: QQC.ToolButton {
         id: button
+        // Pinned-font glyph, named as the freedesktop icon Spectacle uses.
+        property string symbol: ""
         icon.width: 18
         icon.height: 18
         opacity: enabled ? 1 : 0.38
         icon.color: palette.buttonText
+        contentItem: SymbolLabel {
+            symbol: button.symbol
+            text: button.text
+            display: button.display
+            color: button.palette.buttonText
+            iconSize: 18
+            font: button.font
+        }
         property string extraHelp: ""
         property bool secondary: false
         property bool needsBaseImage: false
@@ -140,7 +150,7 @@ ButtonGrid {
         sourceComponent: ToolButton {
             QQC.ButtonGroup.group: toolGroup
             text: i18nc("@action:intoolbar no tool, to allow dragging", "Pan")
-            icon.name: "transform-browse"
+            symbol: "transform-browse"
             onClicked: root.tool.type = AnnotationTool.NoTool
             // Setting checked in onCompleted so clicking the crop tool doesn't check this instead.
             Component.onCompleted: {
@@ -154,7 +164,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar crop image tool", "Crop")
         needsBaseImage: true
-        icon.name: "transform-crop"
+        symbol: "transform-crop"
         checked: root.toolType === (root.isFullscreenCapture ? AnnotationTool.NoTool : AnnotationTool.CropTool)
         onClicked: root.tool.type = (root.isFullscreenCapture ? AnnotationTool.NoTool : AnnotationTool.CropTool)
     }
@@ -162,7 +172,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar select annotation tool", "Select")
         toolKey: "Alt+2"
-        icon.name: "edit-select"
+        symbol: "edit-select"
         enabled: root.editorDocument.undoStackDepth > 0
         checked: root.toolType === AnnotationTool.SelectTool
         onClicked: root.tool.type = AnnotationTool.SelectTool
@@ -174,7 +184,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar freehand line tool", "Freehand")
         extraHelp: i18nc("@info:tooltip", "Shift: Snap to straight lines")
-        icon.name: "draw-freehand"
+        symbol: "draw-freehand"
         checked: root.toolType === AnnotationTool.FreehandTool
         onClicked: root.tool.type = AnnotationTool.FreehandTool
     }
@@ -183,7 +193,7 @@ ButtonGrid {
         text: i18nc("@action:intoolbar highlighter line tool", "Highlighter")
         extraHelp: freehandButton.extraHelp
         secondary: true
-        icon.name: "draw-highlight"
+        symbol: "draw-highlight"
         checked: root.toolType === AnnotationTool.HighlighterTool
         onClicked: root.tool.type = AnnotationTool.HighlighterTool
     }
@@ -193,7 +203,7 @@ ButtonGrid {
         text: i18nc("@action:intoolbar straight line tool", "Line")
         extraHelp: i18nc("@info:tooltip", "Shift: Snap to 45 degree increments")
         secondary: true
-        icon.name: "draw-line"
+        symbol: "draw-line"
         checked: root.toolType === AnnotationTool.LineTool
         onClicked: root.tool.type = AnnotationTool.LineTool
     }
@@ -202,7 +212,7 @@ ButtonGrid {
         text: i18nc("@action:intoolbar arrow line tool", "Arrow")
         toolKey: "Alt+4"
         extraHelp: lineButton.extraHelp
-        icon.name: "draw-arrow"
+        symbol: "draw-arrow"
         checked: root.toolType === AnnotationTool.ArrowTool
         onClicked: root.tool.type = AnnotationTool.ArrowTool
     }
@@ -213,7 +223,7 @@ ButtonGrid {
         text: i18nc("@action:intoolbar rectangle tool", "Rectangle")
         extraHelp: i18nc("@info:tooltip",
             "Shift: Snap to diagonal movements\nControl: Resize from center")
-        icon.name: "draw-rectangle"
+        symbol: "draw-rectangle"
         checked: root.toolType === AnnotationTool.RectangleTool
         onClicked: root.tool.type = AnnotationTool.RectangleTool
     }
@@ -222,7 +232,7 @@ ButtonGrid {
         text: i18nc("@action:intoolbar ellipse tool", "Ellipse")
         extraHelp: rectangleButton.extraHelp
         secondary: true
-        icon.name: "draw-ellipse"
+        symbol: "draw-ellipse"
         checked: root.toolType === AnnotationTool.EllipseTool
         onClicked: root.tool.type = AnnotationTool.EllipseTool
     }
@@ -232,7 +242,7 @@ ButtonGrid {
         needsBaseImage: true
         toolKey: "Alt+6"
         extraHelp: rectangleButton.extraHelp
-        icon.name: "pixelate"
+        symbol: "pixelate"
         checked: root.toolType === AnnotationTool.PixelateTool
         onClicked: root.tool.type = AnnotationTool.PixelateTool
     }
@@ -242,7 +252,7 @@ ButtonGrid {
         needsBaseImage: true
         extraHelp: rectangleButton.extraHelp
         secondary: true
-        icon.name: "blur"
+        symbol: "blur"
         checked: root.toolType === AnnotationTool.BlurTool
         onClicked: root.tool.type = AnnotationTool.BlurTool
     }
@@ -250,7 +260,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar text tool", "Text")
         toolKey: "Alt+7"
-        icon.name: "draw-text"
+        symbol: "draw-text"
         checked: root.toolType === AnnotationTool.TextTool
         onClicked: root.tool.type = AnnotationTool.TextTool
     }
@@ -258,7 +268,7 @@ ButtonGrid {
         QQC.ButtonGroup.group: toolGroup
         text: i18nc("@action:intoolbar number stamp tool", "Number")
         secondary: true
-        icon.name: "draw-number"
+        symbol: "draw-number"
         checked: root.toolType === AnnotationTool.NumberTool
         onClicked: root.tool.type = AnnotationTool.NumberTool
     }
@@ -293,7 +303,7 @@ ButtonGrid {
         readonly property int selectedIndex: secondaryTools.indexOf(root.toolType)
         checked: selectedIndex >= 0
         text: selectedIndex >= 0 ? secondaryNames[selectedIndex] : i18nc("@action", "More tools")
-        icon.name: selectedIndex >= 0 ? secondaryIcons[selectedIndex] : "view-more-symbolic"
+        symbol: selectedIndex >= 0 ? secondaryIcons[selectedIndex] : "view-more-symbolic"
         onClicked: extraToolsMenu.popup()
         QQC.Menu {
             id: extraToolsMenu

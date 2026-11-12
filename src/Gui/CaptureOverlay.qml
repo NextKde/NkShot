@@ -672,7 +672,7 @@ MouseArea {
                     id: captureMoreButton
                     display: QQC.AbstractButton.IconOnly
                     text: i18nc("@action", "More")
-                    icon.name: "view-more-symbolic"
+                    symbol: "view-more-symbolic"
                     onClicked: captureMoreMenu.popup()
                     CaptureMenu {
                         id: captureMoreMenu

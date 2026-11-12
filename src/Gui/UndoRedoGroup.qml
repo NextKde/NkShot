@@ -32,7 +32,7 @@ Grid {
         focusPolicy: root.buttonFocusPolicy
         display: QQC.ToolButton.IconOnly
         text: i18n("Undo")
-        icon.name: "edit-undo"
+        symbol: "edit-undo"
         autoRepeat: true
         onClicked: root.editorDocument.undo()
     }
@@ -44,7 +44,7 @@ Grid {
         focusPolicy: root.buttonFocusPolicy
         display: QQC.ToolButton.IconOnly
         text: i18n("Redo")
-        icon.name: "edit-redo"
+        symbol: "edit-redo"
         autoRepeat: true
         onClicked: root.editorDocument.redo()
     }

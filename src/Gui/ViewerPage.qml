@@ -99,7 +99,7 @@ EmptyPage {
         contentItem: RowLayout {
             spacing: 6
             ViewerButton {
-                icon.name: "camera-photo"
+                symbol: "camera-photo"
                 text: i18nc("@action", "New Screenshot")
                 Accessible.role: Accessible.ButtonMenu
                 onClicked: ScreenshotModeMenu.popup(this)
@@ -148,7 +148,7 @@ EmptyPage {
                 id: moreButton
                 objectName: "nkshotViewerMore"
                 text: i18nc("@action", "More")
-                icon.name: "view-more-symbolic"
+                symbol: "view-more-symbolic"
                 display: QQC.AbstractButton.IconOnly
                 Accessible.role: Accessible.ButtonMenu
                 onClicked: moreMenu.popup(moreButton, moreButton.width - moreMenu.width, moreButton.height + 6)

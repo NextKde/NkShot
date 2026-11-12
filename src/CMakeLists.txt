@@ -174,6 +174,8 @@ target_compile_options (spectacle PRIVATE -fexceptions)
 target_link_libraries(spectacle PRIVATE
     Kos::Ui
     Kos::UiPlugin
+    Kos::Icons
+    Kos::IconsPlugin
     Qt6::QuickDialogs2
     Qt::Concurrent
     Qt::DBus
@@ -248,6 +250,8 @@ qt_target_qml_sources(spectacle
     Gui/HelpMenuButton.qml
     Gui/InlineMessageList.qml
     Gui/Magnifier.qml
+    Gui/SymbolLabel.qml
+    Gui/SymbolMap.js
     Gui/NewScreenshotToolButton.qml
     Gui/OcrAction.qml
     Gui/OptionsMenuButton.qml

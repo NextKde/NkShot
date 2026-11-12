@@ -9,7 +9,7 @@ import org.kde.spectacle.private
 TtToolButton {
     // FIXME: make export menu actually work with videos
     visible: !SpectacleCore.videoMode
-    icon.name: "document-share"
+    symbol: "document-share"
     text: i18nc("@action", "Export")
     down: pressed || ExportMenu.visible
     Accessible.role: Accessible.ButtonMenu

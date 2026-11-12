@@ -391,7 +391,7 @@ FocusScope {
                         bottomMargin: -toolBar.bottomPadding
                     }
                 }
-                icon.name: root.playing ?
+                symbol: root.playing ?
                     "media-playback-pause" : "media-playback-start"
                 text: root.playing ? i18n("Pause") : i18n("Play")
                 display: QQC.ToolButton.IconOnly
@@ -452,7 +452,7 @@ FocusScope {
                 objectName: "nkshotPlaybackSettings"
                 visible: !root.usesAnimatedImage
                 enabled: mediaPlayer.hasVideo
-                icon.name: "configure"
+                symbol: "configure"
                 text: i18nc("@action", "Playback and clips")
                 display: QQC.ToolButton.IconOnly
                 onClicked: playbackSettings.opened ? playbackSettings.close() : playbackSettings.open()

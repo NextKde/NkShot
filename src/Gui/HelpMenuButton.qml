@@ -6,7 +6,7 @@ import QtQuick
 import org.kde.spectacle.private
 
 TtToolButton {
-    icon.name: "help-contents"
+    symbol: "help-contents"
     text: i18nc("@action", "Help")
     down: pressed || HelpMenu.visible
     Accessible.role: Accessible.ButtonMenu

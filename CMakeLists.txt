@@ -141,6 +141,8 @@ ecm_set_disabled_deprecation_versions(QT 6.11.0  KF 6.27.0)
 
 # Pinned portable NextKde material module; no native/compositor services.
 add_subdirectory(third_party/kos-ui/shared/qml kos-ui)
+# Pinned interface glyph font, so controls do not depend on the system icon theme.
+add_subdirectory(third_party/kos-ui/shared/Icons kos-icons)
 add_subdirectory(src)
 add_subdirectory(dbus)
 add_subdirectory(desktop)
