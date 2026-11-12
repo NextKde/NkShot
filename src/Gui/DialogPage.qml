@@ -25,7 +25,7 @@ EmptyPage {
     component ConfigHelpButtonRow : Row {
         spacing: Kirigami.Units.mediumSpacing
         QQC.Button {
-            implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+            implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
             leftPadding: 12
             rightPadding: 12
             icon.color: Kos.AppTheme.paletteText
@@ -41,7 +41,7 @@ EmptyPage {
             onClicked: contextWindow.showPreferencesDialog()
         }
         QQC.ToolButton {
-            implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+            implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
             leftPadding: 12
             rightPadding: 12
             icon.color: Kos.AppTheme.paletteText

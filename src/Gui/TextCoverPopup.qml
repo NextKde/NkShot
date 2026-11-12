@@ -188,7 +188,7 @@ QQC.Popup {
                                     required property var modelData
                                     objectName: "nkshotTextCoverMatch_" + index
                                     Layout.fillWidth: true
-                                    implicitHeight: Math.max(34, contentItem.implicitHeight + 10)
+                                    implicitHeight: Math.max(34, (contentItem ? contentItem.implicitHeight : 0) + 10)
                                     padding: 5
                                     checked: {
                                         const selected = root.session ? root.session.selectedCount : 0

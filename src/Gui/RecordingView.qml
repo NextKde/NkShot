@@ -630,7 +630,7 @@ FocusScope {
                 text: i18nc("@action", "Extract current frame…")
                 enabled: mediaPlayer.hasVideo && !root.captureActive && contextWindow.canOpenMedia
                 font: Qt.application.font
-                implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
                 contentItem: QQC.Label {
                     text: extractFrameButton.text; font: extractFrameButton.font
                     color: Kos.AppTheme.paletteText
@@ -654,7 +654,7 @@ FocusScope {
                 text: i18nc("@action", "Browse exact frames…")
                 enabled: mediaPlayer.hasVideo && !root.captureActive && contextWindow.canOpenMedia
                 font: Qt.application.font
-                implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
                 contentItem: QQC.Label {
                     text: inspectFramesButton.text; font: inspectFramesButton.font
                     color: Kos.AppTheme.paletteText
@@ -678,7 +678,7 @@ FocusScope {
                 text: i18nc("@action", "Export a clip…")
                 enabled: mediaPlayer.hasVideo && !SpectacleCore.videoPlatform.isRecording
                 font: Qt.application.font
-                implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
                 contentItem: QQC.Label {
                     text: openClipButton.text
                     font: openClipButton.font

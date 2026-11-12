@@ -50,7 +50,7 @@ QQC.Pane {
         QQC.Button {
             objectName: "nkshotRecordingCountdownCancel"
             Layout.fillWidth: true
-            implicitHeight: Math.max(36, contentItem.implicitHeight + 14)
+            implicitHeight: Math.max(36, (contentItem ? contentItem.implicitHeight : 0) + 14)
             text: i18n("Cancel")
             background: Rectangle {
                 radius: 9

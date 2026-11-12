@@ -112,7 +112,7 @@ QQC.Pane {
             y: control.height + 4
             width: control.width
             padding: 4
-            implicitHeight: contentItem.implicitHeight + 8
+            implicitHeight: (contentItem ? contentItem.implicitHeight : 0) + 8
             contentItem: ListView {
                 implicitHeight: contentHeight
                 model: control.popup.visible ? control.delegateModel : null

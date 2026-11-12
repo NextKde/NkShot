@@ -118,7 +118,7 @@ QQC.Popup {
     }
     component SolidButton: QQC.Button {
         id: button
-        implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+        implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
         leftPadding: 12
         rightPadding: 12
         font: root.font
@@ -145,7 +145,7 @@ QQC.Popup {
         to: Math.max(0, Math.floor(root.job.durationMs / 10))
         stepSize: 10
         implicitWidth: 82
-        implicitHeight: Math.max(30, contentItem.implicitHeight + 10)
+        implicitHeight: Math.max(30, (contentItem ? contentItem.implicitHeight : 0) + 10)
         leftPadding: 8
         rightPadding: 8
         font: root.font
@@ -196,7 +196,7 @@ QQC.Popup {
                 model: ["MP4", "GIF"]
                 currentIndex: root.gif ? 1 : 0
                 enabled: !contextWindow.choosingClipOutput
-                implicitHeight: Math.max(30, contentItem.implicitHeight + 10)
+                implicitHeight: Math.max(30, (contentItem ? contentItem.implicitHeight : 0) + 10)
                 implicitWidth: 78
                 leftPadding: mirrored ? 24 : 10
                 rightPadding: mirrored ? 10 : 24
@@ -581,7 +581,7 @@ QQC.Popup {
                     y: coverChoice.height + 4
                     width: coverChoice.width
                     padding: 4
-                    implicitHeight: Math.min(264, contentItem.implicitHeight + 8)
+                    implicitHeight: Math.min(264, (contentItem ? contentItem.implicitHeight : 0) + 8)
                     contentItem: ListView {
                         implicitHeight: contentHeight
                         model: coverChoice.popup.visible ? coverChoice.delegateModel : null

@@ -76,7 +76,7 @@ QQC.Pane {
         function onCaptureModeChanged() { Qt.callLater(captureTarget.restoreSelection) }
     }
     component TargetSelect : QQC.ComboBox {
-        implicitHeight: Math.max(36, contentItem.implicitHeight + 14)
+        implicitHeight: Math.max(36, (contentItem ? contentItem.implicitHeight : 0) + 14)
         leftPadding: mirrored ? 30 : 12
         rightPadding: mirrored ? 12 : 30
         background: Rectangle {
@@ -104,13 +104,13 @@ QQC.Pane {
         currentIndex: root.modeIndex
         onCurrentIndexChanged: root.modeIndex = currentIndex
         QQC.TabButton {
-            implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+            implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
             font: root.font
             objectName: "nkshotSetupScreenshotTab"; text: i18n("Screenshot")
             background: Rectangle { radius: 8; color: parent.checked ? Kos.AppTheme.controlBackground : "transparent"; border.width: parent.activeFocus ? 2 : 0; border.color: Kos.AppTheme.accent }
         }
         QQC.TabButton {
-            implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+            implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
             font: root.font
             objectName: "nkshotSetupRecordingTab"; text: i18n("Recording")
             background: Rectangle { radius: 8; color: parent.checked ? Kos.AppTheme.controlBackground : "transparent"; border.width: parent.activeFocus ? 2 : 0; border.color: Kos.AppTheme.accent }
@@ -232,7 +232,7 @@ QQC.Pane {
                 QQC.ToolButton {
                     id: advanced
                     icon.color: Kos.AppTheme.paletteText
-                    implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                    implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
                     background: Rectangle {
                         radius: 8
                         color: advanced.hovered || advanced.down || advanced.activeFocus ? Kos.AppTheme.controlBackground : "transparent"
@@ -323,7 +323,7 @@ QQC.Pane {
                     id: recordingAdvanced
                     objectName: "nkshotRecordingAdvanced"
                     Layout.fillWidth: true
-                    implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                    implicitHeight: Math.max(32, (contentItem ? contentItem.implicitHeight : 0) + 12)
                     checkable: true
                     text: (checked ? i18n("Fewer options") : i18n("More options"))
                         + (!checked && root.autoStopSeconds > 0 ? i18n(" · Auto-stop %1 min", root.autoStopSeconds / 60) : "")
@@ -402,7 +402,7 @@ QQC.Pane {
             id: cancelAction
             objectName: "nkshotSetupCancel"
             Layout.fillWidth: true
-            implicitHeight: Math.max(38, contentItem.implicitHeight + 16)
+            implicitHeight: Math.max(38, (contentItem ? contentItem.implicitHeight : 0) + 16)
             font: root.font
             background: Rectangle {
                 radius: 9
@@ -427,7 +427,7 @@ QQC.Pane {
             objectName: "nkshotSetupPrimary"
             visible: root.captureTimeRemaining <= 0
             Layout.fillWidth: true
-            implicitHeight: Math.max(38, contentItem.implicitHeight + 16)
+            implicitHeight: Math.max(38, (contentItem ? contentItem.implicitHeight : 0) + 16)
             palette.buttonText: enabled ? Kos.AppTheme.accentText : Kos.AppTheme.mutedText
             background: Rectangle {
                 radius: 9
