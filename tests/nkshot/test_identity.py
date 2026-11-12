@@ -248,7 +248,12 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('color: "black"', overlay)
         impl = read('src/Gui/ViewerWindow.cpp')
         self.assertIn('m_clipJob->privacyEnabled() != privacyEnabled', impl)
-        self.assertIn('m_clipJob->privacyRect() != privacyRect', impl)
+        self.assertIn('m_clipJob->privacyRevision() != privacyRevision', impl)
+        self.assertIn('const quint64 privacyRevision = m_clipJob->privacyRevision()', impl)
+        job = read('src/Media/VideoClipJob.cpp')
+        self.assertIn('m_privacyRegions.size()>=8', job)
+        self.assertIn('for(const auto &rect:m_privacyRegions)', job)
+        self.assertIn('setPrivacyRectAt(0,x,y,width,height)', job)
 
     def test_recent_files_reuse_validated_open(self):
         impl = read('src/Gui/ViewerWindow.cpp')

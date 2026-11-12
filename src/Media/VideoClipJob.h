@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
+#include <QVariantList>
+#include <QVector>
 #include <QObject>
 #include <QImage>
 #include <QUrl>
@@ -19,6 +21,9 @@ class VideoClipJob : public QObject {
     Q_PROPERTY(bool privacyEnabled READ privacyEnabled WRITE setPrivacyEnabled NOTIFY changed)
     Q_PROPERTY(bool privacyAvailable READ privacyAvailable NOTIFY changed)
     Q_PROPERTY(QRect privacyRect READ privacyRect NOTIFY changed)
+    Q_PROPERTY(QVariantList privacyRegions READ privacyRegions NOTIFY changed)
+    Q_PROPERTY(int privacyRegionCount READ privacyRegionCount NOTIFY changed)
+    Q_PROPERTY(quint64 privacyRevision READ privacyRevision NOTIFY changed)
     Q_PROPERTY(bool cropCentered READ cropCentered NOTIFY changed)
     Q_PROPERTY(bool cropAvailable READ cropAvailable NOTIFY changed)
     Q_PROPERTY(QString cropAspect READ cropAspect WRITE setCropAspect NOTIFY changed)
@@ -49,7 +54,13 @@ public:
     Q_INVOKABLE void clearAnnotationOverlay() { setAnnotationOverlay(QImage()); }
     bool privacyEnabled() const { return m_privacyEnabled; }
     bool privacyAvailable() const { return cropAvailable() && m_drawboxAvailable; }
-    QRect privacyRect() const { return m_privacyRect; }
+    QRect privacyRect() const { return m_privacyRegions.isEmpty() ? QRect() : m_privacyRegions.first(); }
+    QVariantList privacyRegions() const;
+    int privacyRegionCount() const { return m_privacyRegions.size(); }
+    quint64 privacyRevision() const { return m_privacyRevision; }
+    Q_INVOKABLE bool addPrivacyRect(int x, int y, int width, int height);
+    Q_INVOKABLE void setPrivacyRectAt(int index, int x, int y, int width, int height);
+    Q_INVOKABLE void removePrivacyRect(int index);
     Q_INVOKABLE void setPrivacyEnabled(bool enabled);
     Q_INVOKABLE void setPrivacyRect(int x, int y, int width, int height);
     bool cropAvailable() const { return m_mediaValid && m_squarePixels; }
@@ -99,6 +110,8 @@ private:
     void appendAnnotationInput(QStringList &args) const;
     QString cropFilter() const;
     QString privacyFilter() const;
+    QRect boundedPrivacyRect(int x, int y, int width, int height) const;
+    void privacyChanged();
     QRect centeredCropRect() const;
     QString webmVideoFilter(int fps) const;
     void fail(const QString &message);
@@ -113,7 +126,8 @@ private:
     bool m_overlayAvailable = false;
     QString m_annotationFile;
     bool m_privacyEnabled = false, m_drawboxAvailable = false;
-    QRect m_privacyRect;
+    QVector<QRect> m_privacyRegions;
+    quint64 m_privacyRevision = 0;
     QPoint m_cropPosition = QPoint(-1, -1);
     QRect m_freeCropRect;
     QString m_cropAspect = QStringLiteral("original");

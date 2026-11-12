@@ -124,16 +124,41 @@ FocusScope {
             : videoOutput.contentRect
     }
 
+    Item {
+        anchors.fill: videoOutput
+        visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.privacyEnabled && !root.captureActive
+        Repeater {
+            model: contextWindow.clipJob.privacyRegions
+            delegate: Rectangle {
+                required property int index
+                required property var modelData
+                objectName: "nkshotVideoPrivacyRegion_" + index
+                readonly property size sourceSize: contextWindow.clipJob.sourceSize
+                x: cropOverlay.displayRect.x + modelData.x / Math.max(1, sourceSize.width) * cropOverlay.displayRect.width
+                y: cropOverlay.displayRect.y + modelData.y / Math.max(1, sourceSize.height) * cropOverlay.displayRect.height
+                width: modelData.width / Math.max(1, sourceSize.width) * cropOverlay.displayRect.width
+                height: modelData.height / Math.max(1, sourceSize.height) * cropOverlay.displayRect.height
+                color: "black"
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: clipPopup.editingPrivacy && !clipPopup.locked
+                    onClicked: {clipPopup.stopPreview(); clipPopup.activePrivacyIndex = parent.index}
+                }
+            }
+        }
+    }
+
     PrivacyRegionOverlay {
         objectName: "nkshotVideoPrivacyOverlay"
         anchors.fill: videoOutput
         visible: clipPopup.opened && contextWindow.clipJob.ready && contextWindow.clipJob.privacyEnabled && !root.captureActive
         interactive: visible && clipPopup.editingPrivacy && !clipPopup.locked
         sourceSize: contextWindow.clipJob.sourceSize
-        region: contextWindow.clipJob.privacyRect
+        region: clipPopup.activePrivacyRect
+        regionIndex: clipPopup.activePrivacyIndex
         displayRect: cropOverlay.displayRect
         onRectRequested: (x, y, width, height) => {
-            clipPopup.stopPreview(); contextWindow.clipJob.setPrivacyRect(x, y, width, height)
+            clipPopup.stopPreview(); contextWindow.clipJob.setPrivacyRectAt(clipPopup.activePrivacyIndex, x, y, width, height)
         }
     }
 

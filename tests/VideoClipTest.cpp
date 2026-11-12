@@ -423,6 +423,11 @@ private Q_SLOTS:
         QVERIFY2(ready(job,input),qPrintable(job.error()));QVERIFY(job.privacyAvailable());QVERIFY(!job.privacyEnabled());QVERIFY(job.privacyRect().isEmpty());
         job.setPrivacyEnabled(true);QVERIFY(job.privacyEnabled());QCOMPARE(job.privacyRect(),QRect(106,80,106,80));
         job.setPrivacyRect(60,60,80,60);QCOMPARE(job.privacyRect(),QRect(60,60,80,60));
+        QVERIFY(job.addPrivacyRect(180,140,60,60));QCOMPARE(job.privacyRegionCount(),2);
+        QImage overlay(job.sourceSize(),QImage::Format_ARGB32_Premultiplied);overlay.fill(Qt::transparent);
+        for(int y=60;y<120;++y)for(int x=60;x<140;++x)overlay.setPixelColor(x,y,Qt::white);
+        for(int y=140;y<200;++y)for(int x=180;x<240;++x)overlay.setPixelColor(x,y,Qt::white);
+        QVERIFY(job.setAnnotationOverlay(overlay));
         if(cropped){job.setCropAspect(QStringLiteral("square"));job.setCropPosition(80,0);}
         const auto crop=job.cropRect();
         const auto sourceFrame=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),input,
@@ -432,7 +437,10 @@ private Q_SLOTS:
             job.setOutputFormat(format);QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY2(job.ready(),qPrintable(job.error()));
             QVERIFY(job.privacyEnabled());QCOMPARE(job.privacyRect(),QRect(60,60,80,60));QCOMPARE(job.cropRect(),crop);
             const auto target=folder.filePath(QString::fromLatin1(QTest::currentDataTag())+u'.'+format);
+            const auto privacyRevision=job.privacyRevision();const auto regions=job.privacyRegions();
             job.exportClip(QUrl::fromLocalFile(target),200,1200);QVERIFY(job.busy());
+            QVERIFY(!job.addPrivacyRect(0,0,10,10));job.removePrivacyRect(1);job.setPrivacyRectAt(1,0,0,10,10);
+            QCOMPARE(job.privacyRevision(),privacyRevision);QCOMPARE(job.privacyRegions(),regions);
             job.setPrivacyEnabled(false);job.setPrivacyRect(0,0,320,240);QVERIFY(job.privacyEnabled());QCOMPARE(job.privacyRect(),QRect(60,60,80,60));
             QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
             QCOMPARE(hash(input),original);QCOMPARE(job.outputUrl(),QUrl::fromLocalFile(target));
@@ -444,6 +452,13 @@ private Q_SLOTS:
             const int expectedOutside=uchar(sourceFrame.at(90*320+210));
             for(int frame=0;frame<frames.size()/frameBytes;++frame){
                 QVERIFY2(uchar(frames.at(frame*frameBytes+inside.y()*crop.width()+inside.x()))<=6,"Privacy cover must be opaque black throughout the selected duration");
+                for(const auto &region:job.privacyRegions()) {
+                    const auto interior=region.toRect().adjusted(4,4,-4,-4).intersected(crop);
+                    QVERIFY(!interior.isEmpty());
+                    for(int y=interior.top();y<=interior.bottom();++y)for(int x=interior.left();x<=interior.right();++x)
+                        QVERIFY2(uchar(frames.at(frame*frameBytes+(y-crop.y())*crop.width()+x-crop.x()))<=6,
+                                 "Every interior privacy pixel must remain black in every output frame");
+                }
                 QVERIFY(qAbs(int(uchar(frames.at(frame*frameBytes+outside.y()*crop.width()+outside.x())))-expectedOutside)<=6);
             }
             // A repeated/odd-snapped rectangle is not a new export revision.
@@ -454,6 +469,37 @@ private Q_SLOTS:
         job.setPrivacyEnabled(true);QCOMPARE(job.privacyRect(),QRect(60,60,80,60));
         job.inspect(QUrl::fromLocalFile(input));QVERIFY(!job.privacyEnabled());QVERIFY(job.privacyRect().isEmpty());
         QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());
+    }
+    void multiplePrivacyStateAndCap() {
+        VideoClipJob job;QVERIFY(ready(job,cropMp4));QCOMPARE(job.privacyRegionCount(),0);
+        QVERIFY(!job.addPrivacyRect(0,0,2,2));job.setPrivacyEnabled(true);const auto first=job.privacyRect();
+        for(int i=1;i<8;++i)QVERIFY(job.addPrivacyRect(i*20,20,10,10));
+        QCOMPARE(job.privacyRegionCount(),8);
+        const auto sourceHash=hash(cropMp4);const auto target=folder.filePath(QStringLiteral("eight-privacy-regions.mp4"));
+        job.exportClip(QUrl::fromLocalFile(target),200,600);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},30000));QVERIFY2(job.error().isEmpty(),qPrintable(job.error()));
+        const auto frames=execute(ffmpeg,{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),target,
+            QStringLiteral("-an"),QStringLiteral("-pix_fmt"),QStringLiteral("gray"),QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("pipe:1")});
+        constexpr int bytes=320*240;QVERIFY(frames.size()>=bytes);QCOMPARE(frames.size()%bytes,0);
+        for(int frame=0;frame<frames.size()/bytes;++frame)for(const auto &region:job.privacyRegions()) {
+            const auto center=region.toRect().center();QVERIFY(uchar(frames.at(frame*bytes+center.y()*320+center.x()))<=6);
+        }
+        QCOMPARE(hash(cropMp4),sourceHash);
+        const auto full=job.privacyRegions();const auto revision=job.privacyRevision();
+        QVERIFY(!job.addPrivacyRect(0,0,20,20));job.removePrivacyRect(-1);job.removePrivacyRect(8);job.setPrivacyRectAt(8,0,0,10,10);
+        job.setPrivacyRectAt(1,21,21,11,11);QCOMPARE(job.privacyRevision(),revision);QCOMPARE(job.privacyRegions(),full);
+        job.setPrivacyRectAt(7,std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),std::numeric_limits<int>::min(),std::numeric_limits<int>::max());
+        QCOMPARE(job.privacyRegions().last().toRect(),QRect(318,238,2,2));QCOMPARE(job.privacyRect(),first);
+        const auto saved=job.privacyRegions();job.setPrivacyEnabled(false);const auto disabledRevision=job.privacyRevision();
+        QVERIFY(!job.addPrivacyRect(0,0,2,2));job.removePrivacyRect(0);job.setPrivacyRectAt(0,0,0,2,2);
+        QCOMPARE(job.privacyRevision(),disabledRevision);QCOMPARE(job.privacyRegions(),saved);
+        job.setPrivacyEnabled(true);QCOMPARE(job.privacyRegions(),saved);
+        job.setOutputFormat(QStringLiteral("gif"));QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));QVERIFY(job.ready());QCOMPARE(job.privacyRegions(),saved);
+        for(int i=7;i>=0;--i)job.removePrivacyRect(i);
+        QCOMPARE(job.privacyRegionCount(),0);QVERIFY(!job.privacyEnabled());QVERIFY(job.privacyRect().isEmpty());
+        job.setPrivacyEnabled(true);QCOMPARE(job.privacyRegionCount(),1);QCOMPARE(job.privacyRect(),first);
+        const auto before=job.privacyRevision();job.inspect(QUrl::fromLocalFile(cropMp4));QCOMPARE(job.privacyRegionCount(),0);QVERIFY(!job.privacyEnabled());QVERIFY(job.privacyRevision()>before);
+        QVERIFY(QTest::qWaitFor([&]{return !job.busy();},10000));
     }
     void privacyRectangleBoundsAndNoOpErrors() {
         VideoClipJob job;QSignalSpy changes(&job,&VideoClipJob::changed);job.setPrivacyEnabled(true);job.setPrivacyRect(0,0,2,2);QCOMPARE(changes.size(),0);

@@ -830,7 +830,7 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
     const QString cropAspect = m_clipJob->cropAspect();
     const QRect cropRect = m_clipJob->cropRect();
     const bool privacyEnabled = m_clipJob->privacyEnabled();
-    const QRect privacyRect = m_clipJob->privacyRect();
+    const quint64 privacyRevision = m_clipJob->privacyRevision();
     const quint64 annotationRevision = m_clipJob->annotationRevision();
     const QFileInfo sourceFile(source.toLocalFile());
     auto dialog = new QFileDialog;
@@ -855,8 +855,8 @@ void ViewerWindow::chooseClipOutput(qint64 startMs, qint64 endMs)
         m_clipSaveDialog = nullptr;
         Q_EMIT choosingClipOutputChanged();
     });
-    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, resolution, exportSpeed, includeAudio, cropAspect, cropRect, privacyEnabled, privacyRect, annotationRevision, startMs, endMs] {
-        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->outputResolution() != resolution || m_clipJob->exportSpeed() != exportSpeed || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->privacyEnabled() != privacyEnabled || m_clipJob->privacyRect() != privacyRect || m_clipJob->annotationRevision() != annotationRevision || m_clipJob->busy()
+    connect(dialog, &QFileDialog::accepted, this, [this, dialog, source, format, resolution, exportSpeed, includeAudio, cropAspect, cropRect, privacyEnabled, privacyRevision, annotationRevision, startMs, endMs] {
+        if (!m_clipJob || m_clipJob->sourceUrl() != source || m_clipJob->outputFormat() != format || m_clipJob->outputResolution() != resolution || m_clipJob->exportSpeed() != exportSpeed || m_clipJob->includeAudio() != includeAudio || m_clipJob->cropAspect() != cropAspect || m_clipJob->cropRect() != cropRect || m_clipJob->privacyEnabled() != privacyEnabled || m_clipJob->privacyRevision() != privacyRevision || m_clipJob->annotationRevision() != annotationRevision || m_clipJob->busy()
             || SpectacleCore::instance()->videoPlatform()->isRecording()) return;
         const auto files = dialog->selectedFiles();
         if (files.size() != 1) return;

@@ -30,6 +30,8 @@
 #include <QMimeData>
 #include <QColorSpace>
 #include <cstring>
+#include <algorithm>
+#include <QtMath>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFile>
@@ -847,6 +849,8 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
     const bool cropExport=freeCropExport||qEnvironmentVariableIsSet("NKSHOT_TEST_CROP_CLIP");
     const bool privacyExport=qEnvironmentVariableIsSet("NKSHOT_TEST_PRIVACY_CLIP");
     QRect expectedPrivacy;
+    QList<QRect> expectedPrivacyRegions;
+    const auto privacyRegions=[&]{QList<QRect> out;for(const auto &value:job->property("privacyRegions").toList())out.append(value.toRect());return out;};
     const bool annotationExport=qEnvironmentVariableIsSet("NKSHOT_TEST_ANNOTATION_CLIP");
     QRect expectedCrop;
     if(!click(QStringLiteral("nkshotClipDetails"))||!capture(QStringLiteral(".details.png")))
@@ -944,6 +948,14 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         auto frame=visual(viewer()->contentItem(),QStringLiteral("nkshotVideoPrivacyFrame"));
         if(!overlay||!frame||!QTest::qWaitFor([&]{return overlay->isVisible()&&frame->width()>12&&frame->height()>12;},1000))
             return fail(QStringLiteral("Enabled privacy preview missing"));
+        // Collapsing Details changes the preview layout. The production
+        // overlay correctly cancels gestures across displayRect changes, so
+        // wait for stable scene geometry before beginning the first gesture.
+        const auto privacyGeometry=[&]{return QVariantList{overlay->property("displayRect"),frame->x(),frame->y(),frame->width(),frame->height(),frame->mapToScene(QPointF())};};
+        QElapsedTimer layoutWait;layoutWait.start();auto previousGeometry=privacyGeometry();int stableSamples=0;
+        while(layoutWait.elapsed()<1000&&stableSamples<3){QTest::qWait(50);const auto currentGeometry=privacyGeometry();stableSamples=currentGeometry==previousGeometry?stableSamples+1:0;previousGeometry=currentGeometry;}
+        if(stableSamples<3)return fail(QStringLiteral("Initial privacy preview layout did not stabilize"));
+        qInfo()<<"117 initial privacy gesture geometry"<<previousGeometry;
         const auto original=job->property("privacyRect").toRect();
         auto point=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
         QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,point);
@@ -989,6 +1001,83 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
             ||!click(QStringLiteral("nkshotClipPrivacyEnabled"))||!job->property("privacyEnabled").toBool()
             ||job->property("privacyRect").toRect()!=expectedPrivacy||!capture(QStringLiteral(".privacy.png")))
             return fail(QStringLiteral("Privacy toggle lost region or failed to hide preview"));
+        auto privacyPopup=recording->findChild<QObject *>(QStringLiteral("nkshotClipPopup"));
+        const auto selectCover=[&](int index){
+            if(!click(QStringLiteral("nkshotClipPrivacySelection")))return false;
+            QTest::keyClick(viewer(),Qt::Key_Home);for(int i=0;i<index;++i)QTest::keyClick(viewer(),Qt::Key_Down);QTest::keyClick(viewer(),Qt::Key_Return);
+            return QTest::qWaitFor([&]{return privacyPopup&&privacyPopup->property("activePrivacyIndex").toInt()==index;},1000);
+        };
+        if(!privacyPopup||job->property("privacyRegionCount").toInt()!=1||!click(QStringLiteral("nkshotClipPrivacyAdd"))||!click(QStringLiteral("nkshotClipPrivacyAdd"))
+            ||job->property("privacyRegionCount").toInt()!=3||privacyPopup->property("activePrivacyIndex").toInt()!=2||!selectCover(1))
+            return fail(QStringLiteral("Actual Add/cover selection did not create and select multiple regions"));
+        const auto visibleSource=cropExport?expectedCrop:QRect(QPoint(),source);
+        const auto displayRect=overlay->property("displayRect").toRectF();
+        if(displayRect.width()<=0||displayRect.height()<=0)return fail(QStringLiteral("Privacy display mapping unavailable"));
+        // Regression: a tiny displayed frame must still have a centre move
+        // target. Enlarging only the later presentation fixture would hide the
+        // old overlapping-corner-hitbox bug rather than verify its fix.
+        const QRect smallFixture((visibleSource.x()+visibleSource.width()-48)&~1,(visibleSource.y()+12)&~1,32,32);
+        QMetaObject::invokeMethod(job,"setPrivacyRectAt",Q_ARG(int,1),Q_ARG(int,smallFixture.x()),Q_ARG(int,smallFixture.y()),Q_ARG(int,32),Q_ARG(int,32));
+        if(!QTest::qWaitFor([&]{
+            const auto d=overlay->property("displayRect").toRectF();
+            return privacyRegions().size()==3&&privacyRegions().at(1)==smallFixture&&overlay->property("region").toRect()==smallFixture
+                &&qAbs(frame->width()-smallFixture.width()*d.width()/source.width())<0.6
+                &&qAbs(frame->height()-smallFixture.height()*d.height()/source.height())<0.6
+                &&qAbs(frame->x()-smallFixture.x()*d.width()/source.width())<0.6
+                &&qAbs(frame->y()-smallFixture.y()*d.height()/source.height())<0.6;
+        },1000))return fail(QStringLiteral("Small privacy frame geometry did not settle"));
+        const auto firstBeforeSmallDrag=job->property("privacyRect").toRect();
+        point=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
+        QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,point);
+        for(int i=1;i<=5;++i)QTest::mouseMove(viewer(),point-QPoint(i*2,0),20);
+        QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,point-QPoint(10,0));
+        if(!QTest::qWaitFor([&]{return privacyRegions().size()==3&&privacyRegions().at(1).x()<smallFixture.x();},1000)
+            ||privacyRegions().at(1).size()!=smallFixture.size()||privacyRegions().at(1).y()!=smallFixture.y()
+            ||job->property("privacyRect").toRect()!=firstBeforeSmallDrag)
+            return fail(QStringLiteral("Small cover centre gesture resized instead of moving, or changed first cover"));
+        // A source-pixel size alone is insufficient: in a downscaled preview the
+        // 24px corner hit targets can occupy the entire frame. Keep a genuine
+        // centre drag target in both light and compact layouts.
+        const int secondWidth=qMin(visibleSource.width()-24,qMax(qMax(64,visibleSource.width()/3),qCeil(76.0*source.width()/displayRect.width())))&~1;
+        const int secondHeight=qMin(visibleSource.height()-24,qMax(qMax(64,visibleSource.height()/3),qCeil(76.0*source.height()/displayRect.height())))&~1;
+        const QRect secondFixture((visibleSource.x()+visibleSource.width()-secondWidth-12)&~1,(visibleSource.y()+12)&~1,secondWidth,secondHeight);
+        QMetaObject::invokeMethod(job,"setPrivacyRectAt",Q_ARG(int,1),Q_ARG(int,secondFixture.x()),Q_ARG(int,secondFixture.y()),Q_ARG(int,secondFixture.width()),Q_ARG(int,secondFixture.height()));
+        if(!QTest::qWaitFor([&]{
+            const auto actualDisplay=overlay->property("displayRect").toRectF();
+            return privacyRegions().size()==3&&privacyRegions().at(1)==secondFixture
+                &&overlay->property("region").toRect()==secondFixture
+                &&qAbs(frame->width()-secondFixture.width()*actualDisplay.width()/source.width())<0.6
+                &&qAbs(frame->height()-secondFixture.height()*actualDisplay.height()/source.height())<0.6
+                &&qAbs(frame->x()-secondFixture.x()*actualDisplay.width()/source.width())<0.6
+                &&qAbs(frame->y()-secondFixture.y()*actualDisplay.height()/source.height())<0.6
+                &&frame->width()>72&&frame->height()>72;
+        },1000))return fail(QStringLiteral("Second privacy frame did not settle to a usable move target"));
+        const auto firstBeforeDrag=job->property("privacyRect").toRect();
+        point=frame->mapToScene(QPointF(frame->width()/2,frame->height()/2)).toPoint();
+        QTest::mousePress(viewer(),Qt::LeftButton,Qt::NoModifier,point);
+        for(int i=1;i<=5;++i)QTest::mouseMove(viewer(),point-QPoint(i*2,0),20);
+        QTest::mouseRelease(viewer(),Qt::LeftButton,Qt::NoModifier,point-QPoint(10,0));
+        if(!QTest::qWaitFor([&]{return privacyRegions().size()==3&&privacyRegions().at(1).x()<secondFixture.x();},1000)
+            ||privacyRegions().at(1).size()!=secondFixture.size()||privacyRegions().at(1).y()!=secondFixture.y()
+            ||job->property("privacyRect").toRect()!=firstBeforeDrag)
+            return fail(QStringLiteral("Selected second-cover move resized a region or changed region zero"));
+        if(!selectCover(2)||!click(QStringLiteral("nkshotClipPrivacyRemove"))||job->property("privacyRegionCount").toInt()!=2)
+            return fail(QStringLiteral("Selected third cover could not be removed"));
+        expectedPrivacyRegions=privacyRegions();
+        for(int n=2;n<8;++n)if(!click(QStringLiteral("nkshotClipPrivacyAdd"))||job->property("privacyRegionCount").toInt()!=n+1)
+            return fail(QStringLiteral("Actual cover Add failed before eight-region limit"));
+        auto addCover=visual(viewer()->contentItem(),QStringLiteral("nkshotClipPrivacyAdd"));
+        if(!addCover||addCover->isEnabled())return fail(QStringLiteral("Add remained enabled at eight-cover limit"));
+        const auto atLimit=privacyRegions();const auto limitRevision=job->property("privacyRevision").toULongLong();
+        QTest::mouseClick(viewer(),Qt::LeftButton,Qt::NoModifier,addCover->mapToScene(QPointF(addCover->width()/2,addCover->height()/2)).toPoint());
+        if(privacyRegions()!=atLimit||job->property("privacyRevision").toULongLong()!=limitRevision)return fail(QStringLiteral("Disabled Add changed eight-cover list"));
+        for(int n=8;n>2;--n)if(!click(QStringLiteral("nkshotClipPrivacyRemove"))||job->property("privacyRegionCount").toInt()!=n-1)
+            return fail(QStringLiteral("Cover removal did not restore reviewed two-cover list"));
+        if(privacyRegions()!=expectedPrivacyRegions||!selectCover(0))return fail(QStringLiteral("Cover list limit/remove lost first two reviewed regions"));
+        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()+2),Q_ARG(int,expectedPrivacy.y()),Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
+        if(privacyRegions().at(1)!=expectedPrivacyRegions.at(1)||privacyRegions().at(0)!=job->property("privacyRect").toRect())return fail(QStringLiteral("Legacy privacy setter no longer targets first region only"));
+        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()),Q_ARG(int,expectedPrivacy.y()),Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
+        if(privacyRegions()!=expectedPrivacyRegions||bytes(movie)!=movieBytes||!capture(QStringLiteral(".privacy-multiple.png")))return fail(QStringLiteral("Multi-cover review changed source or reviewed regions"));
     }
     if(annotationExport) {
         const auto error=runVideoAnnotationsUiChecks(viewer(),sink,screenshot);
@@ -1014,17 +1103,19 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))return fail(QStringLiteral("Annotation save race did not recover"));
     }
     if(privacyExport) {
-        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()+2),Q_ARG(int,expectedPrivacy.y()),
-            Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
+        if(expectedPrivacyRegions.size()!=2)return fail(QStringLiteral("Multi-cover snapshot missing before Save race"));
+        const auto second=expectedPrivacyRegions.at(1);const auto revision=job->property("privacyRevision").toULongLong();
+        QMetaObject::invokeMethod(job,"setPrivacyRectAt",Q_ARG(int,1),Q_ARG(int,second.x()+2),Q_ARG(int,second.y()),Q_ARG(int,second.width()),Q_ARG(int,second.height()));
+        if(job->property("privacyRect").toRect()!=expectedPrivacy||job->property("privacyRevision").toULongLong()==revision)
+            return fail(QStringLiteral("Second cover mutation did not isolate first-cover legacy API or revision"));
         const auto stale=fixtures.filePath(QStringLiteral("stale-privacy.mp4"));
         if(!choose(fileDialog(QStringLiteral("nkshotClipSaveDialog")),stale)
             ||!QTest::qWaitFor([&]{return !viewer()->property("choosingClipOutput").toBool();},1500)
             ||QFileInfo::exists(stale)||job->property("busy").toBool())
-            return fail(QStringLiteral("Changed privacy region leaked through stale Save dialog"));
-        QMetaObject::invokeMethod(job,"setPrivacyRect",Q_ARG(int,expectedPrivacy.x()),Q_ARG(int,expectedPrivacy.y()),
-            Q_ARG(int,expectedPrivacy.width()),Q_ARG(int,expectedPrivacy.height()));
-        if(!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
-            return fail(QStringLiteral("Privacy export did not recover after stale dialog"));
+            return fail(QStringLiteral("Changed second privacy region leaked through stale Save dialog"));
+        QMetaObject::invokeMethod(job,"setPrivacyRectAt",Q_ARG(int,1),Q_ARG(int,second.x()),Q_ARG(int,second.y()),Q_ARG(int,second.width()),Q_ARG(int,second.height()));
+        if(privacyRegions()!=expectedPrivacyRegions||!click(QStringLiteral("nkshotClipExport"))||!QTest::qWaitFor([&]{return fileDialog(QStringLiteral("nkshotClipSaveDialog"));},1500))
+            return fail(QStringLiteral("Multi-cover export did not recover after stale dialog"));
     }
     if(cropExport) {
         // An asynchronous dialog must not export a different crop than requested.
@@ -1114,16 +1205,20 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QProcess decode;decode.start(QStringLiteral("ffmpeg"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),clip,
             QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-threads"),QStringLiteral("1"),decoded});
         if(!decode.waitForFinished(10000)||decode.exitCode()!=0)return fail(QStringLiteral("Privacy output decode failed"));
-        QImage image(decoded);auto protectedArea=expectedPrivacy;
-        if(cropExport){protectedArea=protectedArea.intersected(expectedCrop);protectedArea.translate(-expectedCrop.topLeft());}
-        if(image.isNull()||protectedArea.width()<8||protectedArea.height()<8)return fail(QStringLiteral("Privacy output region missing"));
-        const auto color=image.pixelColor(protectedArea.center());
-        if(color.red()>20||color.green()>20||color.blue()>20)return fail(QStringLiteral("Actual UI export did not bake opaque black privacy cover"));
+        QImage image(decoded);if(image.isNull())return fail(QStringLiteral("Privacy output decode empty"));
+        for(auto protectedArea:expectedPrivacyRegions){
+            if(cropExport){protectedArea=protectedArea.intersected(expectedCrop);protectedArea.translate(-expectedCrop.topLeft());}
+            if(protectedArea.width()<8||protectedArea.height()<8)return fail(QStringLiteral("Multi-cover output region missing"));
+            if(resolutionExport){const auto extent=cropExport?expectedCrop.size():job->property("sourceSize").toSize();protectedArea=QRect(qRound(protectedArea.x()*double(image.width())/extent.width()),qRound(protectedArea.y()*double(image.height())/extent.height()),qRound(protectedArea.width()*double(image.width())/extent.width()),qRound(protectedArea.height()*double(image.height())/extent.height()));}
+            const auto interior=protectedArea.adjusted(3,3,-3,-3);if(interior.isEmpty()||!image.rect().contains(interior))return fail(QStringLiteral("Multi-cover decoded geometry invalid"));
+            for(int y=interior.top();y<=interior.bottom();++y)for(int x=interior.left();x<=interior.right();++x){const auto color=image.pixelColor(x,y);if(color.red()>20||color.green()>20||color.blue()>20)return fail(QStringLiteral("Actual UI export did not bake every opaque privacy cover"));}
+        }
+        if(bytes(movie)!=movieBytes)return fail(QStringLiteral("Multi-cover export modified source recording"));
     }
     if(annotationExport) {
         const auto overlay=job->property("annotationOverlay").value<QImage>();QPoint marked(-1,-1);
         for(int y=4;y<overlay.height()-4&&marked.x()<0;y+=2)for(int x=4;x<overlay.width()-4;x+=2){
-            const QPoint p(x,y);if(qAlpha(overlay.pixel(p))>250&&(!cropExport||expectedCrop.contains(p))&&(!privacyExport||!expectedPrivacy.contains(p))){marked=p;break;}
+            const QPoint p(x,y);if(qAlpha(overlay.pixel(p))>250&&(!cropExport||expectedCrop.contains(p))&&(!privacyExport||std::none_of(expectedPrivacyRegions.cbegin(),expectedPrivacyRegions.cend(),[&](const QRect &r){return r.contains(p);}))){marked=p;break;}
         }
         const auto decoded=fixtures.filePath(QStringLiteral("annotations-decoded.png"));
         QProcess decode;decode.start(QStringLiteral("ffmpeg"),{QStringLiteral("-v"),QStringLiteral("error"),QStringLiteral("-i"),clip,QStringLiteral("-frames:v"),QStringLiteral("1"),QStringLiteral("-threads"),QStringLiteral("1"),decoded});
@@ -1282,9 +1377,9 @@ bool LocalMediaOpenUiChecks::run(QApplication &application,const QString &screen
         QTest::mouseMove(viewer(),recording->mapToScene(QPointF(recording->width()/2,recording->height()-35)).toPoint());
         if(!click(QStringLiteral("nkshotPlaybackSettings"))||!click(QStringLiteral("nkshotOpenClip"))
             ||!QTest::qWaitFor([&]{return job->property("ready").toBool()&&!job->property("busy").toBool();},15000)
-            ||job->property("exportSpeed").toDouble()!=1.0||job->property("privacyEnabled").toBool()||job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipCancel")))
+            ||job->property("exportSpeed").toDouble()!=1.0||job->property("privacyEnabled").toBool()||job->property("privacyRegionCount").toInt()!=0||job->property("outputResolution").toString()!=QStringLiteral("original")||!click(QStringLiteral("nkshotClipCancel")))
             return fail(QStringLiteral("New export retained an old privacy cover"));
-        if(privacyExport)qInfo()<<"097 actual privacy toggle, drag, corner resize, keyboard, save-race, decoded output and fresh-session reset passed";
+        if(privacyExport)qInfo()<<"117 actual multi-cover add/select/drag/remove/limit, second-region Save race, decoded output and fresh-session reset passed";
         if(speedExport)qInfo()<<"103 actual export speed, duration, stale Save rejection and fresh-session reset passed";
         if(resolutionExport)qInfo()<<"102 actual resolution control, output dimensions, stale Save rejection and fresh-session reset passed";
     }

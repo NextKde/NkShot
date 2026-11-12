@@ -8,6 +8,18 @@ Item {
     required property rect region
     required property rect displayRect
     property bool interactive: false
+    property int regionIndex: 0
+    property int gestureRevision: 0
+    onRegionIndexChanged: ++gestureRevision
+    onInteractiveChanged: ++gestureRevision
+    onVisibleChanged: ++gestureRevision
+    onSourceSizeChanged: ++gestureRevision
+    onDisplayRectChanged: ++gestureRevision
+    onActiveFocusChanged: { if (!activeFocus) ++gestureRevision }
+    Connections {
+        target: root.Window.window
+        function onActiveChanged() { if (!root.Window.window.active) ++root.gestureRevision }
+    }
     signal rectRequested(int x, int y, int width, int height)
     function requestMove(x, y, width, height) {
         rectRequested(Math.max(0,Math.min(sourceSize.width-width,x)),
@@ -50,12 +62,13 @@ Item {
                 cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                 property point startPointer
                 property rect startRegion
+                property int revision: -1
                 onPressed: mouse => {
                     root.forceActiveFocus(Qt.MouseFocusReason)
-                    startPointer = mapToItem(imageArea, mouse.x, mouse.y); startRegion = root.region
+                    startPointer = mapToItem(imageArea, mouse.x, mouse.y); startRegion = root.region; revision = root.gestureRevision
                 }
                 onPositionChanged: mouse => {
-                    if (!pressed || imageArea.width <= 0 || imageArea.height <= 0) return
+                    if (!pressed || revision !== root.gestureRevision || imageArea.width <= 0 || imageArea.height <= 0) return
                     const p = mapToItem(imageArea, mouse.x, mouse.y)
                     root.requestMove(startRegion.x + (p.x-startPointer.x)*root.sourceSize.width/imageArea.width,
                         startRegion.y + (p.y-startPointer.y)*root.sourceSize.height/imageArea.height,
@@ -72,7 +85,10 @@ Item {
                     readonly property bool topSide: index < 2
                     x: (leftSide ? 0 : cover.width) - width/2
                     y: (topSide ? 0 : cover.height) - height/2
-                    width: 24; height: 24
+                    // Keep corner targets out of the center, so tiny covers remain draggable.
+                    // The visible glyph stays 8 px; only its hit area shrinks.
+                    width: Math.max(0, Math.min(24, cover.width / 2))
+                    height: Math.max(0, Math.min(24, cover.height / 2))
                     visible: root.interactive
                     Rectangle {anchors.centerIn: parent; width: 8; height: 8; radius: 2; color: "white"; border.color: "#606060"}
                     MouseArea {
@@ -80,12 +96,13 @@ Item {
                         cursorShape: handle.leftSide === handle.topSide ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
                         property point startPointer
                         property rect startRegion
+                        property int revision: -1
                         onPressed: mouse => {
                             root.forceActiveFocus(Qt.MouseFocusReason)
-                            startPointer=mapToItem(imageArea,mouse.x,mouse.y); startRegion=root.region
+                            startPointer=mapToItem(imageArea,mouse.x,mouse.y); startRegion=root.region; revision=root.gestureRevision
                         }
                         onPositionChanged: mouse => {
-                            if (!pressed || imageArea.width <= 0 || imageArea.height <= 0) return
+                            if (!pressed || revision !== root.gestureRevision || imageArea.width <= 0 || imageArea.height <= 0) return
                             const p=mapToItem(imageArea,mouse.x,mouse.y)
                             const dx=(p.x-startPointer.x)*root.sourceSize.width/imageArea.width
                             const dy=(p.y-startPointer.y)*root.sourceSize.height/imageArea.height

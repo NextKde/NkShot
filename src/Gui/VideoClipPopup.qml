@@ -14,6 +14,36 @@ QQC.Popup {
     readonly property var job: contextWindow.clipJob
     property bool detailsVisible: false
     property bool editingPrivacy: false
+    property int activePrivacyIndex: 0
+    readonly property rect activePrivacyRect: job.privacyRegionCount > 0
+        ? job.privacyRegions[Math.max(0, Math.min(activePrivacyIndex, job.privacyRegionCount - 1))] : Qt.rect(0, 0, 0, 0)
+    function addPrivacyCover() {
+        if (locked || !job.privacyEnabled || job.privacyRegionCount >= 8) return
+        stopPreview()
+        const size = job.sourceSize
+        const w = Math.max(2, Math.floor(size.width / 5))
+        const h = Math.max(2, Math.floor(size.height / 6))
+        const offset = job.privacyRegionCount * 24
+        const x = Math.max(0, Math.min(size.width - w, Math.floor((size.width - w) / 2) + offset))
+        const y = Math.max(0, Math.min(size.height - h, Math.floor((size.height - h) / 2) + offset))
+        const previousCount = job.privacyRegionCount
+        job.addPrivacyRect(x, y, w, h)
+        if (job.privacyRegionCount > previousCount) activePrivacyIndex = job.privacyRegionCount - 1
+    }
+    function removePrivacyCover() {
+        if (locked || !job.privacyEnabled || job.privacyRegionCount === 0) return
+        stopPreview()
+        job.removePrivacyRect(activePrivacyIndex)
+        activePrivacyIndex = Math.max(0, Math.min(activePrivacyIndex, job.privacyRegionCount - 1))
+        if (job.privacyRegionCount === 0) editingPrivacy = false
+    }
+    Connections {
+        target: root.job
+        function onChanged() {
+            root.activePrivacyIndex = Math.max(0, Math.min(root.activePrivacyIndex, root.job.privacyRegionCount - 1))
+            if (!root.job.privacyEnabled) root.editingPrivacy = false
+        }
+    }
     property bool previewing: false
     property bool rangeInitialized: false
     property real previousPosition: 0
@@ -44,6 +74,7 @@ QQC.Popup {
     onOpened: {
         detailsVisible = false
         editingPrivacy = false
+        activePrivacyIndex = 0
         sessionSource = sourceUrl
         previousPosition = player.position
         player.pause()
@@ -275,7 +306,7 @@ QQC.Popup {
                     : i18nc("@info", "%1 s export at %2×", (root.job.outputDurationMs / 1000).toFixed(2), root.job.exportSpeed), root.gif ? i18nc("@info", "Silent · Looping") : root.job.hasAudio ? (root.job.includeAudio ? i18nc("@info", "Audio included") : i18nc("@info", "Audio removed")) : i18nc("@info", "No audio track"))
                     : root.gif ? i18nc("@info", "Select up to 15 source seconds and at least 0.20 seconds after speed-up.") : i18nc("@info", "Select at least 0.10 seconds after speed-up."))
                     + (root.job.hasAnnotationOverlay ? i18nc("@info", " · Annotations") : "")
-                    + (root.job.privacyEnabled ? i18nc("@info", " · Privacy cover") : "")
+                    + (root.job.privacyEnabled ? i18ncp("@info", " · %1 privacy cover", " · %1 privacy covers", root.job.privacyRegionCount) : "")
                     + (root.job.ready && root.job.cropAspect !== "original" ? i18nc("@info", " · Crop %1 × %2", root.job.cropRect.width, root.job.cropRect.height) : "")
                     + (root.job.ready && !root.gif && root.job.outputResolution !== "original" ? (root.resolutionValid ? i18nc("@info", " · Output %1 × %2", root.job.outputSize.width, root.job.outputSize.height) : "") : "")
                 wrapMode: Text.Wrap
@@ -417,7 +448,7 @@ QQC.Popup {
                 Layout.fillWidth: true
                 checked: root.job.privacyEnabled
                 enabled: root.job.ready && root.job.privacyAvailable && !root.locked
-                text: i18nc("@option:check", "Hide a private region")
+                text: i18nc("@option:check", "Hide private regions")
                 font: root.font
                 palette.windowText: Kos.AppTheme.paletteText
                 onToggled: {
@@ -436,7 +467,7 @@ QQC.Popup {
             }
             SolidButton {
                 objectName: "nkshotClipAdjustPrivacy"
-                text: root.editingPrivacy ? i18nc("@action", "Finish adjusting") : i18nc("@action", "Adjust cover")
+                text: root.editingPrivacy ? i18nc("@action", "Finish adjusting") : i18nc("@action", "Adjust covers")
                 enabled: root.job.privacyEnabled && !root.locked
                 onClicked: {root.stopPreview(); root.editingPrivacy = !root.editingPrivacy; root.detailsVisible = false}
             }
@@ -454,7 +485,7 @@ QQC.Popup {
             visible: root.job.privacyEnabled && root.detailsVisible
             text: !root.detailsVisible
                 ? i18nc("@info", "Fixed for entire clip · Drag to move, corners to resize · Arrows move · Ctrl+arrows resize")
-                : i18nc("@info", "Fixed whole-clip cover. No tracking or audio removal. Review before sharing.")
+                : i18nc("@info", "Up to 8 fixed whole-clip covers. No tracking or audio removal. Review before sharing.")
             wrapMode: Text.Wrap
             font: root.font
             color: Kos.AppTheme.mutedText
@@ -520,6 +551,60 @@ QQC.Popup {
             wrapMode: Text.Wrap
             font: root.font
             color: Kos.AppTheme.mutedText
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.job.privacyEnabled && root.editingPrivacy && !root.detailsVisible
+            spacing: 8
+            QQC.ComboBox {
+                id: coverChoice
+                objectName: "nkshotClipPrivacySelection"
+                Layout.fillWidth: true
+                implicitHeight: 32
+                model: root.job.privacyRegionCount
+                currentIndex: root.activePrivacyIndex
+                displayText: i18nc("@label", "Cover %1 of %2", root.activePrivacyIndex + 1, root.job.privacyRegionCount)
+                enabled: !root.locked && root.job.privacyRegionCount > 0
+                onActivated: {root.stopPreview(); root.activePrivacyIndex = currentIndex}
+                background: Rectangle {radius: 8; color: Kos.AppTheme.controlBackground; border.width: coverChoice.visualFocus ? 2 : 0; border.color: Kos.AppTheme.accent}
+                contentItem: QQC.Label {text: coverChoice.displayText; leftPadding: 10; rightPadding: 26; verticalAlignment: Text.AlignVCenter; color: Kos.AppTheme.paletteText}
+                indicator: QQC.Label {text: "⌄"; x: coverChoice.width - width - 10; anchors.verticalCenter: parent.verticalCenter; color: Kos.AppTheme.mutedText}
+                delegate: QQC.ItemDelegate {
+                    required property int index
+                    width: coverChoice.width; height: 32
+                    text: i18nc("@item", "Cover %1", index + 1)
+                    highlighted: coverChoice.highlightedIndex === index
+                    contentItem: QQC.Label {text: parent.text; color: Kos.AppTheme.paletteText; leftPadding: 8; verticalAlignment: Text.AlignVCenter}
+                    background: Rectangle {radius: 7; color: parent.highlighted ? Kos.AppTheme.controlBackground : "transparent"}
+                }
+                popup: QQC.Popup {
+                    y: coverChoice.height + 4
+                    width: coverChoice.width
+                    padding: 4
+                    implicitHeight: Math.min(264, contentItem.implicitHeight + 8)
+                    contentItem: ListView {
+                        implicitHeight: contentHeight
+                        model: coverChoice.popup.visible ? coverChoice.delegateModel : null
+                        currentIndex: coverChoice.highlightedIndex
+                        clip: true
+                        QQC.ScrollBar.vertical: QQC.ScrollBar {}
+                    }
+                    background: Rectangle {color: Kos.AppTheme.contentBackground; radius: 10; border.width: 1; border.color: Kos.AppTheme.border}
+                }
+                Accessible.name: i18nc("@label", "Privacy cover to adjust")
+            }
+            SolidButton {
+                objectName: "nkshotClipPrivacyAdd"
+                text: i18nc("@action", "Add")
+                enabled: !root.locked && root.job.privacyRegionCount < 8
+                onClicked: root.addPrivacyCover()
+            }
+            SolidButton {
+                objectName: "nkshotClipPrivacyRemove"
+                text: i18nc("@action", "Remove")
+                enabled: !root.locked && root.job.privacyRegionCount > 0
+                onClicked: root.removePrivacyCover()
+            }
         }
         QQC.Label {
             Layout.fillWidth: true

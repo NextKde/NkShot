@@ -134,7 +134,7 @@ void VideoClipJob::inspect(const QUrl &source) {
     if(!m_annotationOverlay.isNull()){m_annotationOverlay=QImage();++m_annotationRevision;}m_overlayAvailable=false;
     m_exportSpeed=1.;m_atempoAvailable=false;m_start=0;m_end=0;
     m_outputResolution=QStringLiteral("original");
-    m_width=0;m_height=0;m_squarePixels=false;m_privacyEnabled=false;m_drawboxAvailable=false;m_privacyRect={};m_cropPosition=QPoint(-1,-1);m_freeCropRect={};m_cropAspect=QStringLiteral("original");
+    m_width=0;m_height=0;m_squarePixels=false;m_privacyEnabled=false;m_drawboxAvailable=false;m_privacyRegions.clear();++m_privacyRevision;m_cropPosition=QPoint(-1,-1);m_freeCropRect={};m_cropAspect=QStringLiteral("original");
     const QFileInfo f(source.toLocalFile());
     m_webm=f.suffix().compare(QStringLiteral("webm"),Qt::CaseInsensitive)==0;
     if(!source.isLocalFile()||!f.isAbsolute()||!f.isFile()||!f.isReadable()||(!m_webm&&f.suffix().compare(QStringLiteral("mp4"),Qt::CaseInsensitive))||(m_webm&&!NkShot::LocalVideoInput::hasWebMDocType(f.absoluteFilePath()))||f.size()<=0||f.size()>(m_webm?qint64(256)*1024*1024:qint64(2)*1024*1024*1024)) {
@@ -376,29 +376,49 @@ void VideoClipJob::appendAnnotationInput(QStringList &args) const {
 QString VideoClipJob::annotatedFilter(const QString &time,const QString &tail) const {
     return QStringLiteral("[0:v:0]")+time+QStringLiteral("[base];[base][1:v:0]overlay=eof_action=repeat:repeatlast=1:format=auto")+tail;
 }
+QVariantList VideoClipJob::privacyRegions() const {
+    QVariantList result;for(const auto &rect:m_privacyRegions)result.append(QVariant::fromValue(rect));return result;
+}
+void VideoClipJob::privacyChanged() {
+    ++m_privacyRevision;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+}
+QRect VideoClipJob::boundedPrivacyRect(int x,int y,int width,int height) const {
+    const int left=qBound(0,x,m_width-2)&~1,top=qBound(0,y,m_height-2)&~1;
+    return QRect(left,top,qBound(2,width,m_width-left)&~1,qBound(2,height,m_height-top)&~1);
+}
 void VideoClipJob::setPrivacyEnabled(bool enabled) {
     if(m_busy||!m_ready||enabled==m_privacyEnabled)return;
     if(enabled&&!privacyAvailable()) {
         m_error=tr("Opaque privacy cover needs square pixels and the FFmpeg drawbox filter.");Q_EMIT changed();return;
     }
-    if(enabled&&m_privacyRect.isEmpty()) {
+    if(enabled&&m_privacyRegions.isEmpty()) {
         const int width=qMax(2,(m_width/3)&~1),height=qMax(2,(m_height/3)&~1);
-        m_privacyRect=QRect(((m_width-width)/2)&~1,((m_height-height)/2)&~1,width,height);
+        m_privacyRegions.append(QRect(((m_width-width)/2)&~1,((m_height-height)/2)&~1,width,height));
     }
-    m_privacyEnabled=enabled;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+    m_privacyEnabled=enabled;privacyChanged();
 }
 void VideoClipJob::setPrivacyRect(int x,int y,int width,int height) {
-    if(m_busy||!m_ready||!m_privacyEnabled||!privacyAvailable())return;
-    // Clamp coordinates before subtraction/addition, including INT extrema.
-    const int left=qBound(0,x,m_width-2)&~1,top=qBound(0,y,m_height-2)&~1;
-    const QRect rect(left,top,qBound(2,width,m_width-left)&~1,qBound(2,height,m_height-top)&~1);
-    if(rect==m_privacyRect)return;
-    m_privacyRect=rect;m_output=QUrl();m_progress=0;m_error.clear();Q_EMIT changed();
+    setPrivacyRectAt(0,x,y,width,height);
+}
+bool VideoClipJob::addPrivacyRect(int x,int y,int width,int height) {
+    if(m_busy||!m_ready||!m_privacyEnabled||!privacyAvailable()||m_privacyRegions.size()>=8)return false;
+    m_privacyRegions.append(boundedPrivacyRect(x,y,width,height));privacyChanged();return true;
+}
+void VideoClipJob::setPrivacyRectAt(int index,int x,int y,int width,int height) {
+    if(m_busy||!m_ready||!m_privacyEnabled||!privacyAvailable()||index<0||index>=m_privacyRegions.size())return;
+    const auto rect=boundedPrivacyRect(x,y,width,height);if(rect==m_privacyRegions[index])return;
+    m_privacyRegions[index]=rect;privacyChanged();
+}
+void VideoClipJob::removePrivacyRect(int index) {
+    if(m_busy||!m_ready||!m_privacyEnabled||!privacyAvailable()||index<0||index>=m_privacyRegions.size())return;
+    m_privacyRegions.removeAt(index);if(m_privacyRegions.isEmpty())m_privacyEnabled=false;privacyChanged();
 }
 QString VideoClipJob::privacyFilter() const {
     if(!m_privacyEnabled)return {};
-    return QStringLiteral(",drawbox=x=%1:y=%2:w=%3:h=%4:color=black@1:t=fill")
-        .arg(m_privacyRect.x()).arg(m_privacyRect.y()).arg(m_privacyRect.width()).arg(m_privacyRect.height());
+    QString result;
+    for(const auto &rect:m_privacyRegions)result+=QStringLiteral(",drawbox=x=%1:y=%2:w=%3:h=%4:color=black@1:t=fill")
+        .arg(rect.x()).arg(rect.y()).arg(rect.width()).arg(rect.height());
+    return result;
 }
 QRect VideoClipJob::centeredCropRect() const {
     if(!m_mediaValid||m_width<2||m_height<2)return {};
