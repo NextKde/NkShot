@@ -20,7 +20,7 @@ add_executable(spectacle)
 if(NKSHOT_ENABLE_UI_CAPTURE)
     find_package(Qt6 REQUIRED COMPONENTS Test)
     target_link_libraries(spectacle PRIVATE Qt::Test)
-    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp ../tests/ui/RecordingAdapterChecks.cpp ../tests/ui/RecordingPreparationUiChecks.cpp ../tests/ui/RecordingControlsUiChecks.cpp ../tests/ui/TranslationUiChecks.cpp ../tests/ui/ScrollSessionUiChecks.cpp ../tests/ui/LocalMediaOpenUiChecks.cpp ../tests/ui/WindowOwnershipUiChecks.cpp ../tests/ui/TextCoverUiChecks.cpp ../tests/ui/FreeCropUiChecks.cpp ../tests/ui/ImageAdjustmentsUiChecks.cpp ../tests/ui/ImageExportUiChecks.cpp ../tests/ui/RecentThumbnailsUiChecks.cpp ../tests/ui/MediaDropUiChecks.cpp ../tests/ui/VideoAnnotationsUiChecks.cpp)
+    target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp ../tests/ui/RecordingAdapterChecks.cpp ../tests/ui/RecordingPreparationUiChecks.cpp ../tests/ui/RecordingControlsUiChecks.cpp ../tests/ui/TranslationUiChecks.cpp ../tests/ui/ScrollSessionUiChecks.cpp ../tests/ui/LocalMediaOpenUiChecks.cpp ../tests/ui/WindowOwnershipUiChecks.cpp ../tests/ui/TextCoverUiChecks.cpp ../tests/ui/FreeCropUiChecks.cpp ../tests/ui/RecordingAutoStopUiChecks.cpp ../tests/ui/ImageAdjustmentsUiChecks.cpp ../tests/ui/ImageExportUiChecks.cpp ../tests/ui/RecentThumbnailsUiChecks.cpp ../tests/ui/MediaDropUiChecks.cpp ../tests/ui/VideoAnnotationsUiChecks.cpp)
     target_include_directories(spectacle PRIVATE ${PROJECT_SOURCE_DIR}/tests/ui)
     target_compile_definitions(spectacle PRIVATE NKSHOT_ENABLE_UI_CAPTURE=1)
 endif()
@@ -114,6 +114,8 @@ target_sources(spectacle PRIVATE
     Platforms/PlatformLoader.cpp
     Platforms/PlatformNull.cpp
     Platforms/screencasting.cpp
+    RecordingAutoStop.cpp
+    RecordingAutoStop.h
     RecordingPreparation.cpp
     RecordingPreparation.h
     Platforms/StatusNotifierAvailability.cpp

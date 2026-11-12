@@ -139,7 +139,7 @@ EmptyPage {
             captureTimeRemaining: SpectacleCore.captureTimeRemaining
             captureProgress: SpectacleCore.captureProgress
             onCaptureRequested: SpectacleCore.takeNewScreenshot()
-            onRecordRequested: recordingMode => SpectacleCore.startRecording(recordingMode, Settings.videoIncludePointer, Settings.recordingStartDelay)
+            onRecordRequested: recordingMode => SpectacleCore.startRecording(recordingMode, Settings.videoIncludePointer, Settings.recordingStartDelay, Settings.recordingAutoStopSeconds)
             onCancelRequested: SpectacleCore.cancelScreenshot()
         }
         ConfigHelpButtonRow { id: footerActions; Layout.alignment: Qt.AlignHCenter }

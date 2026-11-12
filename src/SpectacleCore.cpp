@@ -359,10 +359,19 @@ SpectacleCore::SpectacleCore(QObject *parent)
         }
     });
     connect(videoPlatform->preparation(), &NkShot::RecordingPreparation::changed, this, &SpectacleCore::updateRecordingPreparationUi);
+    connect(&m_recordingAutoStop, &NkShot::RecordingAutoStop::changed, this, &SpectacleCore::recordingAutoStopChanged);
+    connect(&m_recordingAutoStop, &NkShot::RecordingAutoStop::stopRequested, this, [this](quint64 epoch, quint64 token) {
+        if(epoch!=m_recordingAutoStopEpoch || !m_videoPlatform->preparation()->isCurrent(token)
+            || m_videoPlatform->recordingState()!=VideoPlatform::RecordingState::Recording) return;
+        m_recordingAutoStop.invalidate();
+        finishRecording();
+    });
+    connect(videoPlatform, &VideoPlatform::recordingStateChanged, this, &SpectacleCore::updateRecordingAutoStop);
     connect(videoPlatform, &VideoPlatform::recordingStateChanged, this, &SpectacleCore::updateRecordingStateUi);
     connect(videoPlatform,&VideoPlatform::pausePendingChanged,this,&SpectacleCore::updateRecordingPauseTray);
     connect(videoPlatform,&VideoPlatform::pauseSupportedChanged,this,&SpectacleCore::updateRecordingPauseTray);
     connect(videoPlatform, &VideoPlatform::recordedTimeChanged, this, [this, videoPlatform] {
+        updateRecordingAutoStop();
         Q_EMIT recordedTimeChanged();
         if (!s_systemTrayIcon || !videoPlatform->isRecording()) {
             return;
@@ -384,6 +393,7 @@ SpectacleCore::SpectacleCore(QObject *parent)
         InlineMessageModel::instance()->push(InlineMessageModel::Warning, message);
     });
     connect(videoPlatform, &VideoPlatform::recordingCanceled, this, [this] {
+        m_recordingAutoStop.invalidate();
         m_recordingEventLoopLocker.reset();
         if (restoreRecordingPreparation()) return;
         if (m_startMode != StartMode::Gui || !m_returnToViewer || isGuiNull()) {
@@ -401,6 +411,7 @@ SpectacleCore::SpectacleCore(QObject *parent)
         }
     });
     connect(videoPlatform, &VideoPlatform::recordingFailed, this, [this, onScreenshotOrRecordingFailed](const QString &message){
+        m_recordingAutoStop.invalidate();
         m_recordingEventLoopLocker.reset();
         restoreRecordingPreparation();
         auto uiMessage = i18nc("@info", "An error occurred while attempting to record the screen.");
@@ -1537,7 +1548,19 @@ void SpectacleCore::unityLauncherUpdate(const QVariantMap &properties) const
     QDBusConnection::sessionBus().send(message);
 }
 
-void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withPointer, int startDelaySeconds)
+void SpectacleCore::updateRecordingAutoStop()
+{
+    using State=VideoPlatform::RecordingState;
+    const auto state=m_videoPlatform->recordingState();
+    if(state!=State::Recording && state!=State::Paused) {m_recordingAutoStop.invalidate();return;}
+    const auto epoch=m_recordingAutoStopEpoch,token=m_videoPlatform->preparation()->token();
+    const QPointer<SpectacleCore> guard(this);
+    if(state==State::Recording)m_recordingAutoStop.acknowledge(epoch,token);
+    if(!guard || epoch!=m_recordingAutoStopEpoch || token!=m_videoPlatform->preparation()->token())return;
+    m_recordingAutoStop.update(epoch,token,m_videoPlatform->recordedTime(),m_videoPlatform->isPaused());
+}
+
+void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withPointer, int startDelaySeconds, int autoStopSeconds)
 {
     if (m_videoPlatform->preparation()->phase()!=NkShot::RecordingPreparation::Idle
         || m_videoPlatform->recordingState()==VideoPlatform::RecordingState::Rendering
@@ -1549,7 +1572,9 @@ void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withP
             i18nc("@info", "The previous recording is still finishing. Try again in a moment."));
         return;
     }
+    m_recordingAutoStop.invalidate();
     ++m_captureEpoch;
+    m_recordingAutoStop.begin(m_startMode==StartMode::Gui && !m_cliOptions[CommandLineOptions::Record] ? autoStopSeconds : 0,++m_recordingAutoStopEpoch);
     m_delayAnimation->stop();
     snapshotRecordingPreparation();
     m_recordingControlRequired=m_startMode==StartMode::Gui;
@@ -1573,6 +1598,7 @@ void SpectacleCore::startRecording(VideoPlatform::RecordingMode mode, bool withP
 
 void SpectacleCore::finishRecording()
 {
+    m_recordingAutoStop.invalidate();
     if (!m_videoPlatform->isRecording()) { cancelPendingRecording();return; }
     m_videoPlatform->finishRecording();
 }
@@ -1786,6 +1812,8 @@ void SpectacleCore::updateRecordingPreparationUi()
 
 void SpectacleCore::cancelPendingRecording()
 {
+    ++m_recordingAutoStopEpoch;
+    m_recordingAutoStop.invalidate();
     ++m_captureEpoch;
     m_videoPlatform->cancelPendingRecording();
 }

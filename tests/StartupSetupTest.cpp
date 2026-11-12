@@ -70,6 +70,7 @@ QtObject {
  property int captureMode: 0
  property int lastUsedRecordingMode: 1
  property int recordingStartDelay: 0
+ property int recordingAutoStopSeconds: 0
 })QML",QUrl());settings.reset(config.create());QVERIFY2(settings,qPrintable(config.errorString()));
         view->setResizeMode(QQuickView::SizeRootObjectToView);
         view->setInitialProperties({{QStringLiteral("settings"),QVariant::fromValue(settings.get())},{QStringLiteral("captureModes"),captures()},{QStringLiteral("recordingModes"),recordings()},{QStringLiteral("recordingAvailable"),true},{QStringLiteral("transientSupported"),true},{QStringLiteral("clickSupported"),true},{QStringLiteral("audioSupported"),true}});
@@ -98,6 +99,24 @@ QtObject {
         }
         settings->setProperty("recordingStartDelay",3);
         QTRY_COMPARE(item("nkshotRecordingStartDelay")->property("currentValue").toInt(),3);
+    }
+    void recordingAutoStopPreferences() {
+        click("nkshotSetupRecordingTab");
+        auto advanced=item("nkshotRecordingAdvanced");QVERIFY(advanced);
+        QVERIFY(!advanced->property("checked").toBool());
+        QCOMPARE(settings->property("recordingAutoStopSeconds").toInt(),0);
+        click("nkshotRecordingAdvanced");
+        const QList<int> limits{0,60,300,600};
+        for(int i=0;i<limits.size();++i) {
+            select("nkshotRecordingAutoStop",i);
+            QCOMPARE(settings->property("recordingAutoStopSeconds").toInt(),limits[i]);
+        }
+        click("nkshotRecordingAdvanced");
+        QVERIFY(advanced->property("text").toString().contains(QStringLiteral("10")));
+        settings->setProperty("recordingAutoStopSeconds",17);
+        QTRY_COMPARE(item("nkshotRecordingAutoStop")->property("currentIndex").toInt(),0);
+        QVERIFY(!advanced->property("text").toString().contains(QStringLiteral("17")));
+        settings->setProperty("recordingAutoStopSeconds",0);
     }
     void dynamicAndMissingCapabilities() {
         QSignalSpy capture(root(),SIGNAL(captureRequested(int)));

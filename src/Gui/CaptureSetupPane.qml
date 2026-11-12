@@ -20,6 +20,8 @@ QQC.Pane {
     property real captureTimeRemaining: 0
     property real captureProgress: 0
     property int modeIndex: 0
+    readonly property int autoStopSeconds: [60, 300, 600].indexOf(root.settings.recordingAutoStopSeconds) >= 0
+        ? root.settings.recordingAutoStopSeconds : 0
     // Fixed chrome plus a usable scroll viewport; independent of expanded options.
     readonly property real chromeMinimumHeight: tabs.implicitHeight
         + Math.max(primaryAction.implicitHeight, cancelAction.implicitHeight) + 10 + 32 + 80
@@ -316,6 +318,55 @@ QQC.Pane {
                     enabled: root.audioSupported
                     checked: root.settings.videoRecordMicrophone
                     onToggled: root.settings.videoRecordMicrophone = checked
+                }
+                QQC.ToolButton {
+                    id: recordingAdvanced
+                    objectName: "nkshotRecordingAdvanced"
+                    Layout.fillWidth: true
+                    implicitHeight: Math.max(32, contentItem.implicitHeight + 12)
+                    checkable: true
+                    text: (checked ? i18n("Fewer options") : i18n("More options"))
+                        + (!checked && root.autoStopSeconds > 0 ? i18n(" · Auto-stop %1 min", root.autoStopSeconds / 60) : "")
+                    icon.name: checked ? "arrow-up" : "arrow-down"
+                    icon.color: Kos.AppTheme.paletteText
+                    background: Rectangle {
+                        radius: 8
+                        color: recordingAdvanced.hovered || recordingAdvanced.down || recordingAdvanced.activeFocus
+                            ? Kos.AppTheme.controlBackground : "transparent"
+                        border.width: recordingAdvanced.activeFocus ? 2 : 0
+                        border.color: Kos.AppTheme.accent
+                    }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: recordingAdvanced.checked
+                    spacing: 4
+                    RowLayout {
+                        Layout.fillWidth: true
+                        QQC.Label {text: i18n("Auto-stop"); Layout.fillWidth: true}
+                        TargetSelect {
+                            objectName: "nkshotRecordingAutoStop"
+                            implicitWidth: 130
+                            model: [
+                                {display: i18n("Off"), seconds: 0},
+                                {display: i18n("1 minute"), seconds: 60},
+                                {display: i18n("5 minutes"), seconds: 300},
+                                {display: i18n("10 minutes"), seconds: 600}
+                            ]
+                            textRole: "display"
+                            valueRole: "seconds"
+                            currentIndex: Math.max(0, [0, 60, 300, 600].indexOf(root.settings.recordingAutoStopSeconds))
+                            onActivated: root.settings.recordingAutoStopSeconds = currentValue
+                            Accessible.name: i18n("Stop recording automatically after")
+                        }
+                    }
+                    QQC.Label {
+                        Layout.fillWidth: true
+                        text: i18n("Counts recorded time only. Pauses do not count.")
+                        font.pointSize: root.font.pointSize * 0.92
+                        color: Kos.AppTheme.mutedText
+                        wrapMode: Text.WordWrap
+                    }
                 }
                 QQC.Label {
                     Layout.fillWidth: true

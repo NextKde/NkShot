@@ -20,6 +20,7 @@
 #include "OcrManager.h"
 #include "Platforms/PlatformLoader.h"
 #include "RecordingModeModel.h"
+#include "RecordingAutoStop.h"
 #include "VideoFormatModel.h"
 #include "settings.h"
 
@@ -36,6 +37,7 @@ class SpectacleCore : public QObject
 #ifdef NKSHOT_ENABLE_UI_CAPTURE
     friend class RecordingPreparationUiChecks;
     friend class RecordingControlsUiChecks;
+    friend class RecordingAutoStopUiChecks;
     friend class LocalMediaOpenUiChecks;
 #endif
 
@@ -49,6 +51,9 @@ class SpectacleCore : public QObject
     Q_PROPERTY(int captureTimeRemaining READ captureTimeRemaining NOTIFY captureTimeRemainingChanged FINAL)
     Q_PROPERTY(qreal captureProgress READ captureProgress NOTIFY captureProgressChanged FINAL)
     Q_PROPERTY(QString recordedTime READ recordedTime NOTIFY recordedTimeChanged)
+    Q_PROPERTY(bool recordingAutoStopEnabled READ recordingAutoStopEnabled NOTIFY recordingAutoStopChanged)
+    Q_PROPERTY(bool recordingAutoStopActive READ recordingAutoStopActive NOTIFY recordingAutoStopChanged)
+    Q_PROPERTY(qint64 recordingAutoStopRemaining READ recordingAutoStopRemaining NOTIFY recordingAutoStopChanged)
     Q_PROPERTY(bool videoMode READ videoMode WRITE setVideoMode NOTIFY videoModeChanged)
     Q_PROPERTY(QUrl currentVideo READ currentVideo NOTIFY currentVideoChanged)
     Q_PROPERTY(AnnotationDocument *annotationDocument READ annotationDocument CONSTANT FINAL)
@@ -88,6 +93,9 @@ public:
     qreal captureProgress() const;
 
     QString recordedTime() const;
+    bool recordingAutoStopEnabled() const { return m_recordingAutoStop.enabled(); }
+    bool recordingAutoStopActive() const { return m_recordingAutoStop.active(); }
+    qint64 recordingAutoStopRemaining() const { return m_recordingAutoStop.remaining(); }
 
     bool videoMode() const;
     void setVideoMode(bool enabled);
@@ -103,7 +111,7 @@ public:
 
     void syncExportImage();
 
-    Q_INVOKABLE void startRecording(VideoPlatform::RecordingMode mode, bool withPointer = Settings::videoIncludePointer(), int startDelaySeconds = 0);
+    Q_INVOKABLE void startRecording(VideoPlatform::RecordingMode mode, bool withPointer = Settings::videoIncludePointer(), int startDelaySeconds = 0, int autoStopSeconds = 0);
     Q_INVOKABLE void finishRecording();
     Q_INVOKABLE void toggleRecordingPause();
     Q_INVOKABLE void cancelPendingRecording();
@@ -151,10 +159,12 @@ Q_SIGNALS:
     void videoModeChanged(bool videoMode);
     void currentVideoChanged(const QUrl &currentVideo);
     void recordedTimeChanged();
+    void recordingAutoStopChanged();
     void ocrStatusChanged();
     void ocrAvailableChanged();
 
 private:
+    void updateRecordingAutoStop();
     explicit SpectacleCore(QObject *parent = nullptr);
 
     enum class ScreenCapture {
@@ -209,6 +219,8 @@ private:
     ViewerWindow::Mode m_recordingRestoreMode = ViewerWindow::Dialog;
     quint64 m_pendingRegionToken = 0;
     quint64 m_captureEpoch = 0;
+    NkShot::RecordingAutoStop m_recordingAutoStop;
+    quint64 m_recordingAutoStopEpoch = 0;
     std::unique_ptr<QTimer> m_annotationSyncTimer;
     std::unique_ptr<QVariantAnimation> m_delayAnimation;
     std::unique_ptr<QEventLoopLocker> m_eventLoopLocker;

@@ -767,3 +767,23 @@ The existing output dimension/source-byte checks continue, with backend tests
 independently decoding MP4/GIF pixels, cover/annotation order and MP4 sound.
 `.free-crop.png` captures the actual collapsed contextual preview. Do not combine
 this option with `NKSHOT_TEST_REFRAME_CLIP`, which tests the old fixed-aspect flow.
+
+## Optional recording auto-stop (113)
+
+`NKSHOT_TEST_RECORDING_AUTO_STOP=1` starts the actual recording setup/options and
+status UI with a controlled platform in place of the required Null platform.
+It selects all four limits through real controls and checks the collapsed enabled
+summary. A real Core start captures the explicit GUI limit; a fake acknowledgement
+enters Recording. Long recorded-time samples are injected only at the policy seam,
+not into native devices or a public production clock setter. State/time signals
+use the production Core hook and expiry uses its actual finish route.
+
+The helper tests Pause/Resume, frozen allowance, one stop, Rendering feedback,
+retired queued generations and external/default calls remaining Off. Recording
+and Paused both run real delayed screenshot request/cancel paths, before any
+capture occurs, to ensure screenshot epochs do not cancel recording limits.
+Dark/compact options remain `NKSHOT_TEST_DARK` / `NKSHOT_TEST_COMPACT`.
+Evidence suffixes: `.auto-stop-options.png`, `.auto-stop-collapsed.png`,
+`.auto-stop-recording.png`, `.auto-stop-paused.png`, `.auto-stop-finishing.png`.
+These are software-window/control-route checks, not native recording or a claim
+that a media file stops on an exact frame.

@@ -187,6 +187,26 @@ class IdentityTests(unittest.TestCase):
         self.assertIn('signal positionRequested', overlay)
         self.assertIn('signal centerRequested', overlay)
 
+    def test_auto_stop_requires_explicit_gui_request(self):
+        core = read('src/SpectacleCore.h')
+        self.assertIn('int autoStopSeconds = 0', core)
+        impl = read('src/SpectacleCore.cpp')
+        self.assertIn('m_startMode==StartMode::Gui', impl)
+        self.assertIn('updateRecordingAutoStop', impl)
+        for filename in ('DialogPage.qml', 'RecordingModeButtonsColumn.qml'):
+            self.assertIn('Settings.recordingAutoStopSeconds', read('src/Gui/' + filename))
+        self.assertNotIn('recordingAutoStopSeconds', read('src/SpectacleDBusAdapter.cpp'))
+        self.assertIn('m_recordingAutoStopEpoch', impl)
+        screenshot = impl.split('void SpectacleCore::takeNewScreenshot(ImagePlatform::GrabMode', 1)[1].split('void SpectacleCore::takeNewScreenshot(int', 1)[0]
+        cancel = impl.split('void SpectacleCore::cancelScreenshot()', 1)[1].split('\n}', 1)[0]
+        self.assertNotIn('m_recordingAutoStop.invalidate', screenshot)
+        self.assertNotIn('m_recordingAutoStop.invalidate', cancel)
+        policy = read('src/RecordingAutoStop.cpp')
+        self.assertIn('QPointer<RecordingAutoStop>', policy)
+        self.assertIn('QTimer::singleShot', policy)
+        self.assertNotIn('QElapsedTimer', policy)
+        self.assertIn('recordingAutoStopSeconds', read('src/Gui/SettingsDialog/nkshot.kcfg'))
+
     def test_free_crop_keeps_export_and_preview_contract(self):
         overlay = read('src/Gui/CropPreviewOverlay.qml')
         self.assertIn('signal rectRequested', overlay)

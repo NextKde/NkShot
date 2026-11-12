@@ -50,6 +50,37 @@ ColumnLayout {
         checked: Settings.videoRecordMicrophone
         onToggled: Settings.videoRecordMicrophone = checked
     }
+    QQC.ToolButton {
+        id: advanced
+        objectName: "nkshotLegacyRecordingAdvanced"
+        Layout.fillWidth: true
+        checkable: true
+        readonly property int validLimit: [60, 300, 600].indexOf(Settings.recordingAutoStopSeconds) >= 0
+            ? Settings.recordingAutoStopSeconds : 0
+        text: (checked ? i18n("Fewer options") : i18n("More options"))
+            + (!checked && validLimit > 0 ? i18n(" · Auto-stop %1 min", validLimit / 60) : "")
+        icon.name: checked ? "arrow-up" : "arrow-down"
+    }
+    ColumnLayout {
+        Layout.fillWidth: true
+        visible: advanced.checked
+        RowLayout {
+            Layout.fillWidth: true
+            QQC.Label {text: i18n("Auto-stop"); Layout.fillWidth: true}
+            QQC.ComboBox {
+                objectName: "nkshotLegacyRecordingAutoStop"
+                model: [i18n("Off"), i18n("1 minute"), i18n("5 minutes"), i18n("10 minutes")]
+                currentIndex: Math.max(0, [0, 60, 300, 600].indexOf(Settings.recordingAutoStopSeconds))
+                onActivated: Settings.recordingAutoStopSeconds = [0, 60, 300, 600][currentIndex]
+                Accessible.name: i18n("Stop recording automatically after")
+            }
+        }
+        QQC.Label {
+            Layout.fillWidth: true
+            text: i18n("Counts recorded time only. Pauses do not count.")
+            wrapMode: Text.WordWrap
+        }
+    }
     Kirigami.InlineMessage {
         id: audioUnsupportedMessage
         Layout.fillWidth: true

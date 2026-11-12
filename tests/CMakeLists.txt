@@ -227,3 +227,8 @@ ecm_add_test(TextCoverSessionTest.cpp ../src/Gui/TextCoverSession.cpp ../src/Gui
     TEST_NAME text_cover_session_test LINK_LIBRARIES Qt::Test Qt::Quick Qt::Concurrent KF6::I18n PkgConfig::TESSERACT)
 target_compile_options(text_cover_session_test PRIVATE -fexceptions)
 set_tests_properties(text_cover_session_test PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# GUI recording active-time limit, not native device acceptance.
+ecm_add_test(RecordingAutoStopTest.cpp ../src/RecordingAutoStop.cpp ../src/RecordingAutoStop.h
+    TEST_NAME recording_auto_stop_test LINK_LIBRARIES Qt::Test Qt::Core)
+set_tests_properties(recording_auto_stop_test PROPERTIES TIMEOUT 30)

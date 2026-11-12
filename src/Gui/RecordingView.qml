@@ -209,6 +209,11 @@ FocusScope {
 
     // Keep capture controls separate from the editor. During finalization the
     // encoder still owns its output: never present playback or a saved claim.
+    readonly property string autoStopRemainingText: {
+        const seconds = Math.max(0, Math.ceil(SpectacleCore.recordingAutoStopRemaining / 1000))
+        return Math.floor(seconds / 60).toString().padStart(2, "0") + ":"
+            + (seconds % 60).toString().padStart(2, "0")
+    }
     readonly property bool finalizing: SpectacleCore.videoPlatform.recordingState === VideoPlatform.Rendering
     readonly property bool captureActive: SpectacleCore.videoPlatform.isRecording || finalizing
     QQC.Pane {
@@ -257,7 +262,12 @@ FocusScope {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
+                objectName: "nkshotRecordingStatusDescription"
                 text: root.finalizing ? i18nc("@info", "Preparing your video for review…")
+                    : SpectacleCore.recordingAutoStopActive
+                        ? (SpectacleCore.videoPlatform.isPaused
+                            ? i18nc("@info", "Auto-stop in %1 · Paused", root.autoStopRemainingText)
+                            : i18nc("@info", "Auto-stop in %1", root.autoStopRemainingText))
                     : SpectacleCore.videoPlatform.isPaused ? i18nc("@info", "Your recording will continue from here.")
                     : i18nc("@info", "Finish when you are ready to review and trim.")
                 color: Kos.AppTheme.mutedText
