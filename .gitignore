@@ -30,3 +30,7 @@ CMakeLists.txt.user*
 
 # Local build environment, not part of the source tree
 /nkshot-*.png
+
+# Personal scratch, not part of the project
+/EDITOR-TODO.md
+/viewer-fixed.png
