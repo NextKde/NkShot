@@ -30,6 +30,7 @@ class VideoPlatform : public QObject
     Q_PROPERTY(bool isRecording READ isRecording NOTIFY recordingStateChanged)
     Q_PROPERTY(bool isPaused READ isPaused NOTIFY recordingStateChanged)
     Q_PROPERTY(bool pauseSupported READ supportsPause NOTIFY pauseSupportedChanged)
+    Q_PROPERTY(bool audioCaptureSupported READ supportsAudioCapture NOTIFY audioCaptureSupportedChanged)
     Q_PROPERTY(bool pausePending READ pausePending NOTIFY pausePendingChanged)
     Q_PROPERTY(bool readyForRecording READ readyForRecording NOTIFY readyForRecordingChanged)
     Q_PROPERTY(RecordingState recordingState READ recordingState NOTIFY recordingStateChanged)
@@ -136,6 +137,10 @@ public:
     bool isRecording() const;
     bool isPaused() const { return m_recordingState == RecordingState::Paused; }
     virtual bool supportsPause() const { return false; }
+    virtual bool supportsAudioCapture() const
+    {
+        return true;
+    }
     virtual bool pausePending() const { return false; }
     virtual bool isRecordingAudio() const = 0;
     qint64 recordedTime() const;
@@ -165,6 +170,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void pausePendingChanged();
     void pauseSupportedChanged();
+    void audioCaptureSupportedChanged();
     void readyForRecordingChanged();
     void supportedRecordingModesChanged();
     void supportedFormatsChanged();

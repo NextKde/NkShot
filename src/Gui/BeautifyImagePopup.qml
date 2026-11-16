@@ -8,17 +8,23 @@ Kos.LiquidDialog {
     id: root
     objectName: "nkshotBeautifyPopup"
     property int styleIndex: 2
+    property int frameIndex: 0
+    property string windowTitle: "NkShot"
+    property string browserAddress: "example.com"
     property var previewModel
     readonly property size sourceSize: previewModel ? previewModel.sourceSize : Qt.size(0, 0)
-    readonly property int outputWidth: sourceSize.width + paddingInput.value * 2
-    readonly property int outputHeight: sourceSize.height + paddingInput.value * 2 + (watermark.text.trim().length ? 36 : 0)
-    readonly property bool validSize: sourceSize.width > 0 && outputWidth <= 8192 && outputHeight <= 32000 && outputWidth * outputHeight <= 40000000
+    readonly property size outputSize: previewModel ? previewModel.outputSize : Qt.size(0, 0)
+    readonly property bool validSize: outputSize.width > 0 && outputSize.height > 0
     function updatePreview() {
         refresh.stop()
-        if (previewModel) previewModel.update(paddingInput.value, styleIndex, watermark.text, rounded.checked)
+        if (previewModel) previewModel.update(paddingInput.value, styleIndex, watermark.text, rounded.checked,
+            frameIndex, frameIndex === 2 ? browserAddress : windowTitle)
     }
     function schedulePreview() { if (opened) refresh.restart() }
     onStyleIndexChanged: schedulePreview()
+    onFrameIndexChanged: schedulePreview()
+    onWindowTitleChanged: schedulePreview()
+    onBrowserAddressChanged: schedulePreview()
     onOpened: updatePreview()
     onClosed: { refresh.stop(); contextWindow.cancelPresentationPreview() }
     Timer { id: refresh; interval: 120; onTriggered: root.updatePreview() }
@@ -41,13 +47,14 @@ Kos.LiquidDialog {
             objectName: "nkshotPresentationScroll"
             contentWidth: availableWidth
             contentHeight: bodyContents.implicitHeight
-            rightPadding: !mirrored && bodyBar.visible ? bodyBar.width + 4 : 0
-            leftPadding: mirrored && bodyBar.visible ? bodyBar.width + 4 : 0
+            rightPadding: mirrored ? 0 : 14
+            leftPadding: mirrored ? 14 : 0
             QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
             QQC.ScrollBar.vertical: QQC.ScrollBar {
                 id: bodyBar
                 objectName: "nkshotPresentationScrollbar"
                 parent: body
+                width: 10
                 x: body.mirrored ? 0 : body.width - width
                 y: body.topPadding
                 height: body.availableHeight
@@ -104,6 +111,50 @@ Kos.LiquidDialog {
                     wrapMode: Text.Wrap
                     color: Kos.AppTheme.mutedText
                 }
+                QQC.Label {
+                    text: i18nc("@label", "Frame")
+                    color: Kos.AppTheme.paletteText
+                }
+                Kos.KosComboBox {
+                    objectName: "nkshotPresentationFrame"
+                    Layout.fillWidth: true
+                    implicitHeight: 32
+                    model: [i18nc("@option", "None"), i18nc("@option", "macOS window"), i18nc("@option", "Browser"),
+                        i18nc("@option", "Mac display"), "iPad", i18nc("@option", "Surface display"), i18nc("@option", "Vision Pro window")]
+                    currentIndex: root.frameIndex
+                    onActivated: index => root.frameIndex = index
+                    Accessible.name: i18nc("@label", "Screenshot frame")
+                }
+                QQC.Label {
+                    Layout.fillWidth: true
+                    visible: root.frameIndex >= 3
+                    text: root.frameIndex === 6
+                        ? i18nc("@info", "A floating glass window with a spatial grab bar.")
+                        : i18nc("@info", "A slim display frame that follows the screenshot's proportions.")
+                    wrapMode: Text.Wrap
+                    color: Kos.AppTheme.mutedText
+                }
+                Kos.LiquidTextField {
+                    objectName: "nkshotPresentationFrameTitle"
+                    Layout.fillWidth: true
+                    implicitHeight: 28
+                    specificationForm: true
+                    visible: root.frameIndex === 1 || root.frameIndex === 2
+                    maximumLength: 120
+                    text: root.frameIndex === 2 ? root.browserAddress : root.windowTitle
+                    onTextEdited: {
+                        if (root.frameIndex === 2) root.browserAddress = text
+                        else root.windowTitle = text
+                    }
+                    placeholderText: root.frameIndex === 2
+                        ? i18nc("@info:placeholder", "Website address (display only)")
+                        : i18nc("@info:placeholder", "Window title (optional)")
+                    Accessible.name: root.frameIndex === 2 ? i18nc("@label", "Website address") : i18nc("@label", "Window title")
+                }
+                QQC.Label {
+                    text: i18nc("@label", "Background")
+                    color: Kos.AppTheme.paletteText
+                }
                 Kos.LiquidSegmentedControl {
                     objectName: "nkshotPresentationStyle"
                     Layout.fillWidth: true
@@ -140,7 +191,7 @@ Kos.LiquidDialog {
                 }
                 QQC.Label {
                     Layout.fillWidth: true
-                    text: root.validSize ? root.outputWidth + " × " + root.outputHeight + " px"
+                    text: root.validSize ? root.outputSize.width + " × " + root.outputSize.height + " px"
                         : i18nc("@info", "This copy is too large. Reduce padding or use a smaller image.")
                     wrapMode: Text.Wrap
                     color: Kos.AppTheme.mutedText
@@ -161,6 +212,7 @@ Kos.LiquidDialog {
                 Kos.LiquidCheckBox {
                     id: rounded
                     objectName: "nkshotPresentationRounded"
+                    visible: root.frameIndex < 3
                     implicitHeight: 28
                     opacity: 1
                     // Override the upstream label to keep disabled text readable without fading the material.
@@ -172,7 +224,7 @@ Kos.LiquidDialog {
                         color: rounded.enabled ? Kos.AppTheme.paletteText : Kos.AppTheme.disabledText
                     }
                     onCheckedChanged: root.schedulePreview()
-                    text: i18nc("@option:check", "Round image corners")
+                    text: i18nc("@option:check", "Rounded corners")
                     checked: true
                 }
                 }

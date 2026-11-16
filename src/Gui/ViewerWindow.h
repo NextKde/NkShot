@@ -115,6 +115,7 @@ private:
     void setMode(ViewerWindow::Mode mode);
     Q_SLOT void updateColor();
     Q_SLOT void updateMinimumSize();
+    bool fitWindowToImage();
 
     void setBackgroundColorRole(QPalette::ColorRole role);
 

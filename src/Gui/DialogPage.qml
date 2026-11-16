@@ -140,6 +140,7 @@ EmptyPage {
             clickSupported: ImagePlatform.supportedShutterModes === (ImagePlatform.Immediate | ImagePlatform.OnClick)
             onClickOnly: ImagePlatform.supportedShutterModes === ImagePlatform.OnClick
             audioSupported: SpectacleCore.videoPlatform.formatSupportsAudio(Settings.preferredVideoFormat)
+            audioCaptureSupported: SpectacleCore.videoPlatform.audioCaptureSupported
             captureTimeRemaining: SpectacleCore.captureTimeRemaining
             captureProgress: SpectacleCore.captureProgress
             onCaptureRequested: SpectacleCore.takeNewScreenshot()

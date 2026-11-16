@@ -1,0 +1,20 @@
+Package: nkshot
+Version: @VERSION@
+Section: graphics
+Priority: optional
+Architecture: amd64
+Depends: libqt6core6 (>= 6.8), libqt6gui6 (>= 6.8), libqt6qml6, libqt6quick6,
+ libqt6quickcontrols2-6, libqt6dbus6, libqt6printsupport6, libqt6multimedia6,
+ libkf6coreaddons6, libkf6configcore6, libkf6i18n6, libkf6kio6,
+ libkf6windowsystem6, libkf6globalaccel6, libkf6notifications6,
+ libkpipewire6, libwayland-client0, libxcb1
+Recommends: tesseract-ocr
+Maintainer: NextKde <noreply@nextkde.org>
+Homepage: https://github.com/NextKde/NkShot
+Description: Screenshot and screen recording utility for KDE Plasma
+ NkShot captures the desktop, monitors, windows and rectangular regions,
+ annotates the result and records PipeWire screencasts.
+ .
+ Qt 6.8 or newer and KF6 6.13 or newer are required at build time. Recording
+ pause additionally needs KPipeWire 6.8 or newer and is left out of the user
+ interface when the installed KPipeWire is older.

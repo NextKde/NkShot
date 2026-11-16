@@ -7,9 +7,14 @@ set(SPECTACLE_VERSION ${PROJECT_VERSION})
 project(Spectacle VERSION ${SPECTACLE_VERSION})
 
 # minimum requirements
-set(PROJECT_DEP_VERSION "6.8.0")
-set(QT_MIN_VERSION "6.11.0")
-set(KF6_MIN_VERSION "6.30.0")
+# KPipeWire 6.8 is a hard floor: PipeWireRecord only gained the system-audio and
+# microphone API in 6.8, and recording cannot be built without those setters.
+# Qt 6.8 / KF6 6.13 is the floor imposed by the vendored KQuickImageEditor 0.7.
+# KPipeWire 6.4 has start()/stop(); 6.3 does not, so 6.4 is the absolute floor.
+# Audio capture needs 6.8 and is compiled in only when the API is present.
+set(PROJECT_DEP_VERSION "6.4.0")
+set(QT_MIN_VERSION "6.8.0")
+set(KF6_MIN_VERSION "6.13.0")
 
 find_package(ECM ${KF6_MIN_VERSION} REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
@@ -56,7 +61,17 @@ find_package(
         WaylandClient
         Multimedia
 )
-find_package(Qt6GuiPrivate ${QT_MIN_VERSION} REQUIRED NO_MODULE)
+# The X11 backend drives QX11Info::connection() and QX11Info::appRootWindow()
+# from Qt's private X11 header. Upstream Spectacle only asks for that private
+# package from Qt 6.10 on, so below that the X11 backend is not built and
+# NkShot runs through the Wayland backend only.
+if(WITH_X11 AND Qt6Gui_VERSION VERSION_LESS "6.10.0")
+    message(STATUS "WITH_X11 disabled: the X11 backend needs Qt >= 6.10 private X11 headers (Qt is ${Qt6Gui_VERSION})")
+    set(WITH_X11 OFF)
+endif()
+if(WITH_X11)
+    find_package(Qt6GuiPrivate ${QT_MIN_VERSION} REQUIRED NO_MODULE)
+endif()
 
 qt_policy(SET QTP0001 NEW)
 
@@ -86,19 +101,22 @@ find_package(Wayland REQUIRED COMPONENTS Client)
 find_package(PlasmaWaylandProtocols REQUIRED)
 find_package(LayerShellQt REQUIRED)
 find_package(KPipeWire ${PROJECT_DEP_VERSION} REQUIRED)
-# 084 intentionally requires the downstream A/V timeline-pause contract. The
-# upstream same-SONAME pause() only gates video and must never back this UI.
+# Recording pause needs PipeWireBaseEncodedStream::pause()/resume(), which first
+# appeared in KPipeWire 6.8. Older KPipeWire still builds: the pause control is
+# then left out of the recording UI instead of failing the build.
 include(CheckCXXSourceCompiles)
-set(_nkshot_required_libraries "${CMAKE_REQUIRED_LIBRARIES}")
+set(_nkshot_saved_libraries "${CMAKE_REQUIRED_LIBRARIES}")
 set(CMAKE_REQUIRED_LIBRARIES K::KPipeWireRecord)
-unset(NKSHOT_HAS_TIMELINE_PAUSE CACHE)
+unset(NKSHOT_HAS_RECORDING_PAUSE CACHE)
 check_cxx_source_compiles("#include <PipeWireRecord>
-int main() { PipeWireRecord recorder; return recorder.timelinePauseVersion() < 1; }" NKSHOT_HAS_TIMELINE_PAUSE)
-set(CMAKE_REQUIRED_LIBRARIES "${_nkshot_required_libraries}")
-unset(_nkshot_required_libraries)
-if(NOT NKSHOT_HAS_TIMELINE_PAUSE)
-    message(FATAL_ERROR "NkShot requires KPipeWire with the timeline-pause patch. Apply third_party/patches/kpipewire-initialize-failure.patch then kpipewire-timeline-pause.patch to the pinned source, rebuild the private dependency, and configure again. Upstream video-only pause is not supported.")
-endif()
+int main() { PipeWireRecord recorder; recorder.pause(); recorder.resume(); return 0; }" NKSHOT_HAS_RECORDING_PAUSE)
+# System-audio and microphone capture arrived with KPipeWire 6.8. Without them the
+# recording still works, it is simply silent and the audio controls stay hidden.
+unset(NKSHOT_HAS_AUDIO_CAPTURE CACHE)
+check_cxx_source_compiles("#include <PipeWireRecord>
+int main() { PipeWireRecord recorder; recorder.setRecordSystemAudio(true); recorder.setRecordMicrophone(true); return recorder.recordSystemAudio() ? 0 : 0; }" NKSHOT_HAS_AUDIO_CAPTURE)
+set(CMAKE_REQUIRED_LIBRARIES "${_nkshot_saved_libraries}")
+unset(_nkshot_saved_libraries)
 
 find_package(PkgConfig REQUIRED)
 
@@ -107,14 +125,10 @@ set_package_properties(KPipeWire PROPERTIES DESCRIPTION
     TYPE REQUIRED
 )
 
-ecm_find_qmlmodule(org.kde.kquickimageeditor)
-find_package(KQuickImageEditor 0.7 REQUIRED COMPONENTS)
-set_package_properties(KQuickImageEditor PROPERTIES
-    TYPE REQUIRED
-    DESCRIPTION "Simple image editor for QtQuick applications"
-    URL "https://invent.kde.org/libraries/kquickimageeditor/"
-    PURPOSE "Add image editing capability to the screenshots"
-)
+# KQuickImageEditor is vendored as a pinned source snapshot so the annotation
+# stack does not depend on whatever version a distribution happens to ship.
+# See third_party/kquickimageeditor/README.md and SOURCE.json.
+add_subdirectory(third_party/kquickimageeditor kquickimageeditor)
 
 pkg_check_modules(TESSERACT REQUIRED IMPORTED_TARGET tesseract)
 

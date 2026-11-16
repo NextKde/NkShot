@@ -1,0 +1,245 @@
+# Build release artefacts so users never compile NkShot themselves.
+#
+# Three jobs because the version floors in CMakeLists.txt (Qt 6.8, KF6 6.13,
+# KPipeWire 6.4) rule out older base images:
+#   deb       Debian sid      kde-plasma 6.7  (trixie ships kpipewire 6.3.6, too old)
+#   rpm       Fedora rawhide  kpipewire 6.8, Qt 6.12, KF6 6.32
+#   appimage  Debian sid      universal fallback, bundles Qt6 and KF6
+#
+# Every job runs ./install.sh check first: if the container is missing a
+# development package, the log names the component and the package to install
+# instead of failing somewhere inside the compiler output.
+name: Release packages
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version for untagged runs (for example 0.1.0~preview)
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version || '0.0.0~dev' }}
+
+jobs:
+  deb:
+    name: Debian package
+    runs-on: ubuntu-latest
+    container: debian:sid
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git curl ccache build-essential cmake ninja-build pkg-config \
+            extra-cmake-modules \
+            qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-wayland-dev qt6-multimedia-dev \
+            libkf6coreaddons-dev libkf6widgetsaddons-dev libkf6dbusaddons-dev \
+            libkf6notifications-dev libkf6config-dev libkf6i18n-dev libkf6kio-dev \
+            libkf6windowsystem-dev libkf6globalaccel-dev libkf6xmlgui-dev libkf6guiaddons-dev \
+            libkf6kirigami-dev libkf6statusnotifieritem-dev libkf6prison-dev libkf6crash-dev \
+            libwayland-dev plasma-wayland-protocols liblayershellqtinterface-dev \
+            libkpipewire-dev libhwy-dev libtesseract-dev \
+            libxcb1-dev libxcb-icccm4-dev libxcb-image0-dev libxcb-util0-dev \
+            libxcb-cursor-dev libxcb-randr0-dev
+
+      - name: Verify dependencies before compiling
+        run: ./install.sh check
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/ccache
+          key: ccache-deb-${{ github.sha }}
+          restore-keys: ccache-deb-
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DBUILD_TESTING=OFF -DNKSHOT_ENABLE_UI_CAPTURE=OFF \
+            -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib
+          cmake --build build --parallel 4
+
+      - name: Stage the install tree
+        run: DESTDIR="$PWD/stage" cmake --install build --strip
+
+      - name: Build the .deb
+        run: |
+          version="${APP_VERSION#v}"
+          root="$PWD/debroot"
+          mkdir -p "$root/DEBIAN" dist
+          cp -a stage/usr "$root/"
+          sed "s/@VERSION@/${version}/" packaging/debian/control.in > "$root/DEBIAN/control"
+          install -m 0755 packaging/debian/postinst.sh "$root/DEBIAN/postinst"
+          install -m 0755 packaging/debian/postrm.sh "$root/DEBIAN/postrm"
+          dpkg-deb --root-owner-group --build "$root" "dist/nkshot_${version}_amd64.deb"
+          dpkg-deb --info "dist/nkshot_${version}_amd64.deb"
+          dpkg-deb --contents "dist/nkshot_${version}_amd64.deb" | head -30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  rpm:
+    name: Fedora package
+    runs-on: ubuntu-latest
+    container: fedora:rawhide
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            git curl ccache gcc gcc-c++ make cmake ninja-build pkgconf-pkg-config rpm-build \
+            extra-cmake-modules \
+            qt6-qtbase-devel qt6-qtbase-private-devel qt6-qtdeclarative-devel \
+            qt6-qtwayland-devel qt6-qtmultimedia-devel \
+            kf6-kcoreaddons-devel kf6-kwidgetsaddons-devel kf6-kdbusaddons-devel \
+            kf6-knotifications-devel kf6-kconfig-devel kf6-ki18n-devel kf6-kio-devel \
+            kf6-kwindowsystem-devel kf6-kglobalaccel-devel kf6-kxmlgui-devel \
+            kf6-kguiaddons-devel kf6-kirigami-devel kf6-kstatusnotifieritem-devel \
+            kf6-prison-devel kf6-kcrash-devel \
+            wayland-devel plasma-wayland-protocols-devel layer-shell-qt-devel \
+            kpipewire-devel highway-devel tesseract-devel \
+            libxcb-devel libxcb-image-devel libxcb-util-devel \
+            libxcb-cursor-devel libxcb-randr-devel
+
+      - name: Verify dependencies before compiling
+        run: ./install.sh check
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/ccache
+          key: ccache-rpm-${{ github.sha }}
+          restore-keys: ccache-rpm-
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DBUILD_TESTING=OFF -DNKSHOT_ENABLE_UI_CAPTURE=OFF \
+            -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib
+          cmake --build build --parallel 4
+
+      - name: Stage the install tree
+        run: DESTDIR="$PWD/stage" cmake --install build --strip
+
+      - name: Build the .rpm
+        run: |
+          version="${APP_VERSION#v}"
+          mkdir -p dist rpmout
+          sed "s/@VERSION@/${version}/" packaging/rpm/nkshot.spec.in > nkshot.spec
+          rpmbuild -bb nkshot.spec \
+            --define "_topdir $PWD/rpmout" \
+            --define "_rpmdir $PWD/rpmout/RPMS" \
+            --define "stage_dir $PWD/stage"
+          find rpmout -name '*.rpm' -exec cp {} dist/ \;
+          rpm -qip dist/*.rpm
+          rpm -qlp dist/*.rpm | head -30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  appimage:
+    name: AppImage
+    runs-on: ubuntu-latest
+    container: debian:sid
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git curl file ccache build-essential cmake ninja-build pkg-config \
+            extra-cmake-modules \
+            qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-wayland-dev qt6-multimedia-dev \
+            libkf6coreaddons-dev libkf6widgetsaddons-dev libkf6dbusaddons-dev \
+            libkf6notifications-dev libkf6config-dev libkf6i18n-dev libkf6kio-dev \
+            libkf6windowsystem-dev libkf6globalaccel-dev libkf6xmlgui-dev libkf6guiaddons-dev \
+            libkf6kirigami-dev libkf6statusnotifieritem-dev libkf6prison-dev libkf6crash-dev \
+            libwayland-dev plasma-wayland-protocols liblayershellqtinterface-dev \
+            libkpipewire-dev libhwy-dev libtesseract-dev \
+            libxcb1-dev libxcb-icccm4-dev libxcb-image0-dev libxcb-util0-dev \
+            libxcb-cursor-dev libxcb-randr0-dev
+
+      - name: Verify dependencies before compiling
+        run: ./install.sh check
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/ccache
+          key: ccache-appimage-${{ github.sha }}
+          restore-keys: ccache-appimage-
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DBUILD_TESTING=OFF -DNKSHOT_ENABLE_UI_CAPTURE=OFF \
+            -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib
+          cmake --build build --parallel 4
+
+      - name: Assemble the AppDir
+        run: |
+          mkdir -p AppDir
+          DESTDIR="$PWD/AppDir" cmake --install build --strip
+          # linuxdeploy expects the metadata at the AppDir root.
+          cp AppDir/usr/share/applications/org.nextkde.nkshot.desktop AppDir/
+          cp AppDir/usr/share/icons/hicolor/scalable/apps/nkshot.svg AppDir/
+
+      - name: Bundle Qt6 and KF6 with linuxdeploy
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          OUTPUT: nkshot-x86_64.AppImage
+        run: |
+          curl -fsSL -o linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x linuxdeploy linuxdeploy-plugin-qt appimagetool
+          ./linuxdeploy --appdir AppDir --plugin qt --output appimage
+          mkdir -p dist
+          mv nkshot-x86_64.AppImage dist/
+          # The bundled binary must carry its own Qt/KF6 copies; fail loudly if not.
+          ./dist/nkshot-x86_64.AppImage --appimage-extract >/dev/null
+          test -d squashfs-root/usr/lib/x86_64-linux-gnu || test -d squashfs-root/usr/lib
+          rm -rf squashfs-root
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  publish:
+    name: Attach artefacts to the release
+    needs: [deb, rpm, appimage]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -143,8 +143,12 @@ MouseArea {
         rightPadding: leftPadding
     }
 
-    component Overlay: Rectangle {
-        color: Settings.useLightMaskColor ? "white" : "black"
+    Shape {
+        id: selectionOverlay
+        anchors.fill: parent
+        // Clip the full selection path at screen edges, without rounding each screen's intersection.
+        clip: true
+        preferredRendererType: Shape.CurveRenderer
         opacity: if (SpectacleCore.videoPlatform.isRecording
             || (annotationsLoader.visible
                 && SelectionEditor.selection.empty
@@ -163,45 +167,32 @@ MouseArea {
                 easing.type: Easing.OutCubic
             }
         }
-    }
-    Overlay { // top / full overlay when nothing selected
-        id: topOverlay
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: selectionRectangle.visible ? selectionRectangle.top : parent.bottom
-    }
-    Overlay { // bottom
-        id: bottomOverlay
-        anchors.left: parent.left
-        anchors.top: selectionRectangle.visible ? selectionRectangle.bottom : undefined
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        visible: selectionRectangle.visible && height > 0
-    }
-    Overlay { // left
-        anchors {
-            left: topOverlay.left
-            top: topOverlay.bottom
-            right: selectionRectangle.visible ? selectionRectangle.left : undefined
-            bottom: bottomOverlay.top
+        ShapePath {
+            strokeWidth: -1
+            fillColor: Settings.useLightMaskColor ? "white" : "black"
+            fillRule: ShapePath.OddEvenFill
+            PathSvg {
+                path: {
+                    const outline = selectionRectangle
+                    const outer = outline.rectanglePath(0, 0, selectionOverlay.width, selectionOverlay.height)
+                    if (!outline.visible) {
+                        return outer
+                    }
+                    // Match the outline's inset and radius clamp, including very small selections.
+                    const inset = outline.strokeWidth / 2
+                    return outer + outline.roundedRectanglePath(outline.x + inset, outline.y + inset,
+                                                               outline.width - outline.strokeWidth,
+                                                               outline.height - outline.strokeWidth,
+                                                               outline.cornerRadius)
+                }
+            }
         }
-        visible: selectionRectangle.visible && height > 0 && width > 0
-    }
-    Overlay { // right
-        anchors {
-            left: selectionRectangle.visible ? selectionRectangle.right : undefined
-            top: topOverlay.bottom
-            right: topOverlay.right
-            bottom: bottomOverlay.top
-        }
-        visible: selectionRectangle.visible && height > 0 && width > 0
     }
 
     AnimatedLoader {
         anchors.centerIn: parent
         visible: opacity > 0 && !SpectacleCore.videoPlatform.isRecording
-        state: topOverlay.opacity === 0.25 ? "active" : "inactive"
+        state: selectionOverlay.opacity === 0.25 ? "active" : "inactive"
         sourceComponent: Kirigami.Heading {
             id: cropToolHelp
             horizontalAlignment: Text.AlignHCenter
@@ -232,7 +223,8 @@ MouseArea {
             return SpectacleCore.videoPlatform.isRecording ? dprCeil(value + (strokeWidth + 1 / contextWindow.devicePixelRatio)) : dprRound(value + strokeWidth)
         }
         readonly property color frameColor: Settings.useLightMaskColor ? "black" : "white"
-        cornerRadius: dprRound(4)
+        // Rounded arcs can enter the rectangular recording despite the outward stroke offset.
+        cornerRadius: SpectacleCore.videoPlatform.isRecording ? 0 : dprRound(4)
         dashSvgPath: svgPath
         visible: !SelectionEditor.selection.empty
             && Geometry.rectIntersects(Qt.rect(x,y,width,height), Qt.rect(0,0,parent.width, parent.height))

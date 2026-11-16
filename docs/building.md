@@ -1,80 +1,60 @@
 # Building NkShot
 
-## Verified dependency versions
+## Dependency floor
 
-The first complete development build used:
+Everything NkShot needs comes from distribution packages. The repository carries
+no downstream patch of KPipeWire and none of KQuickImageEditor.
 
-- GCC 16.2, CMake 4.4.5 and Ninja.
-- Qt 6.11.2, including Base/Declarative private headers, Wayland, Multimedia,
-  QuickDialogs2 and ShaderTools, from official Debian sid packages.
-- KDE Frameworks / Extra CMake Modules 6.30.0, plus the development packages listed
-  by the top-level CMake file and their normal dependencies.
-- LayerShellQt 6.7.4, Wayland / Plasma Wayland protocols, XCB, Tesseract 5.5.4.
-- KQuickImageEditor v0.7.0.1 from KDE, commit
-  `ac7568044defc89c494b0d6edb60073cb0ad8b25`, built with Highway 1.3.0.
-- KPipeWire v6.8.3 from KDE, commit
-  `f30b39c53092673d136660c8deaf24d3935723eb`, built with official FFmpeg/Mesa
-  development dependencies.
+| Requirement | Minimum | Why |
+|---|---|---|
+| Qt | 6.8 | Vendored KQuickImageEditor 0.7 under `third_party/` |
+| KF6 / Extra CMake Modules | 6.13 | Same |
+| KPipeWire | 6.4 | `start()`/`stop()`; 6.3 does not have them |
+| Google Highway | 1.3 | Vendored KQuickImageEditor |
+| Tesseract | any | OCR |
+| C++ compiler | C++23 | Vendored KQuickImageEditor (GCC 13+, Clang 17+) |
 
-Sources: https://deb.debian.org/debian,
-https://github.com/KDE/kquickimageeditor and https://github.com/KDE/kpipewire.
-The source libraries were installed in a separate development prefix. No host
-system upgrade or screenshot-permission bypass was used.
+KQuickImageEditor is not a system dependency: `third_party/kquickimageeditor/`
+holds a pinned v0.7.0 snapshot, so distributions that only ship 0.5.x or 0.6.x
+still build NkShot.
 
-**KPipeWire 6.7 is not sufficient.** Spectacle 6.8 uses its new microphone and
-system-audio API. CMake now rejects an older version instead of letting configure
-succeed and failing much later in compilation. Do not remove audio functionality
-to work around this requirement.
+Two capabilities are compiled in only when the installed KPipeWire offers them.
+When it does not, the matching control is absent from the interface instead of
+being present and broken:
+
+| Capability | Needs | Without it |
+|---|---|---|
+| Recording pause | KPipeWire 6.8, `pause()`/`resume()` | No pause control |
+| Audio capture | KPipeWire 6.8, `recordSystemAudio()`/`recordMicrophone()` | Recording is silent and the audio rows are hidden |
+
+The X11 backend additionally needs Qt 6.10 private X11 headers. Below Qt 6.10 the
+build is Wayland only, and configure says so.
+
+CMake decides both capabilities with `check_cxx_source_compiles` rather than with
+a version number, so a distribution backport is detected correctly.
 
 ## Build sequence
 
-In an environment with the matching development packages installed, first build
-KQuickImageEditor and KPipeWire into your chosen `PREFIX`. Before building the
-pinned KQuickImageEditor v0.7.0.1, apply the reviewed one-line repaint fix:
-
 ```sh
-git -C "$KQUICKIMAGEEDITOR_SOURCE" apply "$NKSHOT_SOURCE/third_party/patches/kquickimageeditor-shadow-repaint.patch"
-```
-
-This fixes a reproduced incremental-shadow boundary difference. The patch targets
-commit `ac7568044defc89c494b0d6edb60073cb0ad8b25`; do not blindly reapply it to a
-newer upstream version. `shadow_repaint_test` detects whether the linked library
-still exhibits the issue.
-
-Before building the pinned KPipeWire 6.8.3 source, apply its initialization-failure
-fix as well:
-
-```sh
-git -C "$KPIPEWIRE_SOURCE" apply --check "$NKSHOT_SOURCE/third_party/patches/kpipewire-initialize-failure.patch"
-git -C "$KPIPEWIRE_SOURCE" apply "$NKSHOT_SOURCE/third_party/patches/kpipewire-initialize-failure.patch"
-```
-
-The patch targets commit `f30b39c53092673d136660c8deaf24d3935723eb`. Its companion
-JSON records original source hashes. It preserves the normal cleanup path after
-stream initialization fails and connects completion/error handlers before starting
-asynchronous initialization. Build and install that patched dependency into the
-same prefix before configuring NkShot. Do not blindly apply it to a newer version
-or modify a distribution's installed binaries. This is a local downstream patch,
-not an upstream-accepted change. `recording_initialize_failure_test` directly
-checks the linked library and intentionally fails/times out against the affected
-unpatched implementation. Then build NkShot:
-
-```sh
-cmake -S . -B build -G Ninja \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-  -DBUILD_TESTING=ON
+./install.sh check                 # lists anything missing, with package names
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF -DNKSHOT_ENABLE_UI_CAPTURE=OFF
 cmake --build build --parallel 4
-QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
-cmake --install build
-python3 tests/nkshot/test_identity.py -v
+DESTDIR="$PWD/stage" cmake --install build --prefix /usr --strip
 ```
 
-Set `QML2_IMPORT_PATH` to the prefix's installed QML directory when launching if
-it is not a standard system prefix. For this build that was `lib/x86_64-linux-gnu/qml`.
-Also include the prefix's `share` directory in `XDG_DATA_DIRS`, and ensure its
-libraries are resolvable by the runtime linker. Do not replace the system
-Spectacle installation while testing.
+No private prefix, no `CMAKE_PREFIX_PATH` and no `LD_LIBRARY_PATH` are needed: a
+system that satisfies the table above builds against its own libraries.
+`install.sh` runs the same build and installs into a versioned slot under
+`~/.local/share/nkshot-app/`.
+
+Keep `--parallel` bounded. An unbounded `--parallel` on a 16+ thread machine can
+exceed available memory and get the build, or the surrounding desktop session,
+killed by the OOM killer.
+
+Release artefacts (.deb, .rpm, AppImage) are produced by
+`.github/workflows/release.yml`, which builds inside Debian sid and Fedora rawhide
+containers. End users are expected to install those instead of compiling.
 
 ## Validation boundary
 
@@ -259,17 +239,22 @@ compact flags apply. This drives the actual checkbox, periodic requests, pause,
 unchanged-frame skip, failed-frame retry and Finish during an outstanding request;
 it does not replace native KDE acquisition acceptance.
 
-## 084 recording pause dependency
+## 084 recording pause and audio capability
 
-Apply `kpipewire-initialize-failure.patch` then
-`kpipewire-timeline-pause.patch` to pinned KPipeWire
-`f30b39c53092673d136660c8deaf24d3935723eb`; retain both patches. Rebuild
-the private dependency before configuring NkShot. Stock headers fail the CMake
-compile/link capability check; a stock same-SONAME runtime fails symbol resolution
-rather than silently using video-only pause. See [contract](recording-pause.md) and
-[`tests/kpipewire/README.md`](../tests/kpipewire/README.md) for the standalone real
-encoder/muxer regression fixture and exact isolated commands. No global library
-replacement is required. Native KDE validation remains separate.
+No downstream patch is required or carried. KPipeWire 6.8 introduced
+`pause()`/`resume()` together with the system-audio and microphone API; earlier
+releases simply do not have them.
+
+CMake probes both at configure time and NkShot degrades accordingly:
+
+- Without `pause()`/`resume()`, `RecordingBackend` reports `supportsPause() ==
+  false` and no pause control is created.
+- Without the audio API, `supportsAudioCapture() == false`, the two audio rows are
+  hidden in the recording settings and the recording carries no audio track.
+- Upstream `pause()` only gates video, so pause is additionally disabled while any
+  audio source is enabled, and the reason is shown in the tooltip.
+
+See the [pause contract](recording-pause.md).
 
 ## 085 local media import checks
 

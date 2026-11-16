@@ -12,19 +12,65 @@ public:
     State state() const override { return m_native.state(); }
     QList<Encoder> suggestedEncoders() const override { return m_native.suggestedEncoders(); }
     QString output() const override { return m_native.output(); }
+#ifdef NKSHOT_HAS_AUDIO_CAPTURE
     bool recordSystemAudio() const override { return m_native.recordSystemAudio(); }
     bool recordMicrophone() const override { return m_native.recordMicrophone(); }
+#else
+    bool recordSystemAudio() const override
+    {
+        return false;
+    }
+    bool recordMicrophone() const override
+    {
+        return false;
+    }
+#endif
     void setOutput(const QString &value) override { m_native.setOutput(value); }
     void setEncoder(Encoder value) override { m_native.setEncoder(value); }
+#ifdef NKSHOT_HAS_AUDIO_CAPTURE
     void setRecordSystemAudio(bool value) override { m_native.setRecordSystemAudio(value); }
     void setRecordMicrophone(bool value) override { m_native.setRecordMicrophone(value); }
+#else
+    void setRecordSystemAudio(bool) override
+    {
+    }
+    void setRecordMicrophone(bool) override
+    {
+    }
+#endif
     void setNodeId(uint value) override { m_native.setNodeId(value); }
     void setMaxPendingFrames(int value) override { m_native.setMaxPendingFrames(value); }
     void start() override { m_native.start(); }
     void stop() override { m_native.stop(); }
-    bool supportsPause() const override { return m_native.timelinePauseVersion() >= 1; }
+#ifndef NKSHOT_HAS_AUDIO_CAPTURE
+    bool supportsAudioCapture() const override
+    {
+        return false;
+    }
+#endif
+#ifdef NKSHOT_HAS_RECORDING_PAUSE
+    // Upstream pause() only gates video, so pausing is truthful only while no audio is
+    // captured. With audio enabled the sound would keep running and the file would drift.
+    bool supportsPause() const override
+    {
+        return !m_native.recordSystemAudio() && !m_native.recordMicrophone();
+    }
     void pause() override { m_native.pause(); }
     void resume() override { m_native.resume(); }
+#else
+    // KPipeWire older than 6.8 has no pause()/resume(). Recording still works; the
+    // pause control is simply absent from the recording UI.
+    bool supportsPause() const override
+    {
+        return false;
+    }
+    void pause() override
+    {
+    }
+    void resume() override
+    {
+    }
+#endif
 private:
     PipeWireRecord m_native;
 };

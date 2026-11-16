@@ -242,6 +242,7 @@ void VideoPlatformWayland::initialize()
     Q_EMIT supportedRecordingModesChanged();
     Q_EMIT supportedFormatsChanged();
     Q_EMIT pauseSupportedChanged();
+    Q_EMIT audioCaptureSupportedChanged();
 }
 
 VideoPlatform::RecordingModes VideoPlatformWayland::supportedRecordingModes() const
@@ -587,6 +588,10 @@ void VideoPlatformWayland::cancelPendingRecording()
 }
 
 bool VideoPlatformWayland::supportsPause() const { return m_recorder && m_recorder->supportsPause(); }
+bool VideoPlatformWayland::supportsAudioCapture() const
+{
+    return m_recorder && m_recorder->supportsAudioCapture();
+}
 void VideoPlatformWayland::clearPausePending()
 {
     if(!m_pausePending)return;

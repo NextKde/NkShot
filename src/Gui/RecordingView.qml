@@ -307,8 +307,9 @@ FocusScope {
                     objectName: "nkshotRecordingPause"
                     Layout.fillWidth: true
                     implicitHeight: 44
-                    visible: SpectacleCore.videoPlatform.pauseSupported
                     enabled: SpectacleCore.videoPlatform.pauseSupported && !SpectacleCore.videoPlatform.pausePending
+                    QQC.ToolTip.visible: pauseCapture.hovered && !SpectacleCore.videoPlatform.pauseSupported
+                    QQC.ToolTip.text: i18nc("@info", "Pausing needs audio recording turned off: only the video stream is paused, so recorded sound would fall out of sync.")
                     text: SpectacleCore.videoPlatform.pausePending
                         ? (SpectacleCore.videoPlatform.isPaused ? i18nc("@action", "Resuming…") : i18nc("@action", "Pausing…"))
                         : (SpectacleCore.videoPlatform.isPaused ? i18nc("@action", "Resume") : i18nc("@action", "Pause"))

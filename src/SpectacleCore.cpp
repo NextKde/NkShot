@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  SPDX-FileCopyrightText: 2019 David Redondo <kde@david-redondo.de>
  *  SPDX-FileCopyrightText: 2015 Boudhayan Gupta <bgupta@kde.org>
  *  SPDX-FileCopyrightText: 2025 Jhair Paris <dev@jhairparis.com>
@@ -248,13 +248,13 @@ SpectacleCore::SpectacleCore(QObject *parent)
         setExportImage(image);
         ExportManager::instance()->updateTimestamp();
         m_returnToViewer = true;
+        setVideoMode(false);
         showViewerIfGuiMode();
         SpectacleWindow::setTitleForAll(SpectacleWindow::Unsaved);
         if (m_startMode != StartMode::Background) {
             ExportManager::instance()->scanQRCode();
         }
         ExportManager::instance()->exportImage(autoExportActions(), outputUrl());
-        setVideoMode(false);
     });
     connect(imagePlatform, &ImagePlatform::newCroppableScreenshotTaken, this, [this, finishGrab](const QImage &image) {
         const auto grabCompletion = finishGrab();
@@ -1265,7 +1265,7 @@ void SpectacleCore::showViewerIfGuiMode(bool minimized)
         return;
     }
     initViewerWindow(ViewerWindow::Viewer);
-    if (!m_videoMode && m_cliOptions[CommandLineOptions::EditExisting]) {
+    if (!m_videoMode) {
         ViewerWindow::instance()->setAnnotating(true);
     }
     if (minimized) {
@@ -1847,6 +1847,13 @@ void SpectacleCore::updateRecordingPauseTray()
     if(!s_systemTrayIcon || !m_recordingPauseAction)return;
     m_recordingPauseAction->setVisible(m_videoPlatform->isRecording());
     m_recordingPauseAction->setEnabled(m_videoPlatform->supportsPause() && !m_videoPlatform->pausePending());
+    if (!m_videoPlatform->supportsPause()) {
+        m_recordingPauseAction->setText(i18nc("@action", "Pause recording (needs audio off)"));
+        m_recordingPauseAction->setToolTip(
+            i18nc("@info", "Pausing needs audio recording turned off: only the video stream is paused, so recorded sound would fall out of sync."));
+        return;
+    }
+    m_recordingPauseAction->setToolTip(QString());
     m_recordingPauseAction->setText(m_videoPlatform->pausePending()
         ? (m_videoPlatform->isPaused() ? i18nc("@action", "Resuming…") : i18nc("@action", "Pausing…"))
         : (m_videoPlatform->isPaused() ? i18nc("@action", "Resume recording") : i18nc("@action", "Pause recording")));

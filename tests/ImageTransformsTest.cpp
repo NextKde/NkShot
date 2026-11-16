@@ -55,6 +55,118 @@ private Q_SLOTS:
         options.style = PresentationStyle::Light;
         QVERIFY(composePresentation(source, options).pixelColor(0,0).lightness() > 200);
     }
+    void framesPreserveContentAndIncludeChrome()
+    {
+        QImage source(800, 160, QImage::Format_RGBA8888);
+        for (int y = 0; y < source.height(); ++y)
+            for (int x = 0; x < source.width(); ++x)
+                source.setPixelColor(x, y, QColor(x % 256, y % 256, (x + y) % 256));
+        source.setDevicePixelRatio(2);
+        source.setColorSpace(QColorSpace::SRgb);
+        const auto original = source.copy();
+        for (auto frame : {PresentationFrame::MacOS, PresentationFrame::Browser}) {
+            PresentationOptions options{24, PresentationStyle::Light, {}, false, frame, QStringLiteral("Example 中文")};
+            const int header = frame == PresentationFrame::MacOS ? 42 : 52;
+            const auto output = composePresentation(source, options);
+            QCOMPARE(output.size(), QSize(848, 208 + header));
+            QCOMPARE(presentationSize(source.size(), options), output.size());
+            QCOMPARE(output.devicePixelRatio(), 2.);
+            for (int y = 0; y < source.height(); ++y)
+                for (int x = 0; x < source.width(); ++x)
+                    QCOMPARE(output.pixelColor(x + 24, y + 24 + header), source.pixelColor(x, y));
+            QVERIFY(output.pixelColor(44, 24 + header / 2).red() > 200);
+            QVERIFY(output.pixelColor(44, 24 + header / 2).green() < 140);
+            options.watermark = QStringLiteral("Shot by NkShot");
+            QCOMPARE(composePresentation(source, options).height(), output.height() + 36);
+            options.watermark.clear();
+            options.frameTitle.clear();
+            QVERIFY(composePresentation(source, options) != output);
+            options.padding = 0;
+            options.rounded = true;
+            QVERIFY(!composePresentation(source, options).isNull());
+            QImage tiny(1, 1, QImage::Format_RGB32);
+            tiny.fill(Qt::blue);
+            QVERIFY(!composePresentation(tiny, options).isNull());
+        }
+        QCOMPARE(source, original);
+        PresentationOptions options{0, PresentationStyle::Dark, {}, false, PresentationFrame::MacOS, {}};
+        QImage tall(1, 32000, QImage::Format_RGB32);
+        tall.fill(Qt::white);
+        QVERIFY(composePresentation(tall, options).isNull());
+        QVERIFY(composePresentation(source, options, 800 * 160).isNull());
+        options.frame = PresentationFrame(7);
+        QVERIFY(composePresentation(source, options).isNull());
+        options.frame = PresentationFrame(-1);
+        QVERIFY(composePresentation(source, options).isNull());
+        options.frame = PresentationFrame::Browser;
+        options.frameTitle = QString(121, QLatin1Char('a'));
+        QVERIFY(composePresentation(source, options).isNull());
+    }
+    void deviceFramesKeepAllCornersAndAspectRatio()
+    {
+        const QColor colors[] = {QColor("#f92135"), QColor("#21f935"), QColor("#2135f9"), QColor("#f9df21")};
+        for (auto size : {QSize(320, 200), QSize(180, 320), QSize(800, 80), QSize(80, 800)}) {
+            QImage source(size, QImage::Format_RGB32);
+            source.fill(QColor("#ed21f9"));
+            for (int y = 0; y < 16; ++y)
+                for (int x = 0; x < 16; ++x) {
+                    source.setPixelColor(x, y, colors[0]);
+                    source.setPixelColor(size.width() - 1 - x, y, colors[1]);
+                    source.setPixelColor(x, size.height() - 1 - y, colors[2]);
+                    source.setPixelColor(size.width() - 1 - x, size.height() - 1 - y, colors[3]);
+                }
+            source.setDevicePixelRatio(2);
+            source.setColorSpace(QColorSpace::SRgb);
+            const auto original = source.copy();
+            for (auto frame : {PresentationFrame::MacDisplay, PresentationFrame::IPad, PresentationFrame::Surface, PresentationFrame::VisionPro}) {
+                PresentationOptions options{24, PresentationStyle::Aurora, {}, true, frame, {}};
+                const auto output = composePresentation(source, options);
+                QVERIFY(!output.isNull());
+                QCOMPARE(output.size(), presentationSize(size, options));
+                QCOMPARE(output.devicePixelRatio(), 2.);
+                QCOMPARE(output.colorSpace(), QColorSpace(QColorSpace::SRgb));
+                QPointF centers[4];
+                int counts[4] = {};
+                for (int y = 0; y < output.height(); ++y)
+                    for (int x = 0; x < output.width(); ++x) {
+                        const auto pixel = output.pixelColor(x, y);
+                        for (int i = 0; i < 4; ++i)
+                            if (pixel == colors[i]) {
+                                centers[i] += QPointF(x, y);
+                                ++counts[i];
+                            }
+                    }
+                for (int i = 0; i < 4; ++i) {
+                    QVERIFY(counts[i] > 0);
+                    centers[i] /= counts[i];
+                }
+                QVERIFY(centers[0].x() < centers[1].x());
+                QVERIFY(centers[0].y() < centers[2].y());
+                const qreal xScale = (centers[1].x() - centers[0].x()) / (size.width() - 16);
+                const qreal yScale = (centers[2].y() - centers[0].y()) / (size.height() - 16);
+                QVERIFY(qAbs(xScale - yScale) < .025);
+                QVERIFY(xScale > .98);
+                const auto preview = previewPresentation(source, options, 300);
+                QCOMPARE(qMax(preview.width(), preview.height()), 300);
+                options.watermark = QStringLiteral("Shot by NkShot");
+                QCOMPARE(presentationSize(size, options).height(), output.height() + 36);
+                options.watermark.clear();
+                options.rounded = false;
+                QCOMPARE(composePresentation(source, options), output);
+                if (frame == PresentationFrame::IPad || frame == PresentationFrame::Surface)
+                    QCOMPARE(output.height() > output.width(), size.height() > size.width());
+                QVERIFY(composePresentation(source, options, qint64(output.width()) * output.height() - 1).isNull());
+            }
+            QCOMPARE(source, original);
+        }
+        QImage tiny(1, 1, QImage::Format_RGB32);
+        tiny.fill(Qt::green);
+        for (int frame = 3; frame <= 6; ++frame) {
+            PresentationOptions options{0, PresentationStyle::Dark, {}, true, PresentationFrame(frame), {}};
+            QVERIFY(!composePresentation(tiny, options).isNull());
+            QVERIFY(presentationSize(QSize(8192, 32000), options).isEmpty());
+        }
+    }
     void sharingCanvasCompositesTransparency() {
         QImage source(100,60,QImage::Format_RGBA8888); source.fill(Qt::transparent);
         const auto result = composePresentation(source, {0, PresentationStyle::Light, {}, false});

@@ -1,0 +1,59 @@
+Name:           nkshot
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        Screenshot and screen recording utility for KDE Plasma
+License:        GPL-3.0-or-later
+URL:            https://github.com/NextKde/NkShot
+Requires:       qt6-qtbase >= 6.8
+Requires:       qt6-qtdeclarative
+Requires:       qt6-qtwayland
+Requires:       qt6-qtmultimedia
+Requires:       kf6-kcoreaddons
+Requires:       kf6-kconfig
+Requires:       kf6-ki18n
+Requires:       kf6-kio
+Requires:       kf6-kwindowsystem
+Requires:       kf6-kglobalaccel
+Requires:       kf6-knotifications
+Requires:       kpipewire
+Recommends:     tesseract
+%define         debug_package %{nil}
+%define         __strip /bin/true
+
+%description
+NkShot captures the desktop, monitors, windows and rectangular regions,
+annotates the result and records PipeWire screencasts.
+
+Qt 6.8 or newer and KF6 6.13 or newer are required at build time. Recording
+pause additionally needs KPipeWire 6.8 or newer and is left out of the user
+interface when the installed KPipeWire is older.
+
+%prep
+
+%build
+
+%install
+cp -a %{stage_dir}/. %{buildroot}/
+
+%files
+%{_bindir}/nkshot
+%{_datadir}/applications/org.nextkde.nkshot.desktop
+%{_datadir}/icons/hicolor/scalable/apps/nkshot.svg
+%{_datadir}/knotifications6/nkshot.notifyrc
+%{_datadir}/config.kcfg/nkshot.kcfg
+%{_datadir}/metainfo/org.nextkde.nkshot.appdata.xml
+%{_datadir}/dbus-1/services/org.nextkde.nkshot.service
+%{_datadir}/dbus-1/interfaces/org.nextkde.nkshot.xml
+%{_datadir}/kglobalaccel/org.nextkde.nkshot.desktop
+%{_datadir}/locale/*/LC_MESSAGES/nkshot.mo
+%{_datadir}/licenses/kos-icons/*
+/usr/lib/systemd/user/app-org.nextkde.nkshot.service
+
+%post
+update-desktop-database -q %{_datadir}/applications >/dev/null 2>&1 || :
+gtk-update-icon-cache -q -t -f %{_datadir}/icons/hicolor >/dev/null 2>&1 || :
+
+%postun
+update-desktop-database -q %{_datadir}/applications >/dev/null 2>&1 || :
+
+%changelog

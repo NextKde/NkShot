@@ -148,14 +148,20 @@ has finished. Capture pause/resume was not implemented at that stage; see the 08
 
 ## Patched dependency initialization failure (065)
 
+> **Status: historical.** NkShot no longer carries this downstream patch. The build
+> uses stock distribution KPipeWire, so the failure mode described below is once
+> again a plain upstream limitation. The section is kept as the record of how it was
+> reproduced and of what stock KPipeWire still does not do.
+
+
 The specific null-source termination gap above is now fixed in the isolated
 **patched** KPipeWire build. The unpatched public `PipeWireRecord` probe produced
 `Failed to create PipeWire context`, emitted no error/completion, then hung during
 destruction after Stop; the external eight-second watchdog exited 124. Running
 the same probe against the patched library emitted error and Idle and exited 0.
 
-Both original, unpatched files byte-match the pinned upstream commit recorded in
-`third_party/patches/kpipewire-initialize-failure.json`. The inspected master branch
+Both original, unpatched files byte-matched the pinned upstream commit that the
+now-removed downstream patch used to record. The inspected master branch
 also retained the failing initialization branch at review time. The downstream
 patch keeps the failed source alive for normal producer-thread cleanup, emits the
 error, and queues initialization only after handlers are connected. Normal cleanup
@@ -265,10 +271,14 @@ covered by the controlled adapter, not a new native successful-capture test. Reg
 native focus or clean first-frame capture. Rendering must drain without forced
 frame loss; only actual Recording starts recording timing/notifications/animation.
 
-## 084 downstream recording pause
+## 084 recording pause
 
-[Recording pause and resume](recording-pause.md) documents the new pinned dependency
-patch, strong capability gate, acknowledged controls and compressed A/V timeline.
-The upstream audit above remains valid for an unpatched library, which is rejected.
+> **Status: historical.** The A/V timeline-pause patch described here was dropped
+> together with the rest of the downstream dependency patching. Pause is now a
+> compile-time capability: present on KPipeWire 6.8 and newer, absent below that, and
+> additionally disabled while audio capture is on.
+
+[Recording pause and resume](recording-pause.md) documents the capability gate,
+acknowledged controls and the resulting behaviour on a stock library.
 Synthetic production encoding is distinct from native capture acceptance: actual
 KWin, devices, GPU encoders and static-target resume still require validation.

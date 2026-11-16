@@ -56,10 +56,10 @@ QUrl PresentationPreview::imageSource() const
 {
     return m_ready ? QUrl(QStringLiteral("image://%1/%2").arg(m_providerId).arg(m_revision)) : QUrl();
 }
-void PresentationPreview::update(int padding, int style, const QString &watermark, bool rounded)
+void PresentationPreview::update(int padding, int style, const QString &watermark, bool rounded, int frame, const QString &frameTitle)
 {
     if (m_source.isNull() || !m_engine) return;
-    m_options = {padding, NkShot::Imaging::PresentationStyle(style), watermark, rounded};
+    m_options = {padding, NkShot::Imaging::PresentationStyle(style), watermark, rounded, NkShot::Imaging::PresentationFrame(frame), frameTitle};
     const auto preview = NkShot::Imaging::previewPresentation(m_source, m_options);
     m_ready = !preview.isNull();
     m_error = m_ready ? QString() : i18nc("@info", "This copy cannot be previewed. Reduce padding or use a smaller image.");

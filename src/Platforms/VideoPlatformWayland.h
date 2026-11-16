@@ -43,6 +43,7 @@ public:
     void pauseRecording() override;
     void resumeRecording() override;
     bool supportsPause() const override;
+    bool supportsAudioCapture() const override;
     bool pausePending() const override { return m_pausePending; }
     void cancelPendingRecording() override;
     bool readyForRecording() const override;

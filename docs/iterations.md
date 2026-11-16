@@ -230,6 +230,11 @@ flush path is implemented but not claimed as a full QML interaction regression.
 
 ## 012 — Fix reproduced upstream shadow repaint clipping
 
+> **Superseded.** The one-line KQuickImageEditor repaint patch is no longer carried:
+> NkShot vendors an unmodified v0.7.0 snapshot under `third_party/kquickimageeditor/`.
+> The clipping discrepancy therefore still exists in the vendored copy.
+
+
 Isolated reproduction confirmed the prior edge discrepancy exists in upstream
 AnnotationDocument without any NkShot viewport or mouse input. Incremental repaint
 expanded only left/top bounds, clipping faint right/bottom shadow pixels. Apply

@@ -15,18 +15,30 @@ private Q_SLOTS:
     void immutableSessionAndOutputAgreement() {
         QQmlEngine engine;
         PresentationPreview model(&engine);
-        QImage source(640,360,QImage::Format_RGBA8888);source.fill(QColor(100,70,180,170));
+        QImage source(320, 180, QImage::Format_RGBA8888);
+        source.fill(QColor(100, 70, 180, 170));
         source.setColorSpace(QColorSpace::DisplayP3);source.setDevicePixelRatio(2);
         const auto original=source.copy();
         QVERIFY(model.begin(source));QVERIFY(!model.ready());QCOMPARE(model.sourceSize(),source.size());
         source.fill(Qt::red);
-        for(int style=0;style<3;++style)for(bool rounded:{false,true}) {
-            model.update(48,style,QStringLiteral("Preview 中文"),rounded);
-            QVERIFY(model.ready());QVERIFY(model.error().isEmpty());
-            auto expected=NkShot::Imaging::composePresentation(original,{48,NkShot::Imaging::PresentationStyle(style),QStringLiteral("Preview 中文"),rounded});
-            expected.setDevicePixelRatio(1);
-            QCOMPARE(preview(engine,model),expected);
-        }
+        for (int style = 0; style < 3; ++style)
+            for (bool rounded : {false, true})
+                for (int frame = 0; frame < 7; ++frame) {
+                    model.update(48, style, QStringLiteral("Preview 中文"), rounded, frame, QStringLiteral("example.com"));
+                    QVERIFY(model.ready());
+                    QVERIFY(model.error().isEmpty());
+                    auto expected = NkShot::Imaging::composePresentation(original,
+                                                                         {48,
+                                                                          NkShot::Imaging::PresentationStyle(style),
+                                                                          QStringLiteral("Preview 中文"),
+                                                                          rounded,
+                                                                          NkShot::Imaging::PresentationFrame(frame),
+                                                                          QStringLiteral("example.com")});
+                    QCOMPARE(model.outputSize(), expected.size());
+                    QCOMPARE(model.options().frame, NkShot::Imaging::PresentationFrame(frame));
+                    expected.setDevicePixelRatio(1);
+                    QCOMPARE(preview(engine, model), expected);
+                }
         const auto first=model.imageSource();
         model.update(241,2,{},true);QVERIFY(!model.ready());QVERIFY(!model.error().isEmpty());QVERIFY(model.imageSource().isEmpty());
         model.update(0,0,{},false);QVERIFY(model.ready());QVERIFY(model.imageSource()!=first);

@@ -5,6 +5,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
+import QtQuick.Effects
 import QtQuick.Controls as QQC
 import Kos.Ui as Kos
 import org.kde.kirigami as Kirigami
@@ -41,15 +42,43 @@ EmptyPage {
     palette.mid: Kos.AppTheme.border
     background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
 
-    // Used in ViewerWindow::setMode()
-    readonly property real minimumWidth: Math.max(
-        header.implicitWidth,
-        annotationsToolBar.implicitWidth + 48,
-        480 // leave some room for content if necessary
-    )
-    readonly property real minimumHeight: header.implicitHeight
-        + Math.max(annotationsToolBar.implicitHeight,
-                   footerLoader.implicitHeight)
+    readonly property var hostWindow: Window.window
+
+    function toggleMaximized() {
+        if (!hostWindow) return
+        if (hostWindow.visibility === Window.Maximized || hostWindow.visibility === Window.FullScreen) {
+            hostWindow.showNormal()
+        } else {
+            hostWindow.showMaximized()
+        }
+    }
+
+    // Keep the initial image fit independent of labels and floating controls.
+    readonly property real titleBarHeight: 52
+    readonly property real canvasInset: 12
+    readonly property real imageHorizontalInset: canvasInset * 2
+    readonly property real imageVerticalInset: titleBarHeight + canvasInset * 2
+    readonly property real minimumWidth: 480
+    readonly property real minimumHeight: 320
+    readonly property real overlayInset: 20
+    readonly property bool editingImage: contextWindow.annotating && !SpectacleCore.videoMode
+    readonly property rect imageBounds: {
+        const view = contentLoader.item
+        if (!view || SpectacleCore.videoMode) return Qt.rect(0, 0, contentItem.width, contentItem.height)
+        const rect = view.visibleImageRect
+        return Qt.rect(contentLoader.x + rect.x, contentLoader.y + rect.y, rect.width, rect.height)
+    }
+    readonly property bool verticalTools: imageBounds.width < 400 && imageBounds.height > 440
+    readonly property bool smallImage: {
+        const canvas = SpectacleCore.annotationDocument.canvasRect
+        const scale = Math.min(Math.max(1, SpectacleCore.annotationDocument.imageDpr),
+            contentLoader.width / Math.max(1, canvas.width))
+        return canvas.height * scale < 200
+    }
+
+    function boundedPosition(position, extent, available) {
+        return Math.max(overlayInset, Math.min(position, available - extent - overlayInset))
+    }
 
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
@@ -61,6 +90,8 @@ EmptyPage {
         property bool primaryAction: false
         property string symbol: ""
         materialForm: true
+        flat: !primaryAction && !checked
+        checked: action ? action.checked : false
         implicitHeight: QmlUtils.toolbarButtonHeight
         implicitWidth: iconOnly ? implicitHeight
             : Math.max(QmlUtils.toolbarButtonHeight, implicitContentWidth + leftPadding + rightPadding)
@@ -70,9 +101,10 @@ EmptyPage {
         icon.height: iconSize
         icon.color: textColor
         highlighted: primaryAction
-        leftPadding: iconOnly ? 0 : 12
+        leftPadding: iconOnly ? (height - iconSize) / 2 : 12
         rightPadding: leftPadding
         reduceMotion: Settings.reduceUiMotion
+        enabled: !header.captureBusy && (!action || action.enabled)
         display: root.width < 720 ? QQC.AbstractButton.IconOnly : QQC.AbstractButton.TextBesideIcon
         contentItem: SymbolLabel {
             control: button
@@ -87,32 +119,86 @@ EmptyPage {
         QQC.ToolTip.delay: Kirigami.Units.toolTipDelay
     }
 
+    Kos.KosWindowResizeHandles {
+        parent: root
+        targetWindow: root.hostWindow
+        LayoutMirroring.enabled: false
+    }
+
     header: QQC.ToolBar {
         id: header
-        visible: !SpectacleCore.videoPlatform.isRecording
-            && SpectacleCore.videoPlatform.recordingState !== VideoPlatform.Rendering
-        height: visible ? implicitHeight : 0
+        objectName: "nkshotViewerTitleBar"
+        readonly property bool captureBusy: SpectacleCore.videoPlatform.isRecording
+            || SpectacleCore.videoPlatform.recordingState === VideoPlatform.Rendering
+        implicitHeight: root.titleBarHeight
+        height: implicitHeight
         leftPadding: 12
-        rightPadding: 12
+        rightPadding: 10.5
         topPadding: 10
         bottomPadding: 10
         background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
+        // Keep input above the toolbar itself and below its interactive controls.
+        MouseArea {
+            parent: header
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onDoubleClicked: root.toggleMaximized()
+            DragHandler {
+                target: null
+                acceptedButtons: Qt.LeftButton
+                onActiveChanged: if (active) {
+                    acceptedButtons = root.hostWindow.startSystemMove() ? Qt.NoButton : Qt.LeftButton
+                } else {
+                    acceptedButtons = Qt.LeftButton
+                }
+            }
+        }
         contentItem: RowLayout {
+            z: 1
             spacing: 6
             ViewerButton {
                 symbol: "camera-photo"
+                display: root.width >= 960 ? QQC.AbstractButton.TextBesideIcon : QQC.AbstractButton.IconOnly
                 text: i18nc("@action", "New Screenshot")
                 Accessible.role: Accessible.ButtonMenu
                 onClicked: ScreenshotModeMenu.popup(this)
             }
             QQC.ToolSeparator { Layout.preferredHeight: 24 }
-            ViewerButton {
+            TtToolButton {
+                objectName: "nkshotToggleEditing"
                 visible: action.enabled
+                display: QQC.AbstractButton.IconOnly
                 action: EditAction {}
+                QQC.ToolTip.text: checked ? i18nc("@action", "Hide editing tools") : i18nc("@action", "Show editing tools")
             }
-            Item { Layout.fillWidth: true; Layout.minimumWidth: 12 }
+            RowLayout {
+                objectName: "nkshotHistoryControls"
+                visible: root.editingImage
+                spacing: 2
+                Layout.leftMargin: 6
+                TtToolButton {
+                    objectName: "nkshotUndo"
+                    display: QQC.AbstractButton.IconOnly
+                    text: i18nc("@action", "Undo")
+                    symbol: "edit-undo"
+                    enabled: SpectacleCore.annotationDocument.undoStackDepth > 0
+                    autoRepeat: true
+                    onClicked: SpectacleCore.annotationDocument.undo()
+                }
+                TtToolButton {
+                    objectName: "nkshotRedo"
+                    display: QQC.AbstractButton.IconOnly
+                    text: i18nc("@action", "Redo")
+                    symbol: "edit-redo"
+                    enabled: SpectacleCore.annotationDocument.redoStackDepth > 0
+                    autoRepeat: true
+                    onClicked: SpectacleCore.annotationDocument.redo()
+                }
+            }
+            Item { Layout.fillWidth: true; Layout.minimumWidth: 8 }
             ColumnLayout {
-                visible: root.width >= 800
+                visible: root.width >= 960
+                Layout.maximumWidth: Math.max(0, root.width - 720)
                 spacing: 2
                 QQC.Label {
                     Layout.alignment: Qt.AlignHCenter
@@ -123,18 +209,20 @@ EmptyPage {
                 QQC.Label {
                     Layout.alignment: Qt.AlignHCenter
                     visible: !SpectacleCore.videoMode
-                    text: Math.round(SpectacleCore.annotationDocument.canvasRect.width) + " × "
-                        + Math.round(SpectacleCore.annotationDocument.canvasRect.height)
-                    font.pixelSize: 12
+                    text: Math.round(SpectacleCore.annotationDocument.canvasRect.width * SpectacleCore.annotationDocument.imageDpr) + " × "
+                        + Math.round(SpectacleCore.annotationDocument.canvasRect.height * SpectacleCore.annotationDocument.imageDpr)
+                    font.pixelSize: 10
                     color: Kos.AppTheme.mutedText
                 }
             }
-            Item { Layout.fillWidth: true; Layout.minimumWidth: 12 }
-            UndoRedoGroup {
-                editorDocument: SpectacleCore.annotationDocument
-                visible: contextWindow.annotating
-                buttonHeight: QmlUtils.toolbarButtonHeight
-                animationsEnabled: !Settings.reduceUiMotion
+            Item { Layout.fillWidth: true; Layout.minimumWidth: 8 }
+            Loader {
+                id: zoomLoader
+                objectName: "nkshotZoomControl"
+                visible: !SpectacleCore.videoMode
+                active: visible
+                sourceComponent: zoomControlsComponent
+                Layout.rightMargin: 8
             }
             ViewerButton {
                 visible: action.enabled
@@ -214,7 +302,7 @@ EmptyPage {
                             objectName: "nkshotBeautifyImageAction"
                             visible: !SpectacleCore.videoMode
                             height: visible ? implicitHeight : 0
-                            text: contextWindow.resizingImage ? i18nc("@info", "Preparing copy…") : i18nc("@action", "Background and watermark…")
+                            text: contextWindow.resizingImage ? i18nc("@info", "Preparing copy…") : i18nc("@action", "Frame, background and watermark…")
                             icon.name: "color-management"
                             icon.color: palette.buttonText
                             enabled: !contextWindow.resizingImage
@@ -337,6 +425,19 @@ EmptyPage {
                     }
                 }
             }
+            QQC.ToolSeparator { Layout.preferredHeight: 18 }
+            ViewerWindowControls {
+                id: windowControls
+                targetWindow: root.hostWindow
+                actions: ["maximize", "minimize", "close"]
+                maximizeMode: true
+                circleSize: 14
+                buttonWidth: 22
+                buttonHeight: 22
+                spacing: 6
+                Layout.alignment: Qt.AlignVCenter
+                LayoutMirroring.enabled: false
+            }
         }
     }
 
@@ -356,35 +457,74 @@ EmptyPage {
         z: 3
     }
 
-    QQC.Pane { // parent is contentItem
-        id: annotationsToolBar
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: footerLoader.top
-        anchors.bottomMargin: 16
-        visible: contextWindow.annotating && !SpectacleCore.videoMode
+    component EditorSurface: Kos.LiquidPanelSurface {
+        // Dense frost over the image, with one contour for both body and shadow.
+        backdrop: editorBackdrop
+        reduceTransparency: Kos.AppTheme.reduceTransparency || !Settings.useLiquidMaterial
+        cornerRadius: 14
+        tintColor: Kos.AppTheme.contentBackground
+        tintStrength: 0.88
+        blurStrength: 1.0
+        refractionStrength: 0.5
+        materialOpacity: 1
+        shadowEnabled: false
+        layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowOpacity: 0.10
+            shadowBlur: 0.25
+            shadowVerticalOffset: 2
+            blurMax: 12
+            autoPaddingEnabled: true
+        }
+    }
+
+    component FloatingPanel: QQC.Pane {
+        padding: 10
         z: 2
-        leftPadding: 8
-        rightPadding: 8
-        topPadding: 6
-        bottomPadding: 6
-        contentItem: RowLayout {
-            spacing: 6
+        background: EditorSurface {}
+    }
+
+    FloatingPanel {
+        id: annotationsToolBar
+        objectName: "nkshotFloatingTools"
+        x: root.boundedPosition(root.verticalTools
+            ? root.imageBounds.x >= width + root.overlayInset * 2
+                ? root.imageBounds.x - width - root.overlayInset
+                : root.imageBounds.x + root.overlayInset
+            : root.imageBounds.x + (root.imageBounds.width - width) / 2, width, parent.width)
+        y: root.boundedPosition(root.verticalTools
+            ? root.imageBounds.y + (root.imageBounds.height - height) / 2
+            : root.smallImage ? parent.height - height - root.canvasInset
+            : root.imageBounds.y + root.imageBounds.height - height - root.overlayInset, height, parent.height)
+        visible: root.editingImage
+        contentItem: GridLayout {
+            columns: root.verticalTools ? 1 : 3
+            rowSpacing: 10
+            columnSpacing: 10
             AnnotationsToolBarContents {
                 editorDocument: SpectacleCore.annotationDocument
                 id: annotationsToolBarContents
                 displayMode: QQC.AbstractButton.IconOnly
+                // Keep one dimension unlimited while switching orientation.
                 flow: Grid.LeftToRight
-                columns: -1
-                rows: 1
+                columns: root.verticalTools ? 1 : 8
+                rows: -1
                 spacing: 6
                 paletteMode: true
                 essentialsOnly: true
                 showUndoRedo: false
                 showNoneButton: true
             }
-            QQC.ToolSeparator { Layout.preferredHeight: 24 }
-            ViewerButton {
+            Rectangle {
+                color: Qt.alpha(Kos.AppTheme.paletteText, 0.14)
+                Layout.preferredWidth: root.verticalTools ? 20 : 1
+                Layout.preferredHeight: root.verticalTools ? 1 : 20
+                Layout.alignment: Qt.AlignCenter
+            }
+            TtToolButton {
                 id: propertiesButton
+                objectName: "nkshotToolProperties"
                 implicitWidth: QmlUtils.toolbarButtonHeight
                 display: QQC.AbstractButton.IconOnly
                 text: i18nc("@action", "Tool properties")
@@ -401,22 +541,20 @@ EmptyPage {
                     palette.light: Kos.AppTheme.border
                     palette.mid: Kos.AppTheme.border
                     objectName: "nkshotPropertiesPopup"
-                    readonly property real edgeMargin: 16
+                    parent: root.contentItem
+                    readonly property real edgeMargin: root.overlayInset
                     readonly property real anchorGap: 12
                     width: Math.min(root.availableWidth - 2 * edgeMargin,
                         Math.max(propertiesHeading.implicitWidth, propertyContents.implicitWidth) + leftPadding + rightPadding)
-                    height: Math.min(propertiesButton.mapToItem(root.contentItem, 0, 0).y - edgeMargin - anchorGap,
+                    height: Math.min(root.contentItem.height - 2 * edgeMargin,
                         propertiesHeading.implicitHeight + propertiesLayout.spacing + propertyContents.implicitHeight + topPadding + bottomPadding)
-                    x: Math.max(edgeMargin - propertiesButton.mapToItem(root.contentItem, 0, 0).x, propertiesButton.width - width)
-                    y: -height - anchorGap
-                    padding: 12
+                    x: root.boundedPosition(root.verticalTools ? annotationsToolBar.x + annotationsToolBar.width + anchorGap
+                        : annotationsToolBar.x + annotationsToolBar.width - width, width, root.contentItem.width)
+                    y: root.boundedPosition(root.verticalTools ? annotationsToolBar.y + (annotationsToolBar.height - height) / 2
+                        : annotationsToolBar.y - height - anchorGap, height, root.contentItem.height)
+                    padding: 16
                     onClosed: propertyContents.flushPendingChanges()
-                    background: Kos.LiquidPanelSurface {
-                        backdrop: editorBackdrop
-                        reduceTransparency: Kos.AppTheme.reduceTransparency || !Settings.useLiquidMaterial
-                        tintColor: Kos.AppTheme.contentBackground
-                        cornerRadius: 14
-                    }
+                    background: EditorSurface {}
                     contentItem: ColumnLayout {
                         id: propertiesLayout
                         spacing: 12
@@ -454,25 +592,6 @@ EmptyPage {
                 }
             }
         }
-        background: Kos.LiquidPanelSurface {
-            objectName: "nkshotEditorMaterial"
-            backdrop: editorBackdrop
-            reduceTransparency: Kos.AppTheme.reduceTransparency || !Settings.useLiquidMaterial
-            cornerRadius: 14
-            tintColor: Kos.AppTheme.contentBackground
-            darkAppearance: Kos.AppTheme.dark
-            materialOpacity: 0.95
-        }
-    }
-
-    Kirigami.Separator { // parent is contentItem
-        id: separator
-        visible: false
-        anchors.left: annotationsToolBar.right
-        anchors.leftMargin: 16
-        opacity: 0
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
     }
 
     // Only the ordinary workbench and image are sampled. Floating controls are
@@ -482,163 +601,130 @@ EmptyPage {
         objectName: "nkshotWorkbenchScene"
         anchors.fill: parent
         Rectangle { anchors.fill: parent; color: Kos.AppTheme.contentSecondaryBackground }
-    Loader { // parent is contentItem
-        id: contentLoader
-        objectName: "nkshotWorkbench"
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-            bottom: parent.bottom
-            topMargin: 24
-            leftMargin: 24
-            rightMargin: 24
-            bottomMargin: annotationsToolBar.visible
-                ? annotationsToolBar.height + footerLoader.height + 40 : 24
+        Loader {
+            id: contentLoader
+            objectName: "nkshotWorkbench"
+            anchors.fill: parent
+            anchors.margins: root.canvasInset
+            // Tiny images need a real gap above the dock instead of an overlay.
+            // Keep it stable when tools are hidden so the image does not jump.
+            anchors.bottomMargin: !SpectacleCore.videoMode && root.smallImage
+                ? root.canvasInset + annotationsToolBar.height + root.overlayInset : root.canvasInset
+            sourceComponent: SpectacleCore.videoMode ? recordingViewComponent : screenshotViewComponent
+            Component {
+                id: recordingViewComponent
+                RecordingView {}
+            }
+            Component {
+                id: screenshotViewComponent
+                ScreenshotView {}
+            }
         }
-        sourceComponent: SpectacleCore.videoMode ? recordingViewComponent : screenshotViewComponent
-        Component {
-            id: recordingViewComponent
-            RecordingView {}
-        }
-        Component {
-            id: screenshotViewComponent
-            ScreenshotView {}
-        }
-    }
     }
     Kos.LiquidBackdrop {
         id: editorBackdrop
         objectName: "nkshotEditorBackdrop"
         sourceItem: workbenchScene
         registerAsDefault: false
-        active: Settings.useLiquidMaterial && !SpectacleCore.videoMode
-            && contextWindow.annotating && GraphicsInfo.api !== GraphicsInfo.Software
+        active: Settings.useLiquidMaterial && !Kos.AppTheme.reduceTransparency
+            && root.editingImage && GraphicsInfo.api !== GraphicsInfo.Software
         blur: 0.35
         maximumTextureSize: 2048
     }
 
-    Loader {
-        id: footerLoader
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        visible: contextWindow.annotating && !SpectacleCore.videoMode
-        active: visible
-        sourceComponent: QQC.ToolBar { // parent is contentItem
-            position: QQC.ToolBar.Footer
-            leftPadding: 12
-            rightPadding: 16
-            topPadding: 10
-            bottomPadding: 10
-            background: Rectangle { color: Kos.AppTheme.contentSecondaryBackground }
-            contentHeight: QmlUtils.toolbarButtonHeight
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.mediumSpacing
-                Item { Layout.fillWidth: true }
-                RowLayout {
-                    id: zoomControls
-                    spacing: 2
-                    ViewerButton {
-                        implicitWidth: QmlUtils.toolbarButtonHeight
-                        leftPadding: 6
-                        rightPadding: 6
-                        display: QQC.AbstractButton.IconOnly
-                        text: i18nc("@action", "Zoom out")
-                        icon.name: "zoom-out"
-                        enabled: contentLoader.item.currentZoom > contentLoader.item.minZoom
-                        onClicked: contentLoader.item.zoomOut()
-                    }
-                    ViewerButton {
-                        id: zoomButton
-                        implicitWidth: 64
-                        display: QQC.AbstractButton.TextOnly
-                        text: Math.round(contentLoader.item.currentZoom * 100) + "%"
-                        Accessible.name: i18nc("@action", "Image zoom")
-                        onClicked: zoomPopup.open()
-                        QQC.Popup {
-                            id: zoomPopup
-                            palette.windowText: Kos.AppTheme.paletteText
-                            palette.text: Kos.AppTheme.paletteText
-                            palette.buttonText: Kos.AppTheme.paletteText
-                            palette.base: Kos.AppTheme.contentBackground
-                            palette.button: Kos.AppTheme.controlBackground
-                            palette.light: Kos.AppTheme.border
-                            palette.mid: Kos.AppTheme.border
-                            objectName: "nkshotZoomPopup"
-                            x: zoomButton.width - width
-                            y: -height - 8
-                            padding: 12
-                            background: Kos.KosSurface {
-                                fillColor: Kos.AppTheme.contentBackground
-                                radius: 14
-                                elevation: 0.5
+    Component {
+        id: zoomControlsComponent
+        TtToolButton {
+                    id: zoomButton
+                    objectName: "nkshotZoomMenu"
+                    implicitWidth: 56
+                    display: QQC.AbstractButton.TextOnly
+                    text: Math.round(contentLoader.item.currentZoom * 100) + "%"
+                    Accessible.name: i18nc("@action", "Image zoom")
+                    Accessible.role: Accessible.ButtonMenu
+                    onClicked: zoomPopup.open()
+                    QQC.Popup {
+                        id: zoomPopup
+                        parent: root.contentItem
+                        objectName: "nkshotZoomPopup"
+                        width: Math.min(228, root.availableWidth - 24)
+                        x: root.boundedPosition(zoomLoader.mapToItem(root.contentItem, 0, 0).x + zoomLoader.width - width,
+                            width, root.contentItem.width)
+                        y: root.canvasInset
+                        padding: 16
+                        background: EditorSurface {}
+                        contentItem: ColumnLayout {
+                            spacing: 8
+                            RowLayout {
+                                Layout.fillWidth: true
+                                TtToolButton {
+                                    objectName: "nkshotCompactZoomOut"
+                                    display: QQC.AbstractButton.IconOnly
+                                    text: i18nc("@action", "Zoom out")
+                                    symbol: "zoom-out"
+                                    enabled: contentLoader.item.currentZoom > contentLoader.item.minZoom
+                                    onClicked: contentLoader.item.zoomOut()
+                                }
+                                QQC.Label {
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: zoomButton.text
+                                    color: Kos.AppTheme.paletteText
+                                }
+                                TtToolButton {
+                                    objectName: "nkshotCompactZoomIn"
+                                    display: QQC.AbstractButton.IconOnly
+                                    text: i18nc("@action", "Zoom in")
+                                    symbol: "zoom-in"
+                                    enabled: contentLoader.item.currentZoom < contentLoader.item.maxZoom
+                                    onClicked: contentLoader.item.zoomIn()
+                                }
                             }
-                            contentItem: ColumnLayout {
-                                spacing: 8
-                                Kos.LiquidActionButton {
-                                    text: i18nc("@action", "Fit to view")
+                            ViewerButton {
+                                objectName: "nkshotFitImage"
+                                text: i18nc("@action", "Fit to view")
+                                display: QQC.AbstractButton.TextOnly
+                                Layout.fillWidth: true
+                                onClicked: { contentLoader.item.fitToView(); zoomPopup.close() }
+                            }
+                            ViewerButton {
+                                text: i18nc("@action", "Actual size")
+                                display: QQC.AbstractButton.TextOnly
+                                Layout.fillWidth: true
+                                onClicked: { contentLoader.item.zoomToPercent(1); zoomPopup.close() }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Kos.LiquidTextField {
+                                    id: zoomEditor
+                                    objectName: "nkshotZoomInput"
+                                    Layout.fillWidth: true
                                     implicitHeight: QmlUtils.toolbarButtonHeight
-                                    materialForm: true
-                                    Layout.fillWidth: true
-                                    onClicked: {
-                                        contentLoader.item.zoomToPercent(Math.min(1, contentLoader.item.fitZoom))
-                                        zoomPopup.close()
+                                    specificationForm: true
+                                    horizontalAlignment: TextInput.AlignHCenter
+                                    inputMethodHints: Qt.ImhDigitsOnly
+                                    readonly property var numberLocale: Qt.locale()
+                                    validator: IntValidator {
+                                        bottom: Math.ceil(contentLoader.item.minZoom * 100)
+                                        top: Math.floor(contentLoader.item.maxZoom * 100)
+                                        locale: zoomEditor.numberLocale.name
                                     }
-                                }
-                                Kos.LiquidActionButton {
-                                    text: i18nc("@action", "Actual size")
-                                    implicitHeight: QmlUtils.toolbarButtonHeight
-                                    materialForm: true
-                                    Layout.fillWidth: true
-                                    onClicked: { contentLoader.item.zoomToPercent(1); zoomPopup.close() }
-                                }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
-                                    Kos.LiquidTextField {
-                                        id: zoomEditor
-                                        objectName: "nkshotZoomInput"
-                                        Layout.fillWidth: true
-                                        implicitHeight: QmlUtils.toolbarButtonHeight
-                                        specificationForm: true
-                                        horizontalAlignment: TextInput.AlignHCenter
-                                        inputMethodHints: Qt.ImhDigitsOnly
-                                        readonly property var numberLocale: Qt.locale()
-                                        validator: IntValidator {
-                                            bottom: Math.ceil(contentLoader.item.minZoom * 100)
-                                            top: Math.floor(contentLoader.item.maxZoom * 100)
-                                            locale: zoomEditor.numberLocale.name
-                                        }
-                                        Binding on text {
-                                            when: !zoomEditor.activeFocus
-                                            value: Number(Math.round(contentLoader.item.currentZoom * 100)).toLocaleString(zoomEditor.numberLocale, 'f', 0)
-                                        }
-                                        onEditingFinished: {
-                                            if (acceptableInput)
-                                                contentLoader.item.zoomToPercent(Number.fromLocaleString(numberLocale, text) / 100)
-                                            text = Number(Math.round(contentLoader.item.currentZoom * 100)).toLocaleString(numberLocale, 'f', 0)
-                                        }
-                                        Accessible.name: i18nc("@label", "Custom zoom percentage")
+                                    Binding on text {
+                                        when: !zoomEditor.activeFocus
+                                        value: Number(Math.round(contentLoader.item.currentZoom * 100)).toLocaleString(zoomEditor.numberLocale, 'f', 0)
                                     }
-                                    QQC.Label { text: zoomEditor.numberLocale.percent; color: Kos.AppTheme.mutedText }
+                                    onEditingFinished: {
+                                        if (acceptableInput)
+                                            contentLoader.item.zoomToPercent(Number.fromLocaleString(numberLocale, text) / 100)
+                                        text = Number(Math.round(contentLoader.item.currentZoom * 100)).toLocaleString(numberLocale, 'f', 0)
+                                    }
+                                    Accessible.name: i18nc("@label", "Custom zoom percentage")
                                 }
+                                QQC.Label { text: zoomEditor.numberLocale.percent; color: Kos.AppTheme.mutedText }
                             }
                         }
                     }
-                    ViewerButton {
-                        implicitWidth: QmlUtils.toolbarButtonHeight
-                        leftPadding: 6
-                        rightPadding: 6
-                        display: QQC.AbstractButton.IconOnly
-                        text: i18nc("@action", "Zoom in")
-                        icon.name: "zoom-in"
-                        enabled: contentLoader.item.currentZoom < contentLoader.item.maxZoom
-                        onClicked: contentLoader.item.zoomIn()
-                    }
-                }
-
-            }
         }
     }
 

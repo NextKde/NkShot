@@ -23,6 +23,14 @@ if(NKSHOT_ENABLE_UI_CAPTURE)
     target_sources(spectacle PRIVATE ../tests/ui/UiCapture.cpp ../tests/ui/RecordingAdapterChecks.cpp ../tests/ui/RecordingPreparationUiChecks.cpp ../tests/ui/RecordingControlsUiChecks.cpp ../tests/ui/TranslationUiChecks.cpp ../tests/ui/ScrollSessionUiChecks.cpp ../tests/ui/LocalMediaOpenUiChecks.cpp ../tests/ui/WindowOwnershipUiChecks.cpp ../tests/ui/TextCoverUiChecks.cpp ../tests/ui/FreeCropUiChecks.cpp ../tests/ui/ImageCombineUiChecks.cpp ../tests/ui/FrameInspectionUiChecks.cpp ../tests/ui/RecordingAutoStopUiChecks.cpp ../tests/ui/ImageAdjustmentsUiChecks.cpp ../tests/ui/ImageExportUiChecks.cpp ../tests/ui/RecentThumbnailsUiChecks.cpp ../tests/ui/MediaDropUiChecks.cpp ../tests/ui/VideoAnnotationsUiChecks.cpp)
     target_include_directories(spectacle PRIVATE ${PROJECT_SOURCE_DIR}/tests/ui)
     target_compile_definitions(spectacle PRIVATE NKSHOT_ENABLE_UI_CAPTURE=1)
+
+if(NKSHOT_HAS_RECORDING_PAUSE)
+    target_compile_definitions(spectacle PRIVATE NKSHOT_HAS_RECORDING_PAUSE=1)
+endif()
+
+if(NKSHOT_HAS_AUDIO_CAPTURE)
+    target_compile_definitions(spectacle PRIVATE NKSHOT_HAS_AUDIO_CAPTURE=1)
+endif()
 endif()
 # Preserve upstream internal target/module names; isolate the installed binary.
 set_target_properties(spectacle PROPERTIES OUTPUT_NAME nkshot)
@@ -53,6 +61,7 @@ target_sources(spectacle PRIVATE
     Imaging/ImageAdjustments.cpp
     Imaging/ImageExport.cpp
     Imaging/ImageTransforms.cpp
+    Imaging/DeviceFrame.cpp
     Imaging/VerticalStitcher.cpp
     Gui/ImageOverlayPreview.cpp
     Gui/ImageOverlayPreview.h
@@ -185,7 +194,6 @@ target_link_libraries(spectacle PRIVATE
     Qt::Quick
     Qt::QuickControls2
     Qt::QuickTemplates2
-    Qt::GuiPrivate
     Qt::WaylandClient
     KF6::CoreAddons
     KF6::DBusAddons
@@ -300,6 +308,14 @@ qt_target_qml_sources(spectacle
     Gui/PinnedImage.qml
     Gui/MediaDropTarget.qml
     Gui/ViewerPage.qml
+    Gui/ViewerWindowControls.qml
+)
+
+# The optional host module must not become a required QML import.
+qt_add_resources(spectacle window-controls
+    PREFIX /nkshot/platform
+    BASE Gui
+    FILES Gui/NativeWindowControls.qml
 )
 
 qt_import_qml_plugins(spectacle)

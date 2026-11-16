@@ -17,6 +17,9 @@ QQC.Pane {
     property bool clickSupported: false
     property bool onClickOnly: false
     property bool audioSupported: false
+    // False when the KPipeWire in use has no audio capture API; the audio rows are
+    // then hidden rather than shown disabled.
+    property bool audioCaptureSupported: false
     property real captureTimeRemaining: 0
     property real captureProgress: 0
     property int modeIndex: 0
@@ -309,6 +312,7 @@ QQC.Pane {
                 Option {
                     objectName: "nkshotSetupSystemAudio"
                     text: i18n("Record system audio")
+                    visible: root.audioCaptureSupported
                     enabled: root.audioSupported
                     checked: root.settings.videoRecordSystemAudio
                     onToggled: root.settings.videoRecordSystemAudio = checked
@@ -316,6 +320,7 @@ QQC.Pane {
                 Option {
                     objectName: "nkshotSetupMicrophone"
                     text: i18n("Record microphone")
+                    visible: root.audioCaptureSupported
                     enabled: root.audioSupported
                     checked: root.settings.videoRecordMicrophone
                     onToggled: root.settings.videoRecordMicrophone = checked
@@ -372,7 +377,7 @@ QQC.Pane {
                 }
                 QQC.Label {
                     Layout.fillWidth: true
-                    visible: !root.audioSupported
+                    visible: root.audioCaptureSupported && !root.audioSupported
                     text: i18n("The selected video format does not support audio.")
                     font.pointSize: root.font.pointSize * 0.92
                     color: Kos.AppTheme.mutedText

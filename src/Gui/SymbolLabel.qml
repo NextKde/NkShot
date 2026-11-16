@@ -35,16 +35,23 @@ Item {
     readonly property bool hasIcon: symbol.length > 0 && display !== T.AbstractButton.TextOnly
     readonly property bool hasLabel: text.length > 0 && display !== T.AbstractButton.IconOnly
 
+    // Measure independently of the elided label's assigned width. Some Qt
+    // styles report a zero implicit width once the label starts out clipped.
+    TextMetrics {
+        id: labelMetrics
+        text: root.text
+        font: root.font
+    }
     implicitWidth: {
         if (!hasLabel) {
             return hasIcon ? iconSize : 0;
         }
         if (!hasIcon) {
-            return label.implicitWidth;
+            return labelMetrics.advanceWidth;
         }
-        return iconSize + spacing + label.implicitWidth;
+        return iconSize + spacing + labelMetrics.advanceWidth;
     }
-    implicitHeight: Math.max(hasIcon ? iconSize : 0, hasLabel ? label.implicitHeight : 0)
+    implicitHeight: Math.max(hasIcon ? iconSize : 0, hasLabel ? labelMetrics.height : 0)
 
     Symbols.Icon {
         id: icon

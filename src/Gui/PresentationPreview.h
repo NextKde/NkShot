@@ -11,6 +11,7 @@ class PresentationPreview final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QSize sourceSize READ sourceSize NOTIFY changed)
+    Q_PROPERTY(QSize outputSize READ outputSize NOTIFY changed)
     Q_PROPERTY(QUrl imageSource READ imageSource NOTIFY changed)
     Q_PROPERTY(bool ready READ ready NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
@@ -19,8 +20,12 @@ public:
     ~PresentationPreview() override;
     bool begin(const QImage &source);
     void clear();
-    Q_INVOKABLE void update(int padding, int style, const QString &watermark, bool rounded);
+    Q_INVOKABLE void update(int padding, int style, const QString &watermark, bool rounded, int frame = 0, const QString &frameTitle = {});
     QSize sourceSize() const { return m_source.size(); }
+    QSize outputSize() const
+    {
+        return NkShot::Imaging::presentationSize(m_source.size(), m_options);
+    }
     QUrl imageSource() const;
     bool ready() const { return m_ready; }
     QString error() const { return m_error; }

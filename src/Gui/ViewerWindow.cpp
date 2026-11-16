@@ -62,6 +62,10 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
 {
     s_viewerWindowInstance = this;
     s_isAnnotating = false;
+    if (mode == Viewer) {
+        // The QML header hosts the shared controls and cooperates with KOS decorations.
+        setFlags(flags() | Qt::FramelessWindowHint);
+    }
     m_presentationPreview = new PresentationPreview(engine, this);
     m_recentThumbnails = new RecentThumbnails(engine, this);
     connect(NkShot::RecentMediaModel::instance(), &NkShot::RecentMediaModel::changed, this, [this] {
@@ -134,13 +138,13 @@ ViewerWindow::ViewerWindow(Mode mode, QQmlEngine *engine, QWindow *parent)
     // set up QML
     setResizeMode(QQuickView::SizeRootObjectToView);
     setMode(mode); // sets source and other stuff based on mode.
-    m_oldWindowStates = windowStates();
-
-    // Restore window state from config (only for Viewer mode - the screenshot viewer window)
-    if (mode == Viewer) {
+    // New images choose their own opening shape. Later resizing belongs to the
+    // user; video and empty viewers keep the saved window size.
+    if (mode == Viewer && !fitWindowToImage()) {
         KConfigGroup configGroup(KSharedConfig::openConfig(), u"ViewerWindow"_s);
         KWindowConfig::restoreWindowSize(this, configGroup);
     }
+    m_oldWindowStates = windowStates();
 }
 
 QQuickWindow *ViewerWindow::openQuickNote()
@@ -607,7 +611,10 @@ void ViewerWindow::setBackgroundColorRole(QPalette::ColorRole role)
 void ViewerWindow::updateMinimumSize()
 {
     if (auto rootItem = rootObject()) {
-        const QSize size = {qRound(rootItem->property("minimumWidth").toReal()), qRound(rootItem->property("minimumHeight").toReal())};
+        QSize size = {qRound(rootItem->property("minimumWidth").toReal()), qRound(rootItem->property("minimumHeight").toReal())};
+        if (screen()) {
+            size = size.boundedTo(screen()->availableGeometry().size());
+        }
         // Resizing should be automatic, but sometimes a manual resizing is needed
         // to fix window sizing/graphical glitches after a minimum size change.
         if (size.width() > width()) {
@@ -618,6 +625,35 @@ void ViewerWindow::updateMinimumSize()
         }
         setMinimumSize(size);
     }
+}
+
+bool ViewerWindow::fitWindowToImage()
+{
+    auto *core = SpectacleCore::instance();
+    auto *rootItem = rootObject();
+    if (m_mode != Viewer || !rootItem || !core || core->videoMode() || !core->annotationDocument()) {
+        return false;
+    }
+    const auto *document = core->annotationDocument();
+    const QSizeF canvas = document->canvasRect().size();
+    QScreen *targetScreen = screen() ? screen() : QGuiApplication::primaryScreen();
+    if (!targetScreen || document->baseImage().isNull() || canvas.isEmpty() || !qIsFinite(canvas.width()) || !qIsFinite(canvas.height())) {
+        return false;
+    }
+
+    const QRect available = targetScreen->availableGeometry();
+    const qreal horizontalInset = rootItem->property("imageHorizontalInset").toReal();
+    const qreal verticalInset = rootItem->property("imageVerticalInset").toReal();
+    const qreal maxWidth = qMax<qreal>(1, available.width() - 48 - horizontalInset);
+    const qreal maxHeight = qMax<qreal>(1, available.height() * 0.88 - verticalInset);
+    const qreal imageDpr = document->imageDpr();
+    const qreal nativeScale = qIsFinite(imageDpr) ? qMax<qreal>(1, imageDpr) : 1;
+    const qreal scale = qMin(nativeScale, qMin(maxWidth / canvas.width(), maxHeight / canvas.height()));
+    QSize targetSize(qCeil(canvas.width() * scale + horizontalInset), qCeil(canvas.height() * scale + verticalInset));
+    targetSize = targetSize.expandedTo(minimumSize()).boundedTo(available.size());
+    resize(targetSize);
+    setPosition(available.center() - QPoint(targetSize.width() / 2, targetSize.height() / 2));
+    return true;
 }
 
 void ViewerWindow::startDrag()

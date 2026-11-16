@@ -15,7 +15,10 @@ ColumnLayout {
 
     // GIF and WebP can't carry an audio track, so the audio options are
     // disabled for those formats.
-    readonly property bool audioSupported: SpectacleCore.videoPlatform.formatSupportsAudio(Settings.preferredVideoFormat)
+    readonly property bool audioCaptureSupported: SpectacleCore.videoPlatform.audioCaptureSupported
+    // Three things can rule audio out: the KPipeWire build has no audio API at
+    // all, or the chosen container format cannot carry an audio track.
+    readonly property bool audioSupported: audioCaptureSupported && SpectacleCore.videoPlatform.formatSupportsAudio(Settings.preferredVideoFormat)
 
     QQC.CheckBox {
         Layout.fillWidth: true
@@ -28,6 +31,7 @@ ColumnLayout {
     }
     QQC.CheckBox {
         Layout.fillWidth: true
+        visible: root.audioCaptureSupported
         enabled: root.audioSupported
         text: i18nc("@option:check", "Record system audio")
         QQC.ToolTip.text: i18nc("@info:tooltip", "Include the audio that is currently playing on the system in the recording.")
@@ -41,6 +45,7 @@ ColumnLayout {
     }
     QQC.CheckBox {
         Layout.fillWidth: true
+        visible: root.audioCaptureSupported
         enabled: root.audioSupported
         text: i18nc("@option:check", "Record microphone")
         QQC.ToolTip.text: i18nc("@info:tooltip", "Include audio from the default microphone in the recording.")
@@ -87,6 +92,6 @@ ColumnLayout {
         Layout.fillWidth: true
         type: Kirigami.MessageType.Information
         text: i18nc("@info", "The selected video format does not support audio.")
-        visible: !root.audioSupported
+        visible: root.audioCaptureSupported && !root.audioSupported
     }
 }

@@ -13,18 +13,41 @@ import org.kde.kquickimageeditor
 EmptyPage {
     id: root
 
-    readonly property real fitZoom: Math.min(flickable.width / SpectacleCore.annotationDocument.canvasRect.width,
-                                             flickable.height / SpectacleCore.annotationDocument.canvasRect.height)
+    objectName: "nkshotScreenshotView"
+    readonly property real fitZoom: Math.min(flickable.width / Math.max(1, SpectacleCore.annotationDocument.canvasRect.width),
+                                             flickable.height / Math.max(1, SpectacleCore.annotationDocument.canvasRect.height))
+    // Match the window fit: allow high-DPI captures to use their source pixels,
+    // but do not magnify tiny images just to fill the minimum window size.
+    readonly property real automaticZoom: Math.min(Math.max(1, SpectacleCore.annotationDocument.imageDpr), fitZoom)
     readonly property real minZoom: Math.min(fitZoom, 1)
     readonly property real maxZoom: Math.max(minZoom, 8)
     readonly property real currentZoom: annotationEditor.scale
+    readonly property bool imageOverflows: flickable.contentWidth > flickable.width
+        || flickable.contentHeight > flickable.height
+    property bool automaticFit: true
+    property real requestedZoom: 1
+    readonly property rect visibleImageRect: {
+        const left = Math.max(0, annotationEditor.x - flickable.contentX)
+        const top = Math.max(0, annotationEditor.y - flickable.contentY)
+        const right = Math.min(flickable.width, annotationEditor.x - flickable.contentX + annotationEditor.width * currentZoom)
+        const bottom = Math.min(flickable.height, annotationEditor.y - flickable.contentY + annotationEditor.height * currentZoom)
+        return Qt.rect(left, top, Math.max(0, right - left), Math.max(0, bottom - top))
+    }
+
+    function fitToView() {
+        automaticFit = true
+        flickable.contentX = 0
+        flickable.contentY = 0
+        flickable.returnToBounds()
+    }
 
     function zoomToPercent(percent, center = flickable.mapToItem(flickable.contentItem,
                                                                  flickable.width / 2,
                                                                  flickable.height / 2)) {
         const oldW = SpectacleCore.annotationDocument.canvasRect.width * annotationEditor.scale
         const oldH = SpectacleCore.annotationDocument.canvasRect.height * annotationEditor.scale
-        annotationEditor.scale = Math.max(root.minZoom, Math.min(percent, root.maxZoom))
+        requestedZoom = Math.max(root.minZoom, Math.min(percent, root.maxZoom))
+        automaticFit = false
         const w = SpectacleCore.annotationDocument.canvasRect.width * annotationEditor.scale
         const h = SpectacleCore.annotationDocument.canvasRect.height * annotationEditor.scale
 
@@ -73,9 +96,9 @@ EmptyPage {
     contentItem: Flickable {
         id: flickable
 
-        clip: contextWindow.annotating
-        interactive: contextWindow.annotating
-            && SpectacleCore.annotationDocument.tool.type === AnnotationTool.NoTool
+        clip: true
+        interactive: !contextWindow.annotating
+            || SpectacleCore.annotationDocument.tool.type === AnnotationTool.NoTool
         boundsBehavior: Flickable.StopAtBounds
         rebound: Transition {} // Instant transition. Null doesn't do this.
         contentWidth: Math.max(width, SpectacleCore.annotationDocument.canvasRect.width * annotationEditor.scale)
@@ -90,7 +113,7 @@ EmptyPage {
             }
             target: flickable
             keyNavigationEnabled: true
-            scrollFlickableTarget: contextWindow.annotating
+            scrollFlickableTarget: true
             horizontalStepSize: dprRound(Application.styleHints.wheelScrollLines * 20)
             verticalStepSize: dprRound(Application.styleHints.wheelScrollLines * 20)
             onWheel: wheel => {
@@ -155,19 +178,20 @@ EmptyPage {
             cursorShape: enabled ?
                 (containsPress || flickable.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
                 : undefined
-            onPositionChanged: if (!contextWindow.annotating) {
+            onPositionChanged: if (!contextWindow.annotating && !root.imageOverflows) {
                 contextWindow.startDrag()
             }
         }
 
         AnnotationEditor {
             id: annotationEditor
+            objectName: "nkshotImageCanvas"
             x: dprRound((flickable.contentItem.width - SpectacleCore.annotationDocument.canvasRect.width * scale) / 2)
             y: dprRound((flickable.contentItem.height - SpectacleCore.annotationDocument.canvasRect.height * scale) / 2)
             implicitWidth: SpectacleCore.annotationDocument.canvasRect.width
             implicitHeight: SpectacleCore.annotationDocument.canvasRect.height
             transformOrigin: Item.TopLeft
-            scale: root.fitZoom
+            scale: root.automaticFit ? root.automaticZoom : Math.max(root.minZoom, Math.min(root.requestedZoom, root.maxZoom))
             visible: true
             enabled: contextWindow.annotating
             editorDocument: SpectacleCore.annotationDocument
@@ -209,32 +233,8 @@ EmptyPage {
         }
     }
 
-    state: "normal"
-    states: [
-        State {
-            name: "annotating"
-            when: contextWindow.annotating
-            PropertyChanges {
-                target: annotationEditor
-                scale: Math.min(1, root.fitZoom)
-            }
-        },
-        State {
-            name: "normal"
-            when: !contextWindow.annotating
-            PropertyChanges {
-                target: annotationEditor
-                scale: root.fitZoom
-            }
-        }
-    ]
-    transitions: [
-        Transition {
-            NumberAnimation {
-                property: "scale"
-                duration: Settings.reduceUiMotion ? 0 : Kirigami.Units.longDuration
-                easing.type: Easing.InOutSine
-            }
-        }
-    ]
+    Connections {
+        target: SpectacleCore.annotationDocument
+        function onCanvasRectChanged() { root.fitToView() }
+    }
 }

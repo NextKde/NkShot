@@ -13,12 +13,24 @@ QImage resizedToWidth(const QImage &source, int width, qint64 maximumPixels = 40
 
 namespace NkShot::Imaging {
 enum class PresentationStyle { Light, Dark, Aurora };
+enum class PresentationFrame {
+    None,
+    MacOS,
+    Browser,
+    MacDisplay,
+    IPad,
+    Surface,
+    VisionPro
+};
 struct PresentationOptions {
     int padding = 48;
     PresentationStyle style = PresentationStyle::Aurora;
     QString watermark;
     bool rounded = true;
+    PresentationFrame frame = PresentationFrame::None;
+    QString frameTitle;
 };
+QSize presentationSize(const QSize &source, const PresentationOptions &options, qint64 maximumPixels = 40000000);
 // A separate, opaque sRGB sharing canvas. Original pixels/metadata are untouched.
 QImage composePresentation(const QImage &source, const PresentationOptions &options, qint64 maximumPixels = 40000000);
 // Same composition in original coordinates, rendered directly into a bounded

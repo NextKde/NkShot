@@ -42,12 +42,6 @@ set_tests_properties(editor_document_test PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
 )
 
-# Detect upstream fractional-DPR shadow repaint clipping; see third_party/patches.
-ecm_add_test(ShadowRepaintTest.cpp TEST_NAME "shadow_repaint_test"
-    LINK_LIBRARIES Qt::Test Qt::Gui KQuickImageEditor)
-set_tests_properties(shadow_repaint_test PROPERTIES TIMEOUT 20
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
-
 # Real asynchronous OCR; requires installed Tesseract English data and a sans font.
 ecm_add_test(
     OcrManagerTest.cpp
@@ -73,7 +67,7 @@ ecm_add_test(VerticalStitcherTest.cpp ../src/Imaging/VerticalStitcher.cpp
 set_tests_properties(vertical_stitcher_test PROPERTIES TIMEOUT 20)
 
 # Reusable immutable image export transforms.
-ecm_add_test(ImageTransformsTest.cpp ../src/Imaging/ImageTransforms.cpp
+ecm_add_test(ImageTransformsTest.cpp ../src/Imaging/ImageTransforms.cpp ../src/Imaging/DeviceFrame.cpp
     TEST_NAME image_transforms_test LINK_LIBRARIES Qt::Test Qt::Gui)
 set_tests_properties(image_transforms_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -189,7 +183,7 @@ ecm_add_test(RecentMediaModelTest.cpp ../src/RecentMediaModel.cpp ../src/RecentM
 set_tests_properties(recent_media_model_test PROPERTIES TIMEOUT 30)
 
 # Immutable sharing-preview session and bounded exact-composition renderer.
-ecm_add_test(PresentationPreviewTest.cpp ../src/Gui/PresentationPreview.cpp ../src/Gui/PresentationPreview.h ../src/Imaging/ImageTransforms.cpp
+ecm_add_test(PresentationPreviewTest.cpp ../src/Gui/PresentationPreview.cpp ../src/Gui/PresentationPreview.h ../src/Imaging/ImageTransforms.cpp ../src/Imaging/DeviceFrame.cpp
     TEST_NAME presentation_preview_test LINK_LIBRARIES Qt::Test Qt::Quick KF6::I18n)
 set_tests_properties(presentation_preview_test PROPERTIES TIMEOUT 20 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

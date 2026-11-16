@@ -27,6 +27,11 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
     virtual bool supportsPause() const { return false; }
+    // False when the KPipeWire in use predates its audio capture API.
+    virtual bool supportsAudioCapture() const
+    {
+        return true;
+    }
     virtual void pause() {}
     virtual void resume() {}
 Q_SIGNALS:
